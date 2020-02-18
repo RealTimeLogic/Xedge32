@@ -22,7 +22,7 @@ Lua Server Pages (LSP) extends Lua with additional features, such as IoT, making
 
 ## What is the LSP App Manager
 
-The LSP App Manager turns the Barracuda App Server library into an awesome development tool. Once the development is complete, some minor changes to the build swaps out the LSP App Manager's Lua code with your own dedicated LSP/Lua bootloader. See the [LSP App Manager home page](https://realtimelogic.com/ba/?url=lspappmgr/readme.html) for details.
+The LSP App Manager turns the Barracuda App Server library into an awesome development tool. Once the development is complete, some minor changes to the build swaps out the LSP App Manager's Lua code with your own dedicated LSP/Lua bootloader. See the [LSP App Manager home page](https://realtimelogic.com/ba/doc/?url=lspappmgr/readme.html) for details.
 
 ## Getting Started
 
