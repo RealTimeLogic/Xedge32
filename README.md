@@ -64,7 +64,7 @@ programming. We have seen from many successful projects that up to 80%
 of a modern embedded system can be implemented using LSP, ensuring
 dramatically reduced development time and cost.
 
-## What is the LSP App Manager
+## What is the LSP Application Manager?
 
 The LSP App Manager turns the Barracuda App Server library into an
 awesome development tool. Once the development is complete, some minor
