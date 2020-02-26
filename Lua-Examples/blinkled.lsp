@@ -48,11 +48,11 @@ local function blink()
    local gn = esp.GPIO_NUM_4
     esp.gpio_pad_select_gpio(gn);
     esp.gpio_set_direction(gn, esp.GPIO_MODE_OUTPUT);
-   local state=false
    while true do
-      state = not state
-      esp.gpio_set_level(gn, state and 1 or 0)
-      trace(state)
+      trace"blink"
+      esp.gpio_set_level(gn, 1)
+      coroutine.yield(true) -- Sleep
+      esp.gpio_set_level(gn, 0)
       coroutine.yield(true) -- Sleep
    end
 end

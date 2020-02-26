@@ -181,8 +181,7 @@ else
                acmedns.configure(page.zkey)
             end
          end
-         -- State: page.dn==nil'
-         trace(type(page.zkey))
+         -- State: page.dn==nil
          if page.zkey then
             local dn,code,err=acmedns.isreg()
             if dn then
@@ -205,7 +204,9 @@ else
       end
       if doReg then
          if not page.agreementURL then
-            page.agreementURL=require"acme".terms()
+            -- Fetch Let's Encrypt's terms (PDF) link.
+            -- See the Lsp App Mgr's .preload script for details on ba.getDstRoot()
+            page.agreementURL=require"acme".terms({shark=ba.getDstRoot()})
          end
          emitRegister(error and decodeErr(error))
       end
