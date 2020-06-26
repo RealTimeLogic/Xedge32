@@ -86,25 +86,6 @@ particularly the compiler. We had to turn off all optimization and
 compile the Barracuda App Server library with the -g flag. The code
 was randomly crashing when optimization was applied to the build.
 
-The startup code found in LspAppMgr.c sets up a web server that limits
-the number of web server connections to 20; however, this is larger
-than the value that can be set using "make menuconfig". We have
-manually set the value in the file sdconfig (the file edited using
-"make menuconfig") to 32 connections.
-
-CONFIG_LWIP_MAX_ACTIVE_TCP=32
-
-The above is higher than the maximum of 16 connections that can be set
-using "make menuconfig". We do not recommend using smaller values as
-the web server may sputter with modern browsers if you limit the
-number of connections. In addition to the 20 connections that may be
-used by the web-server, additional connections may be used as you use
-the server to create WebSocket connections, HTTP client connections,
-and so on. The lwIP buffers are currently not optimized for the
-Barracuda App Server and the server may sometimes appear a bit
-sluggish, especially if using the NetIo. Feel free to experiment with
-the buffer settings found in the sdconfig file.
-
 The included acme.lsp Lua/LSP example may add an additional two minutes
 to the already 2.5 minutes needed for fetching the SSL certificate
 from Let's Encrypt. Creating an RSA private key is super heavy duty
