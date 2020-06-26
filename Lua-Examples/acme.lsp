@@ -19,12 +19,13 @@ This LSP page includes state management and the persistent state
 information is stored in the persistent "page" table.
 --]]
 
-
+-- cert IO
+local cIO = ba.openio"home" or ba.openio"disk"
 
 -- Zone Key for the domain lspappmgr.embeddedwebserver.net
 local dzkey="DED7C267FC547A1E766D65F58A77F9A0B8ACB09D801627D2A9D75AED2E428548"
 local function getDefaultZKey()
-   local zkey = require"rwfile".file(ba.openio"disk","cert/zkey") or dzkey
+   local zkey = require"rwfile".file(cIO,"cert/zkey") or dzkey
    return #zkey == 64 and zkey or nil
 end
 
@@ -54,7 +55,7 @@ page.dn=dn
 <details open>
 <summary>Certificate Installed</summary>
 <p>The Let's Encrypt signed certificate is installed and you may navigate to the secure URL by navigating to:</p>
-<h3 style="text-align:center"><a href="https://<?lsp=string.format("%s:%d%s",dn,ba.serversslport,request:uri())?>">https://<?lsp=dn?></a></h3>
+<h3 style="text-align:center"><a target="_blank" href="https://<?lsp=string.format("%s:%d%s",dn,ba.serversslport,request:uri())?>">https://<?lsp=dn?></a></h3>
 </details>
 <?lsp end local function emitWaiting()
 -----------------------------------------------------------
@@ -86,7 +87,7 @@ $(function() {
 });
 </script>
 </details>
-<?lsp end local function emitRegister(error)
+<?lsp end local function emitRegister(error,email)
 -----------------------------------------------------------
 ?>
 
@@ -96,7 +97,7 @@ $(function() {
 <form method="post">
 <table class="iw">
 <tr><td>Zone Key:</td><td><input type="text" name="zkey" value="<?lsp=page.zkey or ""?>" placeholder="64 byte long zone key. See instructions below." /></td></tr>
-<tr><td>E-Mail Address:</td><td><input type="text" name="email" placeholder="The e-mail address sent to Let's Encrypt" /></td></tr>
+<tr><td>E-Mail Address:</td><td><input type="text" name="email" placeholder="The e-mail address sent to Let's Encrypt" value="<?lsp=email or""?>"/></td></tr>
 </table>
 <input type="submit" value="Submit"/> 
 </form>
@@ -149,9 +150,10 @@ else
       local jobs=acmebot.status()
       response:json{busy=jobs > 0 and true or false}
    end
+   local op={acceptterms=true,rsa=true,production=true}
    local acmedns=require"acmedns"
    local jobs,domain,error = acmebot.status()
-   if jobs == 0 and (domain or page.dn) and not error then
+   if jobs == 0 and (domain or page.dn) and not error and acmedns.active() =="auto" then
       emitAcmeActive(domain or page.dn)
    elseif jobs > 0 then
       emitWaiting()
@@ -166,7 +168,6 @@ else
             page.zkey=zkey
             acmedns.configure(zkey)
             local dn = email:match"[^@]+"
-            local op={acceptterms=true,rsa=true,production=true}
             acmedns.auto(email, dn:gsub("[^%w]",""), op)
             emitWaiting()
          else
@@ -188,11 +189,16 @@ else
                page.dn=dn
                if not page.zksaved then
                   if page.zkey ~= dzkey then
-                     require"rwfile".file(ba.openio"disk","cert/zkey",page.zkey)
+                     require"rwfile".file(cIO,"cert/zkey",page.zkey)
                   end
                   page.zksaved=true
                end
-               emitAcmeActive(dn)
+               if acmedns.active() =="auto" then
+                  emitAcmeActive(dn)
+               else
+                  local a = require"rwfile".json(cIO,"cert/account.json")
+                  emitRegister(nil, a and a.email)
+               end
             elseif dn == false then
                doReg=true
             else
@@ -206,7 +212,7 @@ else
          if not page.agreementURL then
             -- Fetch Let's Encrypt's terms (PDF) link.
             -- See the Lsp App Mgr's .preload script for details on ba.getDstRoot()
-            page.agreementURL=require"acme".terms({shark=ba.getDstRoot()})
+            page.agreementURL=require"acme".terms()
          end
          emitRegister(error and decodeErr(error))
       end

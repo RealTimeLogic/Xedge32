@@ -9,7 +9,7 @@
  *                  Barracuda Embedded Web-Server 
  ****************************************************************************
  *
- *   $Id: LspAppMgr.c 4492 2020-02-10 18:12:19Z wini $
+ *   $Id: LspAppMgr.c 4536 2020-06-20 23:54:55Z wini $
  *
  *   COPYRIGHT:  Real Time Logic, 2008 - 2020
  *               http://www.realtimelogic.com
@@ -20,7 +20,6 @@
  *   in accordance with the terms and conditions stipulated in
  *   the agreement under which the program has been supplied.
  ****************************************************************************
-
 
 LSP Application Manager Documentation (lspappmgr):
 http://realtimelogic.com/ba/doc/?url=/examples/lspappmgr/readme.html
@@ -33,12 +32,42 @@ ZIP file.
 
 The extra optional API's included are documented in the startup code below.
 
+The LspAppMgr's C code shows typical C startup code required for the
+Barracuda App Server when used in an RTOS/firmware environment. The C
+code includes graceful shutdown, however, the graceful shutdown code
+is only included if compiled with USE_DBGMON=1 -- i.e. when the debug
+monitor is enabled. Graceful shutdown is typically not required in a
+firmware environment, but is required for the debug monitor's hot
+restart feature.
+
+The C code below indirectly installs a Lua debugger hook if compiled
+with USE_DBGMON=1 and installs a Lua debugger hook directly if
+compiled with macro ENABLE_LUA_TRACE. The code enabled with
+ENABLE_LUA_TRACE shows how to print each Lua line executed. See
+function lHook below.  See the following link for how to use the
+debugger: https://makoserver.net/articles/Lua-and-LSP-Debugging
+
+Note: some platforms automatically set USE_DBGMON=1 if the macro is
+not defined. See inc/arch/<PLAT>/TargConfig.h for your platform.
 */
+
 
 /*
   Include all I/O related header files
 */
 #include <barracuda.h>
+
+
+/* Call this function from the program's main() function or from a
+ * dedicated thread.
+ */
+void barracuda(void);
+
+
+/* The server's socket dispatcher object.
+ */
+static SoDisp dispatcher;
+
 
 /* 
    io=ezip
@@ -55,29 +84,57 @@ AUX_LUA_BINDINGS_DECL
 #endif
 extern void luaopen_esp(lua_State* L); /* Example Lua binding: led.c */
 
-/* Some operating systems such as ThreadX/FileX require special initialization.
- * This variable can be set to a function by platform specific startup code.
- * (REF-1).
-*/
+
+#if USE_DBGMON
+/* This function runs the Lua 'onunload' handlers for all loaded apps
+   when the server exits.  onunload is an optional function Lua
+   applications loaded by the server can use if the applications
+   require graceful termination such as sending a socket close message
+   to peers.
+ */
+static void
+onunload(lua_State* L, int onunloadRef)
+{
+   /* Run the 'onunload' function in the .config Lua script, which in
+    * turn runs the optional onunload for all loaded apps.
+    */
+   lua_rawgeti(L, LUA_REGISTRYINDEX, onunloadRef);
+   baAssert(lua_isfunction(L, -1));
+   if(lua_pcall(L, 0, 1, 0))
+   {
+      HttpTrace_printf(0,"Error in 'onunload': %s\n",
+                       lua_isstring(L,-1) ? lua_tostring(L, -1) : "?");
+   }
+   luaL_unref(L, LUA_REGISTRYINDEX, onunloadRef);
+   balua_relsocket(L); /* Gracefully close all cosockets, if any */
+}
+#endif
+
+
+/* Some operating systems such as ThreadX/FileX require special file
+ * system initialization.  This variable can be set to a function by
+ * platform specific startup code.  (REF-1).  
+ */
 #ifndef NO_BAIO_DISK
+
 int (*platformInitDiskIo)(DiskIo*);
 
-/* Example code */
+/* File system init code (exampel code for a few targets) */
 #ifdef _WIN32
 #include <stdlib.h>
 static int initDiskIo(DiskIo* io)
 {
-   DiskIo_setRootDir(io,getenv("USERPROFILE"));
+   DiskIo_setRootDir(io,getenv("USERPROFILE")); /* Set to Window's home dir */
    return 0;
 }
 #elif defined(BA_POSIX)
 #include <stdlib.h>
 static int initDiskIo(DiskIo* io) {
-   DiskIo_setRootDir(io,getenv("HOME"));
+   DiskIo_setRootDir(io,getenv("HOME")); /* Linux user's home dir */
    return 0;
 }
 #elif defined(ESP_PLATFORM)
-/* ESP32 */
+/* ESP32 WROVER */
 #include<esp_vfs.h>
 #include<esp_vfs_fat.h>
 #include<esp_system.h>
@@ -89,28 +146,33 @@ static int initDiskIo(DiskIo* io)
       .format_if_mount_failed = true,
       .allocation_unit_size = CONFIG_WL_SECTOR_SIZE
    };
-   static wl_handle_t hndl = WL_INVALID_HANDLE;
-   esp_err_t err = esp_vfs_fat_spiflash_mount(bp, "storage", &mcfg, &hndl); 
-   if (err != ESP_OK)
+   static BaBool mounted=FALSE;
+   if( ! mounted )
    {
-      HttpTrace_printf(0,"Failed to mount FATFS (%s)", esp_err_to_name(err));
-      return -1;
+      wl_handle_t hndl = WL_INVALID_HANDLE;
+      esp_err_t err = esp_vfs_fat_spiflash_mount(bp, "storage", &mcfg, &hndl); 
+      if (err != ESP_OK)
+      {
+         HttpTrace_printf(0,"Failed to mount FATFS (%s)", esp_err_to_name(err));
+         return -1;
+      }
+      mounted=TRUE;
    }
+   /* Else: restarted internally by debugger */
    DiskIo_setRootDir(io,bp);
    return 0;
 }
 #endif
-#endif /* NO_BAIO_DISK */
+/* End file system init code */
 
-/* Declare and call the server's main loop from main() or a thread */
-void barracuda(void);
+#endif /* NO_BAIO_DISK */
 
 
 /* Initialize the HttpServer object by calling HttpServer_constructor.
    The HttpServerConfig object is only needed during initialization.
 */
 static void
-createServer(HttpServer* server, SoDisp* dispatcher)
+createServer(HttpServer* server)
 {
    HttpServerConfig scfg;
 
@@ -124,18 +186,28 @@ createServer(HttpServer* server, SoDisp* dispatcher)
    /* For huge url encoded data, if any. */
    HttpServerConfig_setRequest(&scfg,2*1024, 8*1024);
    /* Large response buffers makes the NetIO much faster when used by
-    * the web-server.
+    * the web server.
     */
    HttpServerConfig_setResponseData(&scfg,8*1024);
 
    /* Create and init the server, by using the above HttpServerConfig.
     */
-   HttpServer_constructor(server, dispatcher, &scfg);
+   HttpServer_constructor(server, &dispatcher, &scfg);
 }
 
-/* #define ENABLE_LUA_TRACE */
+
+/* Lua debugger hook. Use the debug monitor or the basic trace lib.
+ */
+#if USE_DBGMON
+static void
+dbgExitRequest(void* na, BaBool rstart)
+{
+   (void)na;
+   (void)rstart;
+   SoDisp_setExit(&dispatcher);
+}
+#elif defined(ENABLE_LUA_TRACE)
 /* Prints every line executed by Lua if enabled */
-#ifdef ENABLE_LUA_TRACE
 static void lHook(lua_State *L, lua_Debug *ar)
 {
    lua_getinfo(L, "S", ar);
@@ -144,36 +216,14 @@ static void lHook(lua_State *L, lua_Debug *ar)
 #endif
 
 
-/*
-  This is the "main" barracuda function. This function initializes the
-  web-server, configures a Lua Virtual Machine and enters a forever
-  loop.
-
-  This function is typically called from a thread/task dedicated to
-  the Barracuda web-server.
-
-  Notice that we do not create a Virtual File System in this startup
-  code. The Virtual File System is created by the Lua .preload script
-  in the "lsp" subdirectory. The .preload script is executed when we
-  call balua_loadconfig from the C code below.
+/* Create and return the IO used by the Lua virtual machine.
+   The IO can be configured with compile time options as follows:
+   disk   |    net   |    zip   |   ezip
+   BAIO_DISK | BAIO_NET | BAIO_ZIP | BAIO_EZIP
 */
-void
-barracuda(void)
+static IoIntf*
+createVmIo()
 {
-   ThreadMutex mutex;
-   SoDisp dispatcher;
-   HttpServer server;
-   BaTimer timer;
-   HttpCmdThreadPool pool;
-   int ecode;
-   NetIo netIo;
-   lua_State* L; /* pointer to a Lua virtual machine */
-   BaLua_param blp = {0}; /* configuration parameters */
-
-   /* vmIo=
-         disk   |    net   |    zip   |   ezip
-      BAIO_DISK | BAIO_NET | BAIO_ZIP | BAIO_EZIP
-    */
 #if defined(BAIO_DISK)
    static DiskIo vmIo;
    DiskIo_constructor(&vmIo);
@@ -210,6 +260,47 @@ barracuda(void)
    if(ZipIo_getECode(&vmIo) !=  ZipErr_NoError)
       baFatalE(FE_USER_ERROR_3, 0);
 #endif
+   return (IoIntf*)(&vmIo);
+}
+
+
+/*
+  This is the "main" barracuda function. This function initializes the
+  LspAppMgr, configures a Lua Virtual Machine and enters a forever
+  loop.
+
+  This function is typically called from a thread/task dedicated to
+  running the Barracuda App Server socket dispatcher SoDisp.
+
+  Notice that we do not create a Virtual File System in this startup
+  code. The Virtual File System is created by the Lua .config script
+  in the "lsp" subdirectory. The .config script is executed when we
+  call balua_loadconfig from the C code below.
+*/
+void
+barracuda(void)
+{
+   ThreadMutex mutex;
+   HttpServer server;
+   BaTimer timer;
+   HttpCmdThreadPool pool;
+   int ecode;
+   NetIo netIo;
+   lua_State* L; /* pointer to a Lua virtual machine */
+   BaLua_param blp; /* configuration parameters */
+   balua_thread_Shutdown tShutdown;
+#if USE_DBGMON
+   int onunloadRef;
+#endif
+#ifndef NO_BAIO_DISK
+   static DiskIo diskIo;
+#endif
+
+#if USE_DBGMON
+  L_restart:
+#endif
+
+   HttpTrace_setPrio(7); /* block level 8 and 9 */
 
 /* Example code for 'platformInitDiskIo declaration' (REF-1).
    This would typically be in another (startup) file for deep embedded systems.
@@ -225,7 +316,7 @@ barracuda(void)
     */
    ThreadMutex_constructor(&mutex);
    SoDisp_constructor(&dispatcher, &mutex);
-   createServer(&server, &dispatcher);
+   createServer(&server);
 
    /* For embedded systems without a file system */
    NetIo_constructor(&netIo, &dispatcher);
@@ -235,15 +326,16 @@ barracuda(void)
    
    /* Create a LSP virtual machine.
     */
-   blp.vmio = (IoIntf*)&vmIo;  /* The required IO */
-   blp.server = &server;           /* pointer to a HttpServer */
-   blp.timer = &timer;             /* Pointer to a BaTimer */
-   L = balua_create(&blp);        /* create the Lua state */
+   memset(&blp, 0, sizeof(blp));
+   blp.vmio = createVmIo();  /* The required IO */
+   blp.server = &server;     /* pointer to a HttpServer */
+   blp.timer = &timer;       /* Pointer to a BaTimer */
+   L = balua_create(&blp);   /* create the Lua state */
 
    /* Install optional IO interfaces */
    balua_iointf(L, "net",  (IoIntf*)&netIo);
    balua_http(L); /* Install optional HTTP client library */
-   balua_thread(L); /* Install optional Lua thread library */
+   tShutdown=balua_thread(L); /* Install optional Lua thread library */
    balua_socket(L);  /* Install optional Lua socket library */
    balua_sharkssl(L);  /* Install optional Lua SharkSSL library */
    balua_crypto(L);  /* Install optional crypto library */
@@ -257,18 +349,14 @@ barracuda(void)
    Command line: make ..... nodisk=1
 */
 #ifndef NO_BAIO_DISK
+   DiskIo_constructor(&diskIo);
+   /* REF-1 */
+   if( ! platformInitDiskIo || (*platformInitDiskIo)(&diskIo) == 0)
    {
-      static DiskIo diskIo;
-      DiskIo_constructor(&diskIo);
-      /* REF-1 */
-      if( ! platformInitDiskIo || (*platformInitDiskIo)(&diskIo) == 0)
-      {
-         /* Add optional IO interfaces */
-         balua_iointf(L, "disk",  (IoIntf*)&diskIo);
-      }
+      /* Add optional IO interfaces */
+      balua_iointf(L, "disk",  (IoIntf*)&diskIo);
    }
 #endif
-
 
    /* Create user/login tracker */
    balua_usertracker_create(
@@ -277,21 +365,37 @@ barracuda(void)
       4, /* Max number of login attempts. */
       10*60); /* 10 minutes ban time if more than 4 login attempts in a row. */
 
-   /* Dispatcher mutex must be locked when running the .config script
+   /* Lua debugger hook.
+      Use the debugger monitor or the basic trace lib (lHook).
     */
-   ThreadMutex_set(&mutex);
-   ecode=balua_loadconfig(L, (IoIntf*)&vmIo, 0); /* Load and run .config  */
-   ThreadMutex_release(&mutex);
-
-#ifdef ENABLE_LUA_TRACE
+#if USE_DBGMON
+   ba_ldbgmon(L, dbgExitRequest, 0);
+#elif defined(ENABLE_LUA_TRACE)
    lua_sethook(L, lHook, LUA_MASKLINE, 0);
 #endif
 
+   /* Dispatcher mutex must be locked when running the .config script
+    */
+   ThreadMutex_set(&mutex);
+   ecode=balua_loadconfigExt(L, blp.vmio, 0, 1); /* Load and run .config  */
+   ThreadMutex_release(&mutex);
    if(ecode)
    {
       HttpTrace_printf(0,".config error: %s.\n", lua_tostring(L,-1)); 
       baFatalE(FE_USER_ERROR_2, 0);
    }
+#if USE_DBGMON
+   /* .config must return a function */
+   if(!lua_isfunction(L, -1))
+   {
+      HttpTrace_printf(0,".config error: no onunload\n");
+      baFatalE(FE_USER_ERROR_3, 0);
+   }
+   /* Keep a reference to function returned by .config */
+   onunloadRef=luaL_ref(L,LUA_REGISTRYINDEX);
+#else
+   lua_pop(L, 1); /* Returned function not used */
+#endif
 
    /* See (A) above */
    HttpCmdThreadPool_constructor(&pool, &server, ThreadPrioNormal, BA_STACKSZ);
@@ -303,6 +407,38 @@ barracuda(void)
 
      Note: the server socket connections are opened by the Lua script
      .config and not by C code.
+
+     Arg -1: Never returns, unless SoDisp_setExit() is called
    */
-   SoDisp_run(&dispatcher, -1);  /* -1: Never return */
+   SoDisp_run(&dispatcher, -1);
+
+   /* Enable gracefull shutdown if debug monitor is included.
+    */
+#if USE_DBGMON
+   /*Dispatcher mutex must be locked when terminating the following objects.*/
+   ThreadMutex_set(&mutex);
+   /* Graceful termination of Lua apps. See function above. */
+   onunload(L, onunloadRef);
+   tShutdown(L,&mutex); /* Wait for threads to exit, if any */
+   HttpCmdThreadPool_destructor(&pool);
+
+   /* Must cleanup all sessions before destroying the Lua VM */
+   HttpServer_termAllSessions(&server);
+   /* Destroy all objects, including server listening objects. */
+   lua_close(L);
+
+   IoIntf_destructor(blp.vmio); /* Virtual destr */
+#ifndef NO_BAIO_DISK
+   DiskIo_destructor(&diskIo);
+#endif
+   NetIo_destructor(&netIo);
+   BaTimer_destructor(&timer);
+   HttpServer_destructor(&server);
+   SoDisp_destructor(&dispatcher);
+   ThreadMutex_release(&mutex);   
+   ThreadMutex_destructor(&mutex);
+   HttpTrace_printf(0,"\n\nRestarting LspAppMgr.\n\n");
+   HttpTrace_flush();
+   goto L_restart;
+#endif
 }
