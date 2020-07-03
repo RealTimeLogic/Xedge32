@@ -181,7 +181,7 @@ createServer(HttpServer* server)
    /* (A) Configure for 3 threads. See HttpCmdThreadPool. */
    HttpServerConfig_setNoOfHttpCommands(&scfg,3);
 
-   HttpServerConfig_setNoOfHttpConnections(&scfg,20);
+   HttpServerConfig_setNoOfHttpConnections(&scfg,8);
 
    /* For huge url encoded data, if any. */
    HttpServerConfig_setRequest(&scfg,2*1024, 8*1024);
