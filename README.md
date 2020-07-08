@@ -64,6 +64,8 @@ programming. We have seen from many successful projects that up to 80%
 of a modern embedded system can be implemented using LSP, ensuring
 dramatically reduced development time and cost.
 
+See the [online and interactive LSP tutorial](https://embedded-app-server.info/) for an introduction.
+
 ## What is the LSP Application Manager?
 
 The LSP App Manager turns the Barracuda App Server library into an
@@ -79,16 +81,4 @@ for details.
 * See the [online Barracuda Application Server Tutorial](https://embedded-app-server.info/) for an introduction to Lua and LSP.
 * The sub directory [Lua-Examples](Lua-Examples/README.md) includes ready to use Lua and LSP ESP32 examples.
 
-### Gotchas
 
-We have had some stability issues with the ESP-IDF environment,
-particularly the compiler. We had to turn off all optimization and
-compile the Barracuda App Server library with the -g flag. The code
-was randomly crashing when optimization was applied to the build.
-
-The included acme.lsp Lua/LSP example may add an additional two minutes
-to the already 2.5 minutes needed for fetching the SSL certificate
-from Let's Encrypt. Creating an RSA private key is super heavy duty
-and may take up to 120 seconds on the ESP32. Let's Encrypt will
-hopefully soon support ECC certificates and you may then switch to
-generating an ECC key, which takes less than a seconds.
