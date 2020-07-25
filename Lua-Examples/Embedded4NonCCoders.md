@@ -25,7 +25,7 @@ esp.gpio_set_level(go, 0)
 **References:**
 * [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/index.html)
 * [ESP-IDF GPIO API](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/gpio.html)
-* [video at ]()
+* [video @ 5:40](https://youtu.be/XkVQYJ-z7JA?t=340)
 
 
 ### Blink LED connected to GPIO 22
@@ -55,7 +55,7 @@ run()
 * [The Command (Request/Response) Environment](https://realtimelogic.com/ba/doc/?url=lua.html#CMDE)
 * [ba.sleep](https://realtimelogic.com/ba/doc/?url=lua.html#ba_sleep)
 * [trace](https://realtimelogic.com/ba/doc/?url=lua.html#_G_trace)
-* [video at ]()
+* [video @ 7:00](https://youtu.be/XkVQYJ-z7JA?t=420)
 
 
 ### Blink LED using an infinite loop running inside an interval timer
@@ -85,7 +85,7 @@ ba.timer(run):set(500)
 * [ba.timer](https://realtimelogic.com/ba/doc/?url=lua.html#ba.timer)
 * [coroutine.yield](https://realtimelogic.com/ba/doc/en/lua/man/manual.html#pdf-coroutine.yield)
 * [collectgarbage](https://realtimelogic.com/ba/doc/en/lua/man/manual.html#pdf-collectgarbage)
-* [video at ]()
+* [video @ 8:00](https://youtu.be/XkVQYJ-z7JA?t=480)
 
 ### Interval timer for frequently polling the button state at GPIO 22
 
@@ -114,7 +114,7 @@ ba.timer(run):set(50)
 
 ```
 **References:**
-* [video at ]()
+* [video @ 11:20](https://youtu.be/XkVQYJ-z7JA?t=680)
 
 ### Interval timer for polling the button state with state change filter
 
@@ -149,7 +149,7 @@ end
 ba.timer(run):set(50)
 ```
 **References:**
-* [video at ]()
+* [video @ 12:00](https://youtu.be/XkVQYJ-z7JA?t=720)
 
 ### Interval timer for polling button state and turning LED on/off
 
@@ -184,7 +184,7 @@ end
 ba.timer(run):set(50)
 ```
 **References:**
-* [video at ]()
+* [video @ 12:50](https://youtu.be/XkVQYJ-z7JA?t=770)
 
 ### The above code with added SMS WebHook
 
@@ -231,4 +231,4 @@ ba.timer(run):set(50, true)
 * [IFTTT WebHooks](https://ifttt.com/maker_webhooks)
 * [HTTP Client Library](https://realtimelogic.com/ba/doc/?url=auxlua.html#httplib)
 * [ba.thread.run](https://realtimelogic.com/ba/doc/?url=auxlua.html#thread_lib)
-* [video at ]()
+* [video @ 13:51](https://youtu.be/XkVQYJ-z7JAhttps://youtu.be/XkVQYJ-z7JA?t=831)
