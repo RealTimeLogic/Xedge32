@@ -22,6 +22,7 @@ SWIG: http://www.swig.org/download.html
 #include "driver/adc.h"
 #include "driver/dac.h"
 #include "driver/mcpwm.h"
+#include "nvs_flash.h"
 #include "swig-esp.h"
 %}
 
@@ -38,6 +39,10 @@ SWIG: http://www.swig.org/download.html
 %ignore gpio_intr_pending_high;
 %ignore gpio_pin_wakeup_disable;
 %ignore gpio_pin_wakeup_enable;
+%ignore nvs_flash_read_security_cfg;
+%ignore nvs_flash_secure_init_partition;
+%ignore nvs_flash_generate_keys;
+%ignore nvs_flash_secure_init;
 
 %include "stdint.i"
 %include "swig-esp.h"
@@ -47,4 +52,5 @@ SWIG: http://www.swig.org/download.html
 %include "driver/adc.h"
 %include "driver/dac.h"
 %include "driver/mcpwm.h"
-
+%include "hal/mcpwm_types.h"
+%include "nvs_flash.h"
