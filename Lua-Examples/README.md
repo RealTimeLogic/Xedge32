@@ -22,15 +22,6 @@ real time user interface for controlling the servo.
 The httpclient.lsp example shows how to use the HTTP client library
 for connecting to online REST services.
 
-### Get a Trusted TLS certificate
-
-Trust management and chain of trust can be very complicated, but not
-so with the integrated Let's encrypt plugin. Simply run the LSP file
-acme.lsp using the Web-IDE and follow the instructions.
-
-See the following article if you are new to PKI and chain of trust:
-https://realtimelogic.com/articles/Certificate-Management-for-Embedded-Systems
-
 ### WebSockets
 
 The following example shows how to use WebSockets via the SMQ
