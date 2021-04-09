@@ -9,9 +9,9 @@
  *                  Barracuda Embedded Web-Server 
  ****************************************************************************
  *
- *   $Id: LspAppMgr.c 4536 2020-06-20 23:54:55Z wini $
+ *   $Id: LspAppMgr.c 4677 2021-01-02 15:03:35Z wini $
  *
- *   COPYRIGHT:  Real Time Logic, 2008 - 2020
+ *   COPYRIGHT:  Real Time Logic, 2008 - 2021
  *               http://www.realtimelogic.com
  *
  *   The copyright to the program herein is the property of
@@ -134,7 +134,8 @@ static int initDiskIo(DiskIo* io) {
    return 0;
 }
 #elif defined(ESP_PLATFORM)
-/* ESP32 WROVER */
+/* ESP32 WROVER specific: https://realtimelogic.com/downloads/bas/ESP32/
+*/
 #include<esp_vfs.h>
 #include<esp_vfs_fat.h>
 #include<esp_system.h>
@@ -168,6 +169,25 @@ static int initDiskIo(DiskIo* io)
 #endif /* NO_BAIO_DISK */
 
 
+/* SharkTrustX
+
+   Create your own tokengen.h header file as follows:
+
+   1: Sign up for Real Time Logic's DNS testing service or preferably,
+      set up your own DNS service (one of:)
+        A: Testing service: https://acme.realtimelogic.com/
+        B: Your own service: https://github.com/RealTimeLogic/SharkTrustX
+   2: Wait for the email received from the DNS service
+   3: Navigate to your DNS zone https://your-domain/login
+   4: Login using your credentials
+   5: Navigate to https://your-domain/cgen
+   6: Download the generated C code, rename to tokengen.h,
+      and place generated file in this directory
+*/
+#define EMBEDDED_ZONE_KEY
+#include "tokengen.c"
+
+
 /* Initialize the HttpServer object by calling HttpServer_constructor.
    The HttpServerConfig object is only needed during initialization.
 */
@@ -178,8 +198,8 @@ createServer(HttpServer* server)
 
    HttpServerConfig_constructor(&scfg);
 
-   /* (A) Configure for 3 threads. See HttpCmdThreadPool. */
-   HttpServerConfig_setNoOfHttpCommands(&scfg,3);
+   /* (A) Configure for 2 threads. See HttpCmdThreadPool. */
+   HttpServerConfig_setNoOfHttpCommands(&scfg,2);
 
    HttpServerConfig_setNoOfHttpConnections(&scfg,8);
 
@@ -226,6 +246,7 @@ createVmIo()
 {
 #if defined(BAIO_DISK)
    static DiskIo vmIo;
+   int ecode;
    DiskIo_constructor(&vmIo);
    if( (ecode=DiskIo_setRootDir(&vmIo, "../LspZip")) != 0 )
    {
@@ -372,6 +393,13 @@ barracuda(void)
    ba_ldbgmon(L, dbgExitRequest, 0);
 #elif defined(ENABLE_LUA_TRACE)
    lua_sethook(L, lHook, LUA_MASKLINE, 0);
+#endif
+
+   balua_tokengen(L); /* See  the "SharkTrustX" comment above */
+#if USE_REVCON
+   /* Add reverse server connection. This requires SharkTrustX.
+    */
+   balua_revcon(L);
 #endif
 
    /* Dispatcher mutex must be locked when running the .config script

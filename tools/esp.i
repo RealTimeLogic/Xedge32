@@ -1,9 +1,10 @@
 
 /*
 
-Navigate to ~/esp32 and run:
-
-swig -DCONFIG_IDF_TARGET_ESP32=1 -Iesp-idf/components/esp32/ -Iesp-idf/components/esp_common/include -Iesp-idf/components/soc/include -Iesp-idf/components/soc/esp32/include -Iesp-idf/components/driver/include -Iesp-idf/components/esp_rom/include -lua esp.i
+In the parent directory, run:
+CPWD=$PWD
+cd ..
+swig -DCONFIG_IDF_TARGET_ESP32=1 -Iesp-idf/components/esp32/ -Iesp-idf/components/esp_common/include -Iesp-idf/components/hal/include -Iesp-idf/components/soc/include -Iesp-idf/components/soc/esp32/include -Iesp-idf/components/driver/include -Iesp-idf/components/esp_rom/include -Iesp-idf/components/driver/esp32/include -Iesp-idf/components/nvs_flash/include -I$CPWD/main -lua -o $CPWD/main/esp_wrap.c $CPWD/tools/esp.i
 
 SWIG: http://www.swig.org/download.html
 
@@ -29,7 +30,7 @@ SWIG: http://www.swig.org/download.html
 #define CONFIG_IDF_TARGET_ESP32 1
 //#define SOC_MCPWM_PERIPH_NUM MCPWM_UNIT_MAX
 #define _Static_assert(x,m)
-#define SOC_MCPWM_SUPPORTED
+#define SOC_MCPWM_SUPPORTED 1
 
 %ignore gpio_init;
 %ignore gpio_intr_ack;
