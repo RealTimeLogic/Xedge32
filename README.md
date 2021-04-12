@@ -64,7 +64,7 @@ programming. We have seen from many successful projects that up to 80%
 of a modern embedded system can be implemented using LSP, ensuring
 dramatically reduced development time and cost.
 
-See the [online and interactive LSP tutorial](https://embedded-app-server.info/) for an introduction.
+See the [online and interactive LSP tutorial](https://tutorial.realtimelogic.com/) for an introduction.
 
 ## What is the LSP Application Manager?
 
