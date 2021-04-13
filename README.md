@@ -22,6 +22,14 @@ project and lets developers easily design edge related tasks in Lua
 and enables easy bridging of cloud/IIoT and edge with its portfolio of
 IoT and industrial protocols.
 
+[![](http://img.youtube.com/vi/S_C9794aPro/0.jpg)](http://www.youtube.com/watch?v=S_C9794aPro "Introduction")
+
+** Video 1: Introduction/demo **
+
+[![](http://img.youtube.com/vi/XkVQYJ-z7JA/0.jpg)](http://www.youtube.com/watch?v=XkVQYJ-z7JA "Tutorial")
+
+** Video 2: Tutorial **
+
 ## Why Lua and not Python?
 
 Python may be the king of the desktop, but Lua rocks in embedded
