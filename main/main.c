@@ -3,7 +3,9 @@
 */
 
 #include <sys/param.h>
-
+#include <time.h>
+#include <sys/time.h>
+#include "esp_sntp.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -92,6 +94,11 @@ app_main(void)
    */
   ESP_ERROR_CHECK(example_connect());
 #endif
+
+
+  sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  sntp_setservername(0, "pool.ntp.org");
+  sntp_init();
 
   /* Using BAS thread porting API */
   Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
