@@ -86,7 +86,7 @@ for details.
 ## Getting Started
 
 * See the [Barracuda Application Server for ESP32](https://realtimelogic.com/downloads/bas/ESP32/) page for build instructions.
-* See the [online Barracuda Application Server Tutorial](https://embedded-app-server.info/) for an introduction to Lua and LSP.
+* See the [online Barracuda Application Server Tutorial](https://tutorial.realtimelogic.com/) for an introduction to Lua and LSP.
 * The sub directory [Lua-Examples](Lua-Examples/README.md) includes ready to use Lua and LSP ESP32 examples.
 
 

@@ -56,7 +56,7 @@ Server tutorials. The easiest way to copy the tutorials into the LSP
 App Manager's Web-IDE is to copy the examples directly from the online
 tutorial server:
 
-https://embedded-app-server.info/
+https://tutorial.realtimelogic.com/
 
 ### Mako Server LSP Book
 
