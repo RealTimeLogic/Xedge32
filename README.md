@@ -24,11 +24,11 @@ IoT and industrial protocols.
 
 [![](http://img.youtube.com/vi/S_C9794aPro/0.jpg)](http://www.youtube.com/watch?v=S_C9794aPro "Introduction")
 
-** Video 1: Introduction/demo **
+**Video 1: Installation, Introduction, and Demo**
 
 [![](http://img.youtube.com/vi/XkVQYJ-z7JA/0.jpg)](http://www.youtube.com/watch?v=XkVQYJ-z7JA "Tutorial")
 
-** Video 2: Tutorial **
+**Video 2: Tutorial**
 
 ## Why Lua and not Python?
 

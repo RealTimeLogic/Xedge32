@@ -227,6 +227,36 @@ end
 ba.timer(run):set(50, true)
 ```
 
+### Replace IFTTT with E-Mail
+
+Instead of sending a message by using the IFTTT, why not simply send
+an email directly from the ESP32. The following code is set up for
+using Gmail and if you have a Gmail account, simply replace
+bob@gmail.com with your own email address. You can then replace the
+original send2ifttt function with the one below.
+
+``` lua
+require "socket.mail" -- Load mail lib
+-- doc: https://realtimelogic.com/ba/doc/?url=auxlua.html#smtp
+
+local function send2ifttt() -- This function does not use IFTTT
+   local mail=socket.mail{
+      shark=ba.sharkclient(), -- Use TLS (Required by Google)
+      server="smtp.gmail.com",
+      user="bob@gmail.com",
+      password="YOUR GOOGLE PASSWORD",
+   }
+
+   mail:send{
+      from='Bob <bob@gmail.com>',
+      to='Bob <bob@gmail.com>',
+      subject="Button pressed",
+      txtbody="The button was pressed\n\n-- Sent from ESP32",
+   }
+end
+```
+
+
 **References:**
 * [IFTTT WebHooks](https://ifttt.com/maker_webhooks)
 * [HTTP Client Library](https://realtimelogic.com/ba/doc/?url=auxlua.html#httplib)
