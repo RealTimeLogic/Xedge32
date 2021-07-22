@@ -2703,24 +2703,29 @@ SWIG_Lua_dostring(lua_State *L, const char *str) {
 #define SWIGTYPE_p_mcpwm_deadtime_type_t swig_types[27]
 #define SWIGTYPE_p_mcpwm_duty_type_t swig_types[28]
 #define SWIGTYPE_p_mcpwm_fault_input_level_t swig_types[29]
-#define SWIGTYPE_p_mcpwm_fault_signal_t swig_types[30]
-#define SWIGTYPE_p_mcpwm_generator_t swig_types[31]
-#define SWIGTYPE_p_mcpwm_intr_t swig_types[32]
-#define SWIGTYPE_p_mcpwm_io_signals_t swig_types[33]
-#define SWIGTYPE_p_mcpwm_output_action_t swig_types[34]
-#define SWIGTYPE_p_mcpwm_pin_config_t swig_types[35]
-#define SWIGTYPE_p_mcpwm_sync_signal_t swig_types[36]
-#define SWIGTYPE_p_mcpwm_timer_t swig_types[37]
-#define SWIGTYPE_p_mcpwm_unit_t swig_types[38]
-#define SWIGTYPE_p_nvs_sec_cfg_t swig_types[39]
-#define SWIGTYPE_p_short swig_types[40]
-#define SWIGTYPE_p_signed_char swig_types[41]
-#define SWIGTYPE_p_unsigned_char swig_types[42]
-#define SWIGTYPE_p_unsigned_int swig_types[43]
-#define SWIGTYPE_p_unsigned_long_long swig_types[44]
-#define SWIGTYPE_p_unsigned_short swig_types[45]
-static swig_type_info *swig_types[47];
-static swig_module_info swig_module = {swig_types, 46, 0, 0, 0, 0};
+#define SWIGTYPE_p_mcpwm_fault_reaction_t swig_types[30]
+#define SWIGTYPE_p_mcpwm_fault_signal_t swig_types[31]
+#define SWIGTYPE_p_mcpwm_generator_action_t swig_types[32]
+#define SWIGTYPE_p_mcpwm_generator_t swig_types[33]
+#define SWIGTYPE_p_mcpwm_io_signals_t swig_types[34]
+#define SWIGTYPE_p_mcpwm_output_action_t swig_types[35]
+#define SWIGTYPE_p_mcpwm_pin_config_t swig_types[36]
+#define SWIGTYPE_p_mcpwm_sync_signal_t swig_types[37]
+#define SWIGTYPE_p_mcpwm_timer_count_mode_t swig_types[38]
+#define SWIGTYPE_p_mcpwm_timer_direction_t swig_types[39]
+#define SWIGTYPE_p_mcpwm_timer_event_t swig_types[40]
+#define SWIGTYPE_p_mcpwm_timer_operate_cmd_t swig_types[41]
+#define SWIGTYPE_p_mcpwm_timer_t swig_types[42]
+#define SWIGTYPE_p_mcpwm_unit_t swig_types[43]
+#define SWIGTYPE_p_nvs_sec_cfg_t swig_types[44]
+#define SWIGTYPE_p_short swig_types[45]
+#define SWIGTYPE_p_signed_char swig_types[46]
+#define SWIGTYPE_p_unsigned_char swig_types[47]
+#define SWIGTYPE_p_unsigned_int swig_types[48]
+#define SWIGTYPE_p_unsigned_long_long swig_types[49]
+#define SWIGTYPE_p_unsigned_short swig_types[50]
+static swig_type_info *swig_types[52];
+static swig_module_info swig_module = {swig_types, 51, 0, 0, 0, 0};
 #define SWIG_TypeQuery(name) SWIG_TypeQueryModule(&swig_module, &swig_module, name)
 #define SWIG_MangledTypeQuery(name) SWIG_MangledTypeQueryModule(&swig_module, &swig_module, name)
 
@@ -7268,14 +7273,15 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_F0", MCPWM_SELECT_F0)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_F1", MCPWM_SELECT_F1)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_F2", MCPWM_SELECT_F2)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC0", MCPWM_SELECT_SYNC0)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC1", MCPWM_SELECT_SYNC1)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC2", MCPWM_SELECT_SYNC2)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_LOW_LEVEL_TGR", MCPWM_LOW_LEVEL_TGR)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_HIGH_LEVEL_TGR", MCPWM_HIGH_LEVEL_TGR)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP0", MCPWM_SELECT_CAP0)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP1", MCPWM_SELECT_CAP1)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP2", MCPWM_SELECT_CAP2)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP0", MCPWM_LL_INTR_CAP0)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP1", MCPWM_LL_INTR_CAP1)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP2", MCPWM_LL_INTR_CAP2)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_NEG_EDGE", MCPWM_NEG_EDGE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_POS_EDGE", MCPWM_POS_EDGE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_BOTH_EDGE", MCPWM_BOTH_EDGE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_FREEZE_COUNTER", MCPWM_FREEZE_COUNTER)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_UP_COUNTER", MCPWM_UP_COUNTER)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_DOWN_COUNTER", MCPWM_DOWN_COUNTER)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_UP_DOWN_COUNTER", MCPWM_UP_DOWN_COUNTER)},
@@ -7285,10 +7291,6 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("MCPWM_HAL_GENERATOR_MODE_FORCE_LOW", MCPWM_HAL_GENERATOR_MODE_FORCE_LOW)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_HAL_GENERATOR_MODE_FORCE_HIGH", MCPWM_HAL_GENERATOR_MODE_FORCE_HIGH)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_DUTY_MODE_MAX", MCPWM_DUTY_MODE_MAX)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_NO_CHANGE", MCPWM_ACTION_NO_CHANGE)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_FORCE_LOW", MCPWM_ACTION_FORCE_LOW)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_FORCE_HIGH", MCPWM_ACTION_FORCE_HIGH)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_TOGGLE", MCPWM_ACTION_TOGGLE)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_DEADTIME_BYPASS", MCPWM_DEADTIME_BYPASS)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_BYPASS_RED", MCPWM_BYPASS_RED)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_BYPASS_FED", MCPWM_BYPASS_FED)},
@@ -7299,12 +7301,32 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTIVE_RED_FED_FROM_PWMXA", MCPWM_ACTIVE_RED_FED_FROM_PWMXA)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTIVE_RED_FED_FROM_PWMXB", MCPWM_ACTIVE_RED_FED_FROM_PWMXB)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_DEADTIME_TYPE_MAX", MCPWM_DEADTIME_TYPE_MAX)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC0", MCPWM_SELECT_SYNC0)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC1", MCPWM_SELECT_SYNC1)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_SYNC2", MCPWM_SELECT_SYNC2)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_NEG_EDGE", MCPWM_NEG_EDGE)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_POS_EDGE", MCPWM_POS_EDGE)},
-    {SWIG_LUA_CONSTTAB_INT("MCPWM_BOTH_EDGE", MCPWM_BOTH_EDGE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_NO_CHANGE", MCPWM_ACTION_NO_CHANGE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_FORCE_LOW", MCPWM_ACTION_FORCE_LOW)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_FORCE_HIGH", MCPWM_ACTION_FORCE_HIGH)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_ACTION_TOGGLE", MCPWM_ACTION_TOGGLE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP0", MCPWM_SELECT_CAP0)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP1", MCPWM_SELECT_CAP1)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP2", MCPWM_SELECT_CAP2)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_DIRECTION_UP", MCPWM_TIMER_DIRECTION_UP)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_DIRECTION_DOWN", MCPWM_TIMER_DIRECTION_DOWN)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_EVENT_ZERO", MCPWM_TIMER_EVENT_ZERO)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_EVENT_PEAK", MCPWM_TIMER_EVENT_PEAK)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_COUNT_MODE_PAUSE", MCPWM_TIMER_COUNT_MODE_PAUSE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_COUNT_MODE_UP", MCPWM_TIMER_COUNT_MODE_UP)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_COUNT_MODE_DOWN", MCPWM_TIMER_COUNT_MODE_DOWN)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_COUNT_MODE_UP_DOWN", MCPWM_TIMER_COUNT_MODE_UP_DOWN)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_STOP_AT_ZERO", MCPWM_TIMER_STOP_AT_ZERO)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_STOP_AT_PEAK", MCPWM_TIMER_STOP_AT_PEAK)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_START_NO_STOP", MCPWM_TIMER_START_NO_STOP)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_START_STOP_AT_ZERO", MCPWM_TIMER_START_STOP_AT_ZERO)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_TIMER_START_STOP_AT_PEAK", MCPWM_TIMER_START_STOP_AT_PEAK)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_GEN_ACTION_KEEP", MCPWM_GEN_ACTION_KEEP)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_GEN_ACTION_LOW", MCPWM_GEN_ACTION_LOW)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_GEN_ACTION_HIGH", MCPWM_GEN_ACTION_HIGH)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_GEN_ACTION_TOGGLE", MCPWM_GEN_ACTION_TOGGLE)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_FAULT_REACTION_CBC", MCPWM_FAULT_REACTION_CBC)},
+    {SWIG_LUA_CONSTTAB_INT("MCPWM_FAULT_REACTION_OST", MCPWM_FAULT_REACTION_OST)},
     {SWIG_LUA_CONSTTAB_INT("NVS_KEY_SIZE", 32)},
     {0,0,0,0,0,0}
 };
@@ -7454,13 +7476,18 @@ static swig_type_info _swigt__p_mcpwm_counter_type_t = {"_p_mcpwm_counter_type_t
 static swig_type_info _swigt__p_mcpwm_deadtime_type_t = {"_p_mcpwm_deadtime_type_t", "enum mcpwm_deadtime_type_t *|mcpwm_deadtime_type_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_duty_type_t = {"_p_mcpwm_duty_type_t", "enum mcpwm_duty_type_t *|mcpwm_duty_type_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_fault_input_level_t = {"_p_mcpwm_fault_input_level_t", "enum mcpwm_fault_input_level_t *|mcpwm_fault_input_level_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_fault_reaction_t = {"_p_mcpwm_fault_reaction_t", "enum mcpwm_fault_reaction_t *|mcpwm_fault_reaction_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_fault_signal_t = {"_p_mcpwm_fault_signal_t", "enum mcpwm_fault_signal_t *|mcpwm_fault_signal_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_generator_action_t = {"_p_mcpwm_generator_action_t", "enum mcpwm_generator_action_t *|mcpwm_generator_action_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_generator_t = {"_p_mcpwm_generator_t", "enum mcpwm_generator_t *|mcpwm_generator_t *|mcpwm_operator_t *", 0, 0, (void*)0, 0};
-static swig_type_info _swigt__p_mcpwm_intr_t = {"_p_mcpwm_intr_t", "enum mcpwm_intr_t *|mcpwm_intr_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_io_signals_t = {"_p_mcpwm_io_signals_t", "enum mcpwm_io_signals_t *|mcpwm_io_signals_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_output_action_t = {"_p_mcpwm_output_action_t", "enum mcpwm_output_action_t *|mcpwm_output_action_t *|mcpwm_action_on_pwmxa_t *|mcpwm_action_on_pwmxb_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_pin_config_t = {"_p_mcpwm_pin_config_t", "mcpwm_pin_config_t *", 0, 0, (void*)&_wrap_class_mcpwm_pin_config_t, 0};
 static swig_type_info _swigt__p_mcpwm_sync_signal_t = {"_p_mcpwm_sync_signal_t", "enum mcpwm_sync_signal_t *|mcpwm_sync_signal_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_timer_count_mode_t = {"_p_mcpwm_timer_count_mode_t", "enum mcpwm_timer_count_mode_t *|mcpwm_timer_count_mode_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_timer_direction_t = {"_p_mcpwm_timer_direction_t", "enum mcpwm_timer_direction_t *|mcpwm_timer_direction_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_timer_event_t = {"_p_mcpwm_timer_event_t", "enum mcpwm_timer_event_t *|mcpwm_timer_event_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_mcpwm_timer_operate_cmd_t = {"_p_mcpwm_timer_operate_cmd_t", "enum mcpwm_timer_operate_cmd_t *|mcpwm_timer_operate_cmd_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_timer_t = {"_p_mcpwm_timer_t", "enum mcpwm_timer_t *|mcpwm_timer_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_unit_t = {"_p_mcpwm_unit_t", "enum mcpwm_unit_t *|mcpwm_unit_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_nvs_sec_cfg_t = {"_p_nvs_sec_cfg_t", "nvs_sec_cfg_t *", 0, 0, (void*)&_wrap_class_nvs_sec_cfg_t, 0};
@@ -7502,13 +7529,18 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_mcpwm_deadtime_type_t,
   &_swigt__p_mcpwm_duty_type_t,
   &_swigt__p_mcpwm_fault_input_level_t,
+  &_swigt__p_mcpwm_fault_reaction_t,
   &_swigt__p_mcpwm_fault_signal_t,
+  &_swigt__p_mcpwm_generator_action_t,
   &_swigt__p_mcpwm_generator_t,
-  &_swigt__p_mcpwm_intr_t,
   &_swigt__p_mcpwm_io_signals_t,
   &_swigt__p_mcpwm_output_action_t,
   &_swigt__p_mcpwm_pin_config_t,
   &_swigt__p_mcpwm_sync_signal_t,
+  &_swigt__p_mcpwm_timer_count_mode_t,
+  &_swigt__p_mcpwm_timer_direction_t,
+  &_swigt__p_mcpwm_timer_event_t,
+  &_swigt__p_mcpwm_timer_operate_cmd_t,
   &_swigt__p_mcpwm_timer_t,
   &_swigt__p_mcpwm_unit_t,
   &_swigt__p_nvs_sec_cfg_t,
@@ -7550,13 +7582,18 @@ static swig_cast_info _swigc__p_mcpwm_counter_type_t[] = {  {&_swigt__p_mcpwm_co
 static swig_cast_info _swigc__p_mcpwm_deadtime_type_t[] = {  {&_swigt__p_mcpwm_deadtime_type_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_duty_type_t[] = {  {&_swigt__p_mcpwm_duty_type_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_fault_input_level_t[] = {  {&_swigt__p_mcpwm_fault_input_level_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_fault_reaction_t[] = {  {&_swigt__p_mcpwm_fault_reaction_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_fault_signal_t[] = {  {&_swigt__p_mcpwm_fault_signal_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_generator_action_t[] = {  {&_swigt__p_mcpwm_generator_action_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_generator_t[] = {  {&_swigt__p_mcpwm_generator_t, 0, 0, 0},{0, 0, 0, 0}};
-static swig_cast_info _swigc__p_mcpwm_intr_t[] = {  {&_swigt__p_mcpwm_intr_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_io_signals_t[] = {  {&_swigt__p_mcpwm_io_signals_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_output_action_t[] = {  {&_swigt__p_mcpwm_output_action_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_pin_config_t[] = {  {&_swigt__p_mcpwm_pin_config_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_sync_signal_t[] = {  {&_swigt__p_mcpwm_sync_signal_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_timer_count_mode_t[] = {  {&_swigt__p_mcpwm_timer_count_mode_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_timer_direction_t[] = {  {&_swigt__p_mcpwm_timer_direction_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_timer_event_t[] = {  {&_swigt__p_mcpwm_timer_event_t, 0, 0, 0},{0, 0, 0, 0}};
+static swig_cast_info _swigc__p_mcpwm_timer_operate_cmd_t[] = {  {&_swigt__p_mcpwm_timer_operate_cmd_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_timer_t[] = {  {&_swigt__p_mcpwm_timer_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_mcpwm_unit_t[] = {  {&_swigt__p_mcpwm_unit_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_nvs_sec_cfg_t[] = {  {&_swigt__p_nvs_sec_cfg_t, 0, 0, 0},{0, 0, 0, 0}};
@@ -7598,13 +7635,18 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_mcpwm_deadtime_type_t,
   _swigc__p_mcpwm_duty_type_t,
   _swigc__p_mcpwm_fault_input_level_t,
+  _swigc__p_mcpwm_fault_reaction_t,
   _swigc__p_mcpwm_fault_signal_t,
+  _swigc__p_mcpwm_generator_action_t,
   _swigc__p_mcpwm_generator_t,
-  _swigc__p_mcpwm_intr_t,
   _swigc__p_mcpwm_io_signals_t,
   _swigc__p_mcpwm_output_action_t,
   _swigc__p_mcpwm_pin_config_t,
   _swigc__p_mcpwm_sync_signal_t,
+  _swigc__p_mcpwm_timer_count_mode_t,
+  _swigc__p_mcpwm_timer_direction_t,
+  _swigc__p_mcpwm_timer_event_t,
+  _swigc__p_mcpwm_timer_operate_cmd_t,
   _swigc__p_mcpwm_timer_t,
   _swigc__p_mcpwm_unit_t,
   _swigc__p_nvs_sec_cfg_t,
