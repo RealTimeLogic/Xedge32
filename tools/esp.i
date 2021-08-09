@@ -30,6 +30,7 @@ SWIG: http://www.swig.org/download.html
 #define CONFIG_IDF_TARGET_ESP32 1
 //#define SOC_MCPWM_PERIPH_NUM MCPWM_UNIT_MAX
 #define _Static_assert(x,m)
+#define __attribute__(x)
 #define SOC_MCPWM_SUPPORTED 1
 
 %ignore gpio_init;
