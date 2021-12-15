@@ -1,5 +1,6 @@
 
-This example is a direct copy of the following C code example converted to Lua code.
+This example is a direct copy of the following C code example
+converted to Lua code.
 
 https://github.com/espressif/esp-idf/blob/master/examples/peripherals/mcpwm/mcpwm_servo_control/main/mcpwm_servo_control_example.c
 
@@ -13,6 +14,15 @@ Also note that all C functions and definitions are prefixed with 'esp.'
 See the introduction in the following tutorial on how to physically
 connect a servo to the ESP32:
 https://randomnerdtutorials.com/esp32-servo-motor-web-server-arduino-ide/
+In short, the 3 cable servo connector:
+Wire	Color
+-------------
+Power	Red
+GND	Black, or brown
+Signal	Yellow, orange, or white
+
+A standard servo requires 4.8V so you need to connect the Servo's power to
+5V on the ESP32. The signal pin goes to GPIO 25 (see details below)
 
 You can start and stop the timer by refreshing the browser window (or
 click the run button in the IDE).

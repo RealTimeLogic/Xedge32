@@ -85,6 +85,18 @@ for details.
 
 ## Getting Started
 
+This repository includes the ESP32 build files for
+[BAS Amalgamated](https://github.com/RealTimeLogic/BAS). Set up the
+complete environment as follows:
+
+```
+git clone https://github.com/RealTimeLogic/LspAppMgr-ESP32.git LspAppMgr
+cd LspAppMgr-ESP32/main
+git clone https://github.com/RealTimeLogic/BAS.git BAS
+```
+
+See the following for details:
+
 * See the [Barracuda Application Server for ESP32](https://realtimelogic.com/downloads/bas/ESP32/) page for build instructions.
 * See the [online Barracuda Application Server Tutorial](https://tutorial.realtimelogic.com/) for an introduction to Lua and LSP.
 * The sub directory [Lua-Examples](Lua-Examples/README.md) includes ready to use Lua and LSP ESP32 examples.
