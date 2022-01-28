@@ -2744,9 +2744,6 @@ static swig_module_info swig_module = {swig_types, 46, 0, 0, 0, 0};
 
 #include <stdint.h>		// Use the C99 official header
 
-void* baLMalloc(lua_State* L, size_t size);
-#define malloc(x) baLMalloc(L,x)
-
 
 SWIGINTERN int SWIG_lua_isnilstring(lua_State *L, int idx) {
   int ret = lua_isstring(L, idx);
@@ -2754,6 +2751,21 @@ SWIGINTERN int SWIG_lua_isnilstring(lua_State *L, int idx) {
    ret = lua_isnil(L, idx);
   return ret;
 }
+
+
+
+  /*
+    Use dlmalloc setup by main.c
+    baLMalloc calls dlmalloc and does a GC if no mem left.
+  */
+
+  void* baLMalloc(lua_State* L, size_t size);
+  void* dlrealloc(void* oldmem, size_t bytes);
+  void dlfree(void* mem);
+  #define malloc(x) baLMalloc(L,x)
+  #define realloc(ptr, size) dlrealloc(ptr, size)
+  #define free(ptr) dlfree(ptr)
+
 
 #ifdef __cplusplus
 extern "C" {

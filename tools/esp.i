@@ -56,3 +56,20 @@ SWIG: http://www.swig.org/download.html
 %include "driver/mcpwm.h"
 %include "hal/mcpwm_types.h"
 %include "nvs_flash.h"
+
+
+%{
+
+  /*
+    Use dlmalloc set up by main.c
+    baLMalloc calls dlmalloc and does a GC if no mem left.
+  */
+
+  void* baLMalloc(lua_State* L, size_t size);
+  void* dlrealloc(void* oldmem, size_t bytes);
+  void dlfree(void* mem);
+  #define malloc(x) baLMalloc(L,x)
+  #define realloc(ptr, size) dlrealloc(ptr, size)
+  #define free(ptr) dlfree(ptr)
+
+%}
