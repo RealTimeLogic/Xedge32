@@ -2744,6 +2744,9 @@ static swig_module_info swig_module = {swig_types, 46, 0, 0, 0, 0};
 
 #include <stdint.h>		// Use the C99 official header
 
+void* baLMalloc(lua_State* L, size_t size);
+#define malloc(x) baLMalloc(L,x)
+
 
 SWIGINTERN int SWIG_lua_isnilstring(lua_State *L, int idx) {
   int ret = lua_isstring(L, idx);

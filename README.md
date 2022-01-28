@@ -91,7 +91,7 @@ complete environment as follows:
 
 ```
 git clone https://github.com/RealTimeLogic/LspAppMgr-ESP32.git LspAppMgr
-cd LspAppMgr-ESP32/main
+cd LspAppMgr/main
 git clone https://github.com/RealTimeLogic/BAS.git BAS
 ```
 
