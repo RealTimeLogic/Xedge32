@@ -47,6 +47,9 @@ SWIG: http://www.swig.org/download.html
 %ignore nvs_flash_secure_init;
 
 %include "stdint.i"
+%include "esp_err.h"
+%include "gpio_types.h"
+%include "mcpwm.h"
 %include "swig-esp.h"
 %include "driver/gpio.h"
 %include "hal/gpio_types.h"

@@ -2677,50 +2677,49 @@ SWIG_Lua_dostring(lua_State *L, const char *str) {
 #define SWIGTYPE_p_adc_channel_t swig_types[1]
 #define SWIGTYPE_p_adc_i2s_source_t swig_types[2]
 #define SWIGTYPE_p_adc_unit_t swig_types[3]
-#define SWIGTYPE_p_esp_err_t swig_types[4]
-#define SWIGTYPE_p_esp_partition_t swig_types[5]
-#define SWIGTYPE_p_f_p_void__void swig_types[6]
-#define SWIGTYPE_p_gpio_config_t swig_types[7]
-#define SWIGTYPE_p_gpio_drive_cap_t swig_types[8]
-#define SWIGTYPE_p_gpio_int_type_t swig_types[9]
-#define SWIGTYPE_p_gpio_mode_t swig_types[10]
-#define SWIGTYPE_p_gpio_num_t swig_types[11]
-#define SWIGTYPE_p_gpio_port_t swig_types[12]
-#define SWIGTYPE_p_gpio_pull_mode_t swig_types[13]
-#define SWIGTYPE_p_gpio_pulldown_t swig_types[14]
-#define SWIGTYPE_p_gpio_pullup_t swig_types[15]
-#define SWIGTYPE_p_gpio_sel_t swig_types[16]
-#define SWIGTYPE_p_int swig_types[17]
-#define SWIGTYPE_p_intr_handle_t swig_types[18]
-#define SWIGTYPE_p_long_long swig_types[19]
-#define SWIGTYPE_p_mcpwm_capture_on_edge_t swig_types[20]
-#define SWIGTYPE_p_mcpwm_capture_signal_t swig_types[21]
-#define SWIGTYPE_p_mcpwm_carrier_config_t swig_types[22]
-#define SWIGTYPE_p_mcpwm_carrier_os_t swig_types[23]
-#define SWIGTYPE_p_mcpwm_carrier_out_ivt_t swig_types[24]
-#define SWIGTYPE_p_mcpwm_config_t swig_types[25]
-#define SWIGTYPE_p_mcpwm_counter_type_t swig_types[26]
-#define SWIGTYPE_p_mcpwm_deadtime_type_t swig_types[27]
-#define SWIGTYPE_p_mcpwm_duty_type_t swig_types[28]
-#define SWIGTYPE_p_mcpwm_fault_input_level_t swig_types[29]
-#define SWIGTYPE_p_mcpwm_fault_signal_t swig_types[30]
-#define SWIGTYPE_p_mcpwm_generator_t swig_types[31]
-#define SWIGTYPE_p_mcpwm_intr_t swig_types[32]
-#define SWIGTYPE_p_mcpwm_io_signals_t swig_types[33]
-#define SWIGTYPE_p_mcpwm_output_action_t swig_types[34]
-#define SWIGTYPE_p_mcpwm_pin_config_t swig_types[35]
-#define SWIGTYPE_p_mcpwm_sync_signal_t swig_types[36]
-#define SWIGTYPE_p_mcpwm_timer_t swig_types[37]
-#define SWIGTYPE_p_mcpwm_unit_t swig_types[38]
-#define SWIGTYPE_p_nvs_sec_cfg_t swig_types[39]
-#define SWIGTYPE_p_short swig_types[40]
-#define SWIGTYPE_p_signed_char swig_types[41]
-#define SWIGTYPE_p_unsigned_char swig_types[42]
-#define SWIGTYPE_p_unsigned_int swig_types[43]
-#define SWIGTYPE_p_unsigned_long_long swig_types[44]
-#define SWIGTYPE_p_unsigned_short swig_types[45]
-static swig_type_info *swig_types[47];
-static swig_module_info swig_module = {swig_types, 46, 0, 0, 0, 0};
+#define SWIGTYPE_p_esp_partition_t swig_types[4]
+#define SWIGTYPE_p_f_p_void__void swig_types[5]
+#define SWIGTYPE_p_gpio_config_t swig_types[6]
+#define SWIGTYPE_p_gpio_drive_cap_t swig_types[7]
+#define SWIGTYPE_p_gpio_int_type_t swig_types[8]
+#define SWIGTYPE_p_gpio_mode_t swig_types[9]
+#define SWIGTYPE_p_gpio_num_t swig_types[10]
+#define SWIGTYPE_p_gpio_port_t swig_types[11]
+#define SWIGTYPE_p_gpio_pull_mode_t swig_types[12]
+#define SWIGTYPE_p_gpio_pulldown_t swig_types[13]
+#define SWIGTYPE_p_gpio_pullup_t swig_types[14]
+#define SWIGTYPE_p_gpio_sel_t swig_types[15]
+#define SWIGTYPE_p_int swig_types[16]
+#define SWIGTYPE_p_intr_handle_t swig_types[17]
+#define SWIGTYPE_p_long_long swig_types[18]
+#define SWIGTYPE_p_mcpwm_capture_on_edge_t swig_types[19]
+#define SWIGTYPE_p_mcpwm_capture_signal_t swig_types[20]
+#define SWIGTYPE_p_mcpwm_carrier_config_t swig_types[21]
+#define SWIGTYPE_p_mcpwm_carrier_os_t swig_types[22]
+#define SWIGTYPE_p_mcpwm_carrier_out_ivt_t swig_types[23]
+#define SWIGTYPE_p_mcpwm_config_t swig_types[24]
+#define SWIGTYPE_p_mcpwm_counter_type_t swig_types[25]
+#define SWIGTYPE_p_mcpwm_deadtime_type_t swig_types[26]
+#define SWIGTYPE_p_mcpwm_duty_type_t swig_types[27]
+#define SWIGTYPE_p_mcpwm_fault_input_level_t swig_types[28]
+#define SWIGTYPE_p_mcpwm_fault_signal_t swig_types[29]
+#define SWIGTYPE_p_mcpwm_generator_t swig_types[30]
+#define SWIGTYPE_p_mcpwm_intr_t swig_types[31]
+#define SWIGTYPE_p_mcpwm_io_signals_t swig_types[32]
+#define SWIGTYPE_p_mcpwm_output_action_t swig_types[33]
+#define SWIGTYPE_p_mcpwm_pin_config_t swig_types[34]
+#define SWIGTYPE_p_mcpwm_sync_signal_t swig_types[35]
+#define SWIGTYPE_p_mcpwm_timer_t swig_types[36]
+#define SWIGTYPE_p_mcpwm_unit_t swig_types[37]
+#define SWIGTYPE_p_nvs_sec_cfg_t swig_types[38]
+#define SWIGTYPE_p_short swig_types[39]
+#define SWIGTYPE_p_signed_char swig_types[40]
+#define SWIGTYPE_p_unsigned_char swig_types[41]
+#define SWIGTYPE_p_unsigned_int swig_types[42]
+#define SWIGTYPE_p_unsigned_long_long swig_types[43]
+#define SWIGTYPE_p_unsigned_short swig_types[44]
+static swig_type_info *swig_types[46];
+static swig_module_info swig_module = {swig_types, 45, 0, 0, 0, 0};
 #define SWIG_TypeQuery(name) SWIG_TypeQueryModule(&swig_module, &swig_module, name)
 #define SWIG_MangledTypeQuery(name) SWIG_MangledTypeQueryModule(&swig_module, &swig_module, name)
 
@@ -2755,7 +2754,7 @@ SWIGINTERN int SWIG_lua_isnilstring(lua_State *L, int idx) {
 
 
   /*
-    Use dlmalloc setup by main.c
+    Use dlmalloc set up by main.c
     baLMalloc calls dlmalloc and does a GC if no mem left.
   */
 
@@ -2770,25 +2769,16 @@ SWIGINTERN int SWIG_lua_isnilstring(lua_State *L, int idx) {
 #ifdef __cplusplus
 extern "C" {
 #endif
-static int _wrap_gpio_config(lua_State* L) {
+static int _wrap_esp_err_to_name(lua_State* L) {
   int SWIG_arg = 0;
-  gpio_config_t *arg1 = (gpio_config_t *) 0 ;
-  esp_err_t result;
+  esp_err_t arg1 ;
+  char *result = 0 ;
   
-  SWIG_check_num_args("gpio_config",1,1)
-  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("gpio_config",1,"gpio_config_t const *");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_gpio_config_t,0))){
-    SWIG_fail_ptr("gpio_config",1,SWIGTYPE_p_gpio_config_t);
-  }
-  
-  result = gpio_config((gpio_config_t const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  SWIG_check_num_args("esp_err_to_name",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("esp_err_to_name",1,"esp_err_t");
+  arg1 = (esp_err_t)lua_tonumber(L, 1);
+  result = (char *)esp_err_to_name(arg1);
+  lua_pushstring(L,(const char *)result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -2799,21 +2789,23 @@ fail:
 }
 
 
-static int _wrap_gpio_reset_pin(lua_State* L) {
+static int _wrap_esp_err_to_name_r(lua_State* L) {
   int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
+  esp_err_t arg1 ;
+  char *arg2 = (char *) 0 ;
+  size_t arg3 ;
+  char *result = 0 ;
   
-  SWIG_check_num_args("gpio_reset_pin",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_reset_pin",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_reset_pin(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  SWIG_check_num_args("esp_err_to_name_r",3,3)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("esp_err_to_name_r",1,"esp_err_t");
+  if(!SWIG_lua_isnilstring(L,2)) SWIG_fail_arg("esp_err_to_name_r",2,"char *");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("esp_err_to_name_r",3,"size_t");
+  arg1 = (esp_err_t)lua_tonumber(L, 1);
+  arg2 = (char *)lua_tostring(L, 2);
+  SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
+  arg3 = (size_t)lua_tonumber(L, 3);
+  result = (char *)esp_err_to_name_r(arg1,arg2,arg3);
+  lua_pushstring(L,(const char *)result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -2824,414 +2816,26 @@ fail:
 }
 
 
-static int _wrap_gpio_set_intr_type(lua_State* L) {
+static int _wrap__esp_error_check_failed(lua_State* L) {
   int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_int_type_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_set_intr_type",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_intr_type",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_intr_type",2,"gpio_int_type_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  arg2 = (gpio_int_type_t)(int)lua_tonumber(L, 2);
-  result = gpio_set_intr_type(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_intr_enable(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_intr_enable",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_intr_enable",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_intr_enable(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_intr_disable(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_intr_disable",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_intr_disable",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_intr_disable(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_set_level(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  uint32_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_set_level",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_level",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_level",2,"uint32_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  result = gpio_set_level(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_get_level(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  int result;
-  
-  SWIG_check_num_args("gpio_get_level",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_get_level",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = (int)gpio_get_level(arg1);
-  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_set_direction(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_mode_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_set_direction",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_direction",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_direction",2,"gpio_mode_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  arg2 = (gpio_mode_t)(int)lua_tonumber(L, 2);
-  result = gpio_set_direction(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_set_pull_mode(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_pull_mode_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_set_pull_mode",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_pull_mode",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_pull_mode",2,"gpio_pull_mode_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  arg2 = (gpio_pull_mode_t)(int)lua_tonumber(L, 2);
-  result = gpio_set_pull_mode(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_wakeup_enable(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_int_type_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_wakeup_enable",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_wakeup_enable",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_wakeup_enable",2,"gpio_int_type_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  arg2 = (gpio_int_type_t)(int)lua_tonumber(L, 2);
-  result = gpio_wakeup_enable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_wakeup_disable(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_wakeup_disable",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_wakeup_disable",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_wakeup_disable(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_isr_register(lua_State* L) {
-  int SWIG_arg = 0;
-  void (*arg1)(void *) = (void (*)(void *)) 0 ;
-  void *arg2 = (void *) 0 ;
+  esp_err_t arg1 ;
+  char *arg2 = (char *) 0 ;
   int arg3 ;
-  gpio_isr_handle_t *arg4 = (gpio_isr_handle_t *) 0 ;
-  esp_err_t result;
+  char *arg4 = (char *) 0 ;
+  char *arg5 = (char *) 0 ;
   
-  SWIG_check_num_args("gpio_isr_register",4,4)
-  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("gpio_isr_register",1,"void (*)(void *)");
-  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_isr_register",2,"void *");
-  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_isr_register",3,"int");
-  if(!SWIG_isptrtype(L,4)) SWIG_fail_arg("gpio_isr_register",4,"gpio_isr_handle_t *");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_f_p_void__void,0))){
-    SWIG_fail_ptr("gpio_isr_register",1,SWIGTYPE_p_f_p_void__void);
-  }
-  
-  arg2=(void *)SWIG_MustGetPtr(L,2,0,0,2,"gpio_isr_register");
+  SWIG_check_num_args("_esp_error_check_failed",5,5)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("_esp_error_check_failed",1,"esp_err_t");
+  if(!SWIG_lua_isnilstring(L,2)) SWIG_fail_arg("_esp_error_check_failed",2,"char const *");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("_esp_error_check_failed",3,"int");
+  if(!SWIG_lua_isnilstring(L,4)) SWIG_fail_arg("_esp_error_check_failed",4,"char const *");
+  if(!SWIG_lua_isnilstring(L,5)) SWIG_fail_arg("_esp_error_check_failed",5,"char const *");
+  arg1 = (esp_err_t)lua_tonumber(L, 1);
+  arg2 = (char *)lua_tostring(L, 2);
   arg3 = (int)lua_tonumber(L, 3);
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,4,(void**)&arg4,SWIGTYPE_p_intr_handle_t,0))){
-    SWIG_fail_ptr("gpio_isr_register",4,SWIGTYPE_p_intr_handle_t);
-  }
-  
-  result = gpio_isr_register(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pullup_en(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_pullup_en",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pullup_en",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_pullup_en(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pullup_dis(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_pullup_dis",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pullup_dis",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_pullup_dis(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pulldown_en(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_pulldown_en",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pulldown_en",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_pulldown_en(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pulldown_dis(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_pulldown_dis",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pulldown_dis",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_pulldown_dis(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_install_isr_service(lua_State* L) {
-  int SWIG_arg = 0;
-  int arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_install_isr_service",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_install_isr_service",1,"int");
-  arg1 = (int)lua_tonumber(L, 1);
-  result = gpio_install_isr_service(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_uninstall_isr_service(lua_State* L) {
-  int SWIG_arg = 0;
-  
-  SWIG_check_num_args("gpio_uninstall_isr_service",0,0)
-  gpio_uninstall_isr_service();
+  arg4 = (char *)lua_tostring(L, 4);
+  arg5 = (char *)lua_tostring(L, 5);
+  _esp_error_check_failed(arg1,(char const *)arg2,arg3,(char const *)arg4,(char const *)arg5);
   
   return SWIG_arg;
   
@@ -3243,247 +2847,26 @@ fail:
 }
 
 
-static int _wrap_gpio_isr_handler_add(lua_State* L) {
+static int _wrap__esp_error_check_failed_without_abort(lua_State* L) {
   int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_isr_t arg2 = (gpio_isr_t) 0 ;
-  void *arg3 = (void *) 0 ;
-  esp_err_t result;
+  esp_err_t arg1 ;
+  char *arg2 = (char *) 0 ;
+  int arg3 ;
+  char *arg4 = (char *) 0 ;
+  char *arg5 = (char *) 0 ;
   
-  SWIG_check_num_args("gpio_isr_handler_add",3,3)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_isr_handler_add",1,"gpio_num_t");
-  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_isr_handler_add",2,"gpio_isr_t");
-  if(!SWIG_isptrtype(L,3)) SWIG_fail_arg("gpio_isr_handler_add",3,"void *");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&arg2,SWIGTYPE_p_f_p_void__void,0))){
-    SWIG_fail_ptr("gpio_isr_handler_add",2,SWIGTYPE_p_f_p_void__void);
-  }
-  
-  arg3=(void *)SWIG_MustGetPtr(L,3,0,0,3,"gpio_isr_handler_add");
-  result = gpio_isr_handler_add(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_isr_handler_remove(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_isr_handler_remove",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_isr_handler_remove",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_isr_handler_remove(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_set_drive_capability(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_drive_cap_t arg2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_set_drive_capability",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_drive_capability",1,"gpio_num_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_drive_capability",2,"gpio_drive_cap_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  arg2 = (gpio_drive_cap_t)(int)lua_tonumber(L, 2);
-  result = gpio_set_drive_capability(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_get_drive_capability(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  gpio_drive_cap_t *arg2 = (gpio_drive_cap_t *) 0 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_get_drive_capability",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_get_drive_capability",1,"gpio_num_t");
-  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_get_drive_capability",2,"gpio_drive_cap_t *");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&arg2,SWIGTYPE_p_gpio_drive_cap_t,0))){
-    SWIG_fail_ptr("gpio_get_drive_capability",2,SWIGTYPE_p_gpio_drive_cap_t);
-  }
-  
-  result = gpio_get_drive_capability(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_hold_en(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_hold_en",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_hold_en",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_hold_en(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_hold_dis(lua_State* L) {
-  int SWIG_arg = 0;
-  gpio_num_t arg1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("gpio_hold_dis",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_hold_dis",1,"gpio_num_t");
-  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
-  result = gpio_hold_dis(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_deep_sleep_hold_en(lua_State* L) {
-  int SWIG_arg = 0;
-  
-  SWIG_check_num_args("gpio_deep_sleep_hold_en",0,0)
-  gpio_deep_sleep_hold_en();
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_deep_sleep_hold_dis(lua_State* L) {
-  int SWIG_arg = 0;
-  
-  SWIG_check_num_args("gpio_deep_sleep_hold_dis",0,0)
-  gpio_deep_sleep_hold_dis();
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_iomux_in(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t arg1 ;
-  uint32_t arg2 ;
-  
-  SWIG_check_num_args("gpio_iomux_in",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_iomux_in",1,"uint32_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_iomux_in",2,"uint32_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint32_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  gpio_iomux_in(arg1,arg2);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_iomux_out(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  int arg2 ;
-  bool arg3 ;
-  
-  SWIG_check_num_args("gpio_iomux_out",3,3)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_iomux_out",1,"uint8_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_iomux_out",2,"int");
-  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_iomux_out",3,"bool");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  arg2 = (int)lua_tonumber(L, 2);
-  arg3 = (lua_toboolean(L, 3)!=0);
-  gpio_iomux_out(arg1,arg2,arg3);
+  SWIG_check_num_args("_esp_error_check_failed_without_abort",5,5)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("_esp_error_check_failed_without_abort",1,"esp_err_t");
+  if(!SWIG_lua_isnilstring(L,2)) SWIG_fail_arg("_esp_error_check_failed_without_abort",2,"char const *");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("_esp_error_check_failed_without_abort",3,"int");
+  if(!SWIG_lua_isnilstring(L,4)) SWIG_fail_arg("_esp_error_check_failed_without_abort",4,"char const *");
+  if(!SWIG_lua_isnilstring(L,5)) SWIG_fail_arg("_esp_error_check_failed_without_abort",5,"char const *");
+  arg1 = (esp_err_t)lua_tonumber(L, 1);
+  arg2 = (char *)lua_tostring(L, 2);
+  arg3 = (int)lua_tonumber(L, 3);
+  arg4 = (char *)lua_tostring(L, 4);
+  arg5 = (char *)lua_tostring(L, 5);
+  _esp_error_check_failed_without_abort(arg1,(char const *)arg2,arg3,(char const *)arg4,(char const *)arg5);
   
   return SWIG_arg;
   
@@ -3813,417 +3196,6 @@ static swig_lua_namespace swig_gpio_config_t_Sf_SwigStatic = {
 static swig_lua_class *swig_gpio_config_t_bases[] = {0};
 static const char *swig_gpio_config_t_base_names[] = {0};
 static swig_lua_class _wrap_class_gpio_config_t = { "gpio_config_t", "gpio_config_t", &SWIGTYPE_p_gpio_config_t,_proxy__wrap_new_gpio_config_t, swig_delete_gpio_config_t, swig_gpio_config_t_methods, swig_gpio_config_t_attributes, &swig_gpio_config_t_Sf_SwigStatic, swig_gpio_config_t_meta, swig_gpio_config_t_bases, swig_gpio_config_t_base_names };
-
-static int _wrap_gpio_output_set(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t arg1 ;
-  uint32_t arg2 ;
-  uint32_t arg3 ;
-  uint32_t arg4 ;
-  
-  SWIG_check_num_args("gpio_output_set",4,4)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_output_set",1,"uint32_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_output_set",2,"uint32_t");
-  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_output_set",3,"uint32_t");
-  if(!lua_isnumber(L,4)) SWIG_fail_arg("gpio_output_set",4,"uint32_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint32_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
-  arg3 = (uint32_t)lua_tonumber(L, 3);
-  SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
-  arg4 = (uint32_t)lua_tonumber(L, 4);
-  gpio_output_set(arg1,arg2,arg3,arg4);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_output_set_high(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t arg1 ;
-  uint32_t arg2 ;
-  uint32_t arg3 ;
-  uint32_t arg4 ;
-  
-  SWIG_check_num_args("gpio_output_set_high",4,4)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_output_set_high",1,"uint32_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_output_set_high",2,"uint32_t");
-  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_output_set_high",3,"uint32_t");
-  if(!lua_isnumber(L,4)) SWIG_fail_arg("gpio_output_set_high",4,"uint32_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint32_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
-  arg3 = (uint32_t)lua_tonumber(L, 3);
-  SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
-  arg4 = (uint32_t)lua_tonumber(L, 4);
-  gpio_output_set_high(arg1,arg2,arg3,arg4);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_input_get(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t result;
-  
-  SWIG_check_num_args("gpio_input_get",0,0)
-  result = (uint32_t)gpio_input_get();
-  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_input_get_high(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t result;
-  
-  SWIG_check_num_args("gpio_input_get_high",0,0)
-  result = (uint32_t)gpio_input_get_high();
-  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_matrix_in(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t arg1 ;
-  uint32_t arg2 ;
-  bool arg3 ;
-  
-  SWIG_check_num_args("gpio_matrix_in",3,3)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_matrix_in",1,"uint32_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_matrix_in",2,"uint32_t");
-  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_matrix_in",3,"bool");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint32_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  arg3 = (lua_toboolean(L, 3)!=0);
-  gpio_matrix_in(arg1,arg2,arg3);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_matrix_out(lua_State* L) {
-  int SWIG_arg = 0;
-  uint32_t arg1 ;
-  uint32_t arg2 ;
-  bool arg3 ;
-  bool arg4 ;
-  
-  SWIG_check_num_args("gpio_matrix_out",4,4)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_matrix_out",1,"uint32_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_matrix_out",2,"uint32_t");
-  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_matrix_out",3,"bool");
-  if(!lua_isboolean(L,4)) SWIG_fail_arg("gpio_matrix_out",4,"bool");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint32_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint32_t)lua_tonumber(L, 2);
-  arg3 = (lua_toboolean(L, 3)!=0);
-  arg4 = (lua_toboolean(L, 4)!=0);
-  gpio_matrix_out(arg1,arg2,arg3,arg4);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_select_gpio(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  
-  SWIG_check_num_args("gpio_pad_select_gpio",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_select_gpio",1,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  gpio_pad_select_gpio(arg1);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_set_drv(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  uint8_t arg2 ;
-  
-  SWIG_check_num_args("gpio_pad_set_drv",2,2)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_set_drv",1,"uint8_t");
-  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_pad_set_drv",2,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
-  arg2 = (uint8_t)lua_tonumber(L, 2);
-  gpio_pad_set_drv(arg1,arg2);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_pullup(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  
-  SWIG_check_num_args("gpio_pad_pullup",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_pullup",1,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  gpio_pad_pullup(arg1);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_pulldown(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  
-  SWIG_check_num_args("gpio_pad_pulldown",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_pulldown",1,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  gpio_pad_pulldown(arg1);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_unhold(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  
-  SWIG_check_num_args("gpio_pad_unhold",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_unhold",1,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  gpio_pad_unhold(arg1);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_gpio_pad_hold(lua_State* L) {
-  int SWIG_arg = 0;
-  uint8_t arg1 ;
-  
-  SWIG_check_num_args("gpio_pad_hold",1,1)
-  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_hold",1,"uint8_t");
-  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
-  arg1 = (uint8_t)lua_tonumber(L, 1);
-  gpio_pad_hold(arg1);
-  
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_adc_set_i2s_data_source(lua_State* L) {
-  int SWIG_arg = 0;
-  adc_i2s_source_t arg1 ;
-  adc_i2s_source_t *argp1 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("adc_set_i2s_data_source",1,1)
-  if(!lua_isuserdata(L,1)) SWIG_fail_arg("adc_set_i2s_data_source",1,"adc_i2s_source_t");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&argp1,SWIGTYPE_p_adc_i2s_source_t,0))){
-    SWIG_fail_ptr("adc_set_i2s_data_source",1,SWIGTYPE_p_adc_i2s_source_t);
-  }
-  arg1 = *argp1;
-  
-  result = adc_set_i2s_data_source(arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_adc_i2s_mode_init(lua_State* L) {
-  int SWIG_arg = 0;
-  adc_unit_t arg1 ;
-  adc_channel_t arg2 ;
-  adc_unit_t *argp1 ;
-  adc_channel_t *argp2 ;
-  esp_err_t result;
-  
-  SWIG_check_num_args("adc_i2s_mode_init",2,2)
-  if(!lua_isuserdata(L,1)) SWIG_fail_arg("adc_i2s_mode_init",1,"adc_unit_t");
-  if(!lua_isuserdata(L,2)) SWIG_fail_arg("adc_i2s_mode_init",2,"adc_channel_t");
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&argp1,SWIGTYPE_p_adc_unit_t,0))){
-    SWIG_fail_ptr("adc_i2s_mode_init",1,SWIGTYPE_p_adc_unit_t);
-  }
-  arg1 = *argp1;
-  
-  
-  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&argp2,SWIGTYPE_p_adc_channel_t,0))){
-    SWIG_fail_ptr("adc_i2s_mode_init",2,SWIGTYPE_p_adc_channel_t);
-  }
-  arg2 = *argp2;
-  
-  result = adc_i2s_mode_init(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_hall_sensor_read(lua_State* L) {
-  int SWIG_arg = 0;
-  int result;
-  
-  SWIG_check_num_args("hall_sensor_read",0,0)
-  result = (int)hall_sensor_read();
-  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_dac_i2s_enable(lua_State* L) {
-  int SWIG_arg = 0;
-  esp_err_t result;
-  
-  SWIG_check_num_args("dac_i2s_enable",0,0)
-  result = dac_i2s_enable();
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
-
-static int _wrap_dac_i2s_disable(lua_State* L) {
-  int SWIG_arg = 0;
-  esp_err_t result;
-  
-  SWIG_check_num_args("dac_i2s_disable",0,0)
-  result = dac_i2s_disable();
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
-  return SWIG_arg;
-  
-  if(0) SWIG_fail;
-  
-fail:
-  lua_error(L);
-  return SWIG_arg;
-}
-
 
 static int _wrap_mcpwm_pin_config_t_mcpwm0a_out_num_set(lua_State* L) {
   int SWIG_arg = 0;
@@ -5710,13 +4682,8 @@ static int _wrap_mcpwm_gpio_init(lua_State* L) {
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_io_signals_t)(int)lua_tonumber(L, 2);
   arg3 = (int)lua_tonumber(L, 3);
-  result = mcpwm_gpio_init(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_gpio_init(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5742,13 +4709,8 @@ static int _wrap_mcpwm_set_pin(lua_State* L) {
     SWIG_fail_ptr("mcpwm_set_pin",2,SWIGTYPE_p_mcpwm_pin_config_t);
   }
   
-  result = mcpwm_set_pin(arg1,(mcpwm_pin_config_t const *)arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_pin(arg1,(mcpwm_pin_config_t const *)arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5777,13 +4739,8 @@ static int _wrap_mcpwm_init(lua_State* L) {
     SWIG_fail_ptr("mcpwm_init",3,SWIGTYPE_p_mcpwm_config_t);
   }
   
-  result = mcpwm_init(arg1,arg2,(mcpwm_config_t const *)arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_init(arg1,arg2,(mcpwm_config_t const *)arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5809,13 +4766,8 @@ static int _wrap_mcpwm_set_frequency(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
   arg3 = (uint32_t)lua_tonumber(L, 3);
-  result = mcpwm_set_frequency(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_frequency(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5843,13 +4795,8 @@ static int _wrap_mcpwm_set_duty(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_generator_t)(int)lua_tonumber(L, 3);
   arg4 = (float)lua_tonumber(L, 4);
-  result = mcpwm_set_duty(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_duty(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5878,13 +4825,8 @@ static int _wrap_mcpwm_set_duty_in_us(lua_State* L) {
   arg3 = (mcpwm_generator_t)(int)lua_tonumber(L, 3);
   SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
   arg4 = (uint32_t)lua_tonumber(L, 4);
-  result = mcpwm_set_duty_in_us(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_duty_in_us(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5912,13 +4854,8 @@ static int _wrap_mcpwm_set_duty_type(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_generator_t)(int)lua_tonumber(L, 3);
   arg4 = (mcpwm_duty_type_t)(int)lua_tonumber(L, 4);
-  result = mcpwm_set_duty_type(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_duty_type(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -5992,13 +4929,8 @@ static int _wrap_mcpwm_set_signal_high(lua_State* L) {
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_generator_t)(int)lua_tonumber(L, 3);
-  result = mcpwm_set_signal_high(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_signal_high(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6023,13 +4955,8 @@ static int _wrap_mcpwm_set_signal_low(lua_State* L) {
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_generator_t)(int)lua_tonumber(L, 3);
-  result = mcpwm_set_signal_low(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_set_signal_low(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6051,13 +4978,8 @@ static int _wrap_mcpwm_start(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_start",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_start(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_start(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6079,13 +5001,8 @@ static int _wrap_mcpwm_stop(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_stop",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_stop(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_stop(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6114,13 +5031,8 @@ static int _wrap_mcpwm_carrier_init(lua_State* L) {
     SWIG_fail_ptr("mcpwm_carrier_init",3,SWIGTYPE_p_mcpwm_carrier_config_t);
   }
   
-  result = mcpwm_carrier_init(arg1,arg2,(mcpwm_carrier_config_t const *)arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_init(arg1,arg2,(mcpwm_carrier_config_t const *)arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6142,13 +5054,8 @@ static int _wrap_mcpwm_carrier_enable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_carrier_enable",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_carrier_enable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_enable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6170,13 +5077,8 @@ static int _wrap_mcpwm_carrier_disable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_carrier_disable",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_carrier_disable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_disable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6202,13 +5104,8 @@ static int _wrap_mcpwm_carrier_set_period(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
   arg3 = (uint8_t)lua_tonumber(L, 3);
-  result = mcpwm_carrier_set_period(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_set_period(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6234,13 +5131,8 @@ static int _wrap_mcpwm_carrier_set_duty_cycle(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
   arg3 = (uint8_t)lua_tonumber(L, 3);
-  result = mcpwm_carrier_set_duty_cycle(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_set_duty_cycle(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6266,13 +5158,8 @@ static int _wrap_mcpwm_carrier_oneshot_mode_enable(lua_State* L) {
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
   arg3 = (uint8_t)lua_tonumber(L, 3);
-  result = mcpwm_carrier_oneshot_mode_enable(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_oneshot_mode_enable(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6294,13 +5181,8 @@ static int _wrap_mcpwm_carrier_oneshot_mode_disable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_carrier_oneshot_mode_disable",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_carrier_oneshot_mode_disable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_oneshot_mode_disable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6325,13 +5207,8 @@ static int _wrap_mcpwm_carrier_output_invert(lua_State* L) {
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_carrier_out_ivt_t)(int)lua_tonumber(L, 3);
-  result = mcpwm_carrier_output_invert(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_carrier_output_invert(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6364,13 +5241,8 @@ static int _wrap_mcpwm_deadtime_enable(lua_State* L) {
   arg4 = (uint32_t)lua_tonumber(L, 4);
   SWIG_contract_assert((lua_tonumber(L,5)>=0),"number must not be negative")
   arg5 = (uint32_t)lua_tonumber(L, 5);
-  result = mcpwm_deadtime_enable(arg1,arg2,arg3,arg4,arg5);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_deadtime_enable(arg1,arg2,arg3,arg4,arg5);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6392,13 +5264,8 @@ static int _wrap_mcpwm_deadtime_disable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_deadtime_disable",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_deadtime_disable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_deadtime_disable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6423,13 +5290,8 @@ static int _wrap_mcpwm_fault_init(lua_State* L) {
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_fault_input_level_t)(int)lua_tonumber(L, 2);
   arg3 = (mcpwm_fault_signal_t)(int)lua_tonumber(L, 3);
-  result = mcpwm_fault_init(arg1,arg2,arg3);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_fault_init(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6460,13 +5322,8 @@ static int _wrap_mcpwm_fault_set_oneshot_mode(lua_State* L) {
   arg3 = (mcpwm_fault_signal_t)(int)lua_tonumber(L, 3);
   arg4 = (mcpwm_output_action_t)(int)lua_tonumber(L, 4);
   arg5 = (mcpwm_output_action_t)(int)lua_tonumber(L, 5);
-  result = mcpwm_fault_set_oneshot_mode(arg1,arg2,arg3,arg4,arg5);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_fault_set_oneshot_mode(arg1,arg2,arg3,arg4,arg5);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6497,13 +5354,8 @@ static int _wrap_mcpwm_fault_set_cyc_mode(lua_State* L) {
   arg3 = (mcpwm_fault_signal_t)(int)lua_tonumber(L, 3);
   arg4 = (mcpwm_output_action_t)(int)lua_tonumber(L, 4);
   arg5 = (mcpwm_output_action_t)(int)lua_tonumber(L, 5);
-  result = mcpwm_fault_set_cyc_mode(arg1,arg2,arg3,arg4,arg5);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_fault_set_cyc_mode(arg1,arg2,arg3,arg4,arg5);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6525,13 +5377,8 @@ static int _wrap_mcpwm_fault_deinit(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_fault_deinit",2,"mcpwm_fault_signal_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_fault_signal_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_fault_deinit(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_fault_deinit(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6560,13 +5407,8 @@ static int _wrap_mcpwm_capture_enable(lua_State* L) {
   arg3 = (mcpwm_capture_on_edge_t)(int)lua_tonumber(L, 3);
   SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
   arg4 = (uint32_t)lua_tonumber(L, 4);
-  result = mcpwm_capture_enable(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_capture_enable(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6588,13 +5430,8 @@ static int _wrap_mcpwm_capture_disable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_capture_disable",2,"mcpwm_capture_signal_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_capture_signal_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_capture_disable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_capture_disable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6669,13 +5506,8 @@ static int _wrap_mcpwm_sync_enable(lua_State* L) {
   arg3 = (mcpwm_sync_signal_t)(int)lua_tonumber(L, 3);
   SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
   arg4 = (uint32_t)lua_tonumber(L, 4);
-  result = mcpwm_sync_enable(arg1,arg2,arg3,arg4);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_sync_enable(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6697,13 +5529,8 @@ static int _wrap_mcpwm_sync_disable(lua_State* L) {
   if(!lua_isnumber(L,2)) SWIG_fail_arg("mcpwm_sync_disable",2,"mcpwm_timer_t");
   arg1 = (mcpwm_unit_t)(int)lua_tonumber(L, 1);
   arg2 = (mcpwm_timer_t)(int)lua_tonumber(L, 2);
-  result = mcpwm_sync_disable(arg1,arg2);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)mcpwm_sync_disable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6742,13 +5569,1014 @@ static int _wrap_mcpwm_isr_register(lua_State* L) {
     SWIG_fail_ptr("mcpwm_isr_register",5,SWIGTYPE_p_intr_handle_t);
   }
   
-  result = mcpwm_isr_register(arg1,arg2,arg3,arg4,arg5);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
+  result = (esp_err_t)mcpwm_isr_register(arg1,arg2,arg3,arg4,arg5);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_config(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_config_t *arg1 = (gpio_config_t *) 0 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_config",1,1)
+  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("gpio_config",1,"gpio_config_t const *");
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_gpio_config_t,0))){
+    SWIG_fail_ptr("gpio_config",1,SWIGTYPE_p_gpio_config_t);
   }
+  
+  result = (esp_err_t)gpio_config((gpio_config_t const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_reset_pin(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_reset_pin",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_reset_pin",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_reset_pin(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_set_intr_type(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_int_type_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_set_intr_type",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_intr_type",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_intr_type",2,"gpio_int_type_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  arg2 = (gpio_int_type_t)(int)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_set_intr_type(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_intr_enable(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_intr_enable",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_intr_enable",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_intr_enable(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_intr_disable(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_intr_disable",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_intr_disable",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_intr_disable(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_set_level(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  uint32_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_set_level",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_level",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_level",2,"uint32_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_set_level(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_get_level(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  int result;
+  
+  SWIG_check_num_args("gpio_get_level",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_get_level",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (int)gpio_get_level(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_set_direction(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_mode_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_set_direction",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_direction",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_direction",2,"gpio_mode_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  arg2 = (gpio_mode_t)(int)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_set_direction(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_set_pull_mode(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_pull_mode_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_set_pull_mode",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_pull_mode",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_pull_mode",2,"gpio_pull_mode_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  arg2 = (gpio_pull_mode_t)(int)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_set_pull_mode(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_wakeup_enable(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_int_type_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_wakeup_enable",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_wakeup_enable",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_wakeup_enable",2,"gpio_int_type_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  arg2 = (gpio_int_type_t)(int)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_wakeup_enable(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_wakeup_disable(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_wakeup_disable",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_wakeup_disable",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_wakeup_disable(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_isr_register(lua_State* L) {
+  int SWIG_arg = 0;
+  void (*arg1)(void *) = (void (*)(void *)) 0 ;
+  void *arg2 = (void *) 0 ;
+  int arg3 ;
+  gpio_isr_handle_t *arg4 = (gpio_isr_handle_t *) 0 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_isr_register",4,4)
+  if(!SWIG_isptrtype(L,1)) SWIG_fail_arg("gpio_isr_register",1,"void (*)(void *)");
+  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_isr_register",2,"void *");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_isr_register",3,"int");
+  if(!SWIG_isptrtype(L,4)) SWIG_fail_arg("gpio_isr_register",4,"gpio_isr_handle_t *");
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&arg1,SWIGTYPE_p_f_p_void__void,0))){
+    SWIG_fail_ptr("gpio_isr_register",1,SWIGTYPE_p_f_p_void__void);
+  }
+  
+  arg2=(void *)SWIG_MustGetPtr(L,2,0,0,2,"gpio_isr_register");
+  arg3 = (int)lua_tonumber(L, 3);
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,4,(void**)&arg4,SWIGTYPE_p_intr_handle_t,0))){
+    SWIG_fail_ptr("gpio_isr_register",4,SWIGTYPE_p_intr_handle_t);
+  }
+  
+  result = (esp_err_t)gpio_isr_register(arg1,arg2,arg3,arg4);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pullup_en(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_pullup_en",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pullup_en",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_pullup_en(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pullup_dis(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_pullup_dis",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pullup_dis",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_pullup_dis(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pulldown_en(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_pulldown_en",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pulldown_en",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_pulldown_en(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pulldown_dis(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_pulldown_dis",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pulldown_dis",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_pulldown_dis(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_install_isr_service(lua_State* L) {
+  int SWIG_arg = 0;
+  int arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_install_isr_service",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_install_isr_service",1,"int");
+  arg1 = (int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_install_isr_service(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_uninstall_isr_service(lua_State* L) {
+  int SWIG_arg = 0;
+  
+  SWIG_check_num_args("gpio_uninstall_isr_service",0,0)
+  gpio_uninstall_isr_service();
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_isr_handler_add(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_isr_t arg2 = (gpio_isr_t) 0 ;
+  void *arg3 = (void *) 0 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_isr_handler_add",3,3)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_isr_handler_add",1,"gpio_num_t");
+  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_isr_handler_add",2,"gpio_isr_t");
+  if(!SWIG_isptrtype(L,3)) SWIG_fail_arg("gpio_isr_handler_add",3,"void *");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&arg2,SWIGTYPE_p_f_p_void__void,0))){
+    SWIG_fail_ptr("gpio_isr_handler_add",2,SWIGTYPE_p_f_p_void__void);
+  }
+  
+  arg3=(void *)SWIG_MustGetPtr(L,3,0,0,3,"gpio_isr_handler_add");
+  result = (esp_err_t)gpio_isr_handler_add(arg1,arg2,arg3);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_isr_handler_remove(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_isr_handler_remove",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_isr_handler_remove",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_isr_handler_remove(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_set_drive_capability(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_drive_cap_t arg2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_set_drive_capability",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_set_drive_capability",1,"gpio_num_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_set_drive_capability",2,"gpio_drive_cap_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  arg2 = (gpio_drive_cap_t)(int)lua_tonumber(L, 2);
+  result = (esp_err_t)gpio_set_drive_capability(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_get_drive_capability(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  gpio_drive_cap_t *arg2 = (gpio_drive_cap_t *) 0 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_get_drive_capability",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_get_drive_capability",1,"gpio_num_t");
+  if(!SWIG_isptrtype(L,2)) SWIG_fail_arg("gpio_get_drive_capability",2,"gpio_drive_cap_t *");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&arg2,SWIGTYPE_p_gpio_drive_cap_t,0))){
+    SWIG_fail_ptr("gpio_get_drive_capability",2,SWIGTYPE_p_gpio_drive_cap_t);
+  }
+  
+  result = (esp_err_t)gpio_get_drive_capability(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_hold_en(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_hold_en",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_hold_en",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_hold_en(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_hold_dis(lua_State* L) {
+  int SWIG_arg = 0;
+  gpio_num_t arg1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("gpio_hold_dis",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_hold_dis",1,"gpio_num_t");
+  arg1 = (gpio_num_t)(int)lua_tonumber(L, 1);
+  result = (esp_err_t)gpio_hold_dis(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_deep_sleep_hold_en(lua_State* L) {
+  int SWIG_arg = 0;
+  
+  SWIG_check_num_args("gpio_deep_sleep_hold_en",0,0)
+  gpio_deep_sleep_hold_en();
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_deep_sleep_hold_dis(lua_State* L) {
+  int SWIG_arg = 0;
+  
+  SWIG_check_num_args("gpio_deep_sleep_hold_dis",0,0)
+  gpio_deep_sleep_hold_dis();
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_iomux_in(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t arg1 ;
+  uint32_t arg2 ;
+  
+  SWIG_check_num_args("gpio_iomux_in",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_iomux_in",1,"uint32_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_iomux_in",2,"uint32_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint32_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  gpio_iomux_in(arg1,arg2);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_iomux_out(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  int arg2 ;
+  bool arg3 ;
+  
+  SWIG_check_num_args("gpio_iomux_out",3,3)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_iomux_out",1,"uint8_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_iomux_out",2,"int");
+  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_iomux_out",3,"bool");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  arg2 = (int)lua_tonumber(L, 2);
+  arg3 = (lua_toboolean(L, 3)!=0);
+  gpio_iomux_out(arg1,arg2,arg3);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_output_set(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t arg1 ;
+  uint32_t arg2 ;
+  uint32_t arg3 ;
+  uint32_t arg4 ;
+  
+  SWIG_check_num_args("gpio_output_set",4,4)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_output_set",1,"uint32_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_output_set",2,"uint32_t");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_output_set",3,"uint32_t");
+  if(!lua_isnumber(L,4)) SWIG_fail_arg("gpio_output_set",4,"uint32_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint32_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
+  arg3 = (uint32_t)lua_tonumber(L, 3);
+  SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
+  arg4 = (uint32_t)lua_tonumber(L, 4);
+  gpio_output_set(arg1,arg2,arg3,arg4);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_output_set_high(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t arg1 ;
+  uint32_t arg2 ;
+  uint32_t arg3 ;
+  uint32_t arg4 ;
+  
+  SWIG_check_num_args("gpio_output_set_high",4,4)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_output_set_high",1,"uint32_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_output_set_high",2,"uint32_t");
+  if(!lua_isnumber(L,3)) SWIG_fail_arg("gpio_output_set_high",3,"uint32_t");
+  if(!lua_isnumber(L,4)) SWIG_fail_arg("gpio_output_set_high",4,"uint32_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint32_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  SWIG_contract_assert((lua_tonumber(L,3)>=0),"number must not be negative")
+  arg3 = (uint32_t)lua_tonumber(L, 3);
+  SWIG_contract_assert((lua_tonumber(L,4)>=0),"number must not be negative")
+  arg4 = (uint32_t)lua_tonumber(L, 4);
+  gpio_output_set_high(arg1,arg2,arg3,arg4);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_input_get(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t result;
+  
+  SWIG_check_num_args("gpio_input_get",0,0)
+  result = (uint32_t)gpio_input_get();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_input_get_high(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t result;
+  
+  SWIG_check_num_args("gpio_input_get_high",0,0)
+  result = (uint32_t)gpio_input_get_high();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_matrix_in(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t arg1 ;
+  uint32_t arg2 ;
+  bool arg3 ;
+  
+  SWIG_check_num_args("gpio_matrix_in",3,3)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_matrix_in",1,"uint32_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_matrix_in",2,"uint32_t");
+  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_matrix_in",3,"bool");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint32_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  arg3 = (lua_toboolean(L, 3)!=0);
+  gpio_matrix_in(arg1,arg2,arg3);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_matrix_out(lua_State* L) {
+  int SWIG_arg = 0;
+  uint32_t arg1 ;
+  uint32_t arg2 ;
+  bool arg3 ;
+  bool arg4 ;
+  
+  SWIG_check_num_args("gpio_matrix_out",4,4)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_matrix_out",1,"uint32_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_matrix_out",2,"uint32_t");
+  if(!lua_isboolean(L,3)) SWIG_fail_arg("gpio_matrix_out",3,"bool");
+  if(!lua_isboolean(L,4)) SWIG_fail_arg("gpio_matrix_out",4,"bool");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint32_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint32_t)lua_tonumber(L, 2);
+  arg3 = (lua_toboolean(L, 3)!=0);
+  arg4 = (lua_toboolean(L, 4)!=0);
+  gpio_matrix_out(arg1,arg2,arg3,arg4);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_select_gpio(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  
+  SWIG_check_num_args("gpio_pad_select_gpio",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_select_gpio",1,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  gpio_pad_select_gpio(arg1);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_set_drv(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  uint8_t arg2 ;
+  
+  SWIG_check_num_args("gpio_pad_set_drv",2,2)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_set_drv",1,"uint8_t");
+  if(!lua_isnumber(L,2)) SWIG_fail_arg("gpio_pad_set_drv",2,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  SWIG_contract_assert((lua_tonumber(L,2)>=0),"number must not be negative")
+  arg2 = (uint8_t)lua_tonumber(L, 2);
+  gpio_pad_set_drv(arg1,arg2);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_pullup(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  
+  SWIG_check_num_args("gpio_pad_pullup",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_pullup",1,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  gpio_pad_pullup(arg1);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_pulldown(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  
+  SWIG_check_num_args("gpio_pad_pulldown",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_pulldown",1,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  gpio_pad_pulldown(arg1);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_unhold(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  
+  SWIG_check_num_args("gpio_pad_unhold",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_unhold",1,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  gpio_pad_unhold(arg1);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_gpio_pad_hold(lua_State* L) {
+  int SWIG_arg = 0;
+  uint8_t arg1 ;
+  
+  SWIG_check_num_args("gpio_pad_hold",1,1)
+  if(!lua_isnumber(L,1)) SWIG_fail_arg("gpio_pad_hold",1,"uint8_t");
+  SWIG_contract_assert((lua_tonumber(L,1)>=0),"number must not be negative")
+  arg1 = (uint8_t)lua_tonumber(L, 1);
+  gpio_pad_hold(arg1);
+  
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_adc_set_i2s_data_source(lua_State* L) {
+  int SWIG_arg = 0;
+  adc_i2s_source_t arg1 ;
+  adc_i2s_source_t *argp1 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("adc_set_i2s_data_source",1,1)
+  if(!lua_isuserdata(L,1)) SWIG_fail_arg("adc_set_i2s_data_source",1,"adc_i2s_source_t");
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&argp1,SWIGTYPE_p_adc_i2s_source_t,0))){
+    SWIG_fail_ptr("adc_set_i2s_data_source",1,SWIGTYPE_p_adc_i2s_source_t);
+  }
+  arg1 = *argp1;
+  
+  result = (esp_err_t)adc_set_i2s_data_source(arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_adc_i2s_mode_init(lua_State* L) {
+  int SWIG_arg = 0;
+  adc_unit_t arg1 ;
+  adc_channel_t arg2 ;
+  adc_unit_t *argp1 ;
+  adc_channel_t *argp2 ;
+  esp_err_t result;
+  
+  SWIG_check_num_args("adc_i2s_mode_init",2,2)
+  if(!lua_isuserdata(L,1)) SWIG_fail_arg("adc_i2s_mode_init",1,"adc_unit_t");
+  if(!lua_isuserdata(L,2)) SWIG_fail_arg("adc_i2s_mode_init",2,"adc_channel_t");
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,1,(void**)&argp1,SWIGTYPE_p_adc_unit_t,0))){
+    SWIG_fail_ptr("adc_i2s_mode_init",1,SWIGTYPE_p_adc_unit_t);
+  }
+  arg1 = *argp1;
+  
+  
+  if (!SWIG_IsOK(SWIG_ConvertPtr(L,2,(void**)&argp2,SWIGTYPE_p_adc_channel_t,0))){
+    SWIG_fail_ptr("adc_i2s_mode_init",2,SWIGTYPE_p_adc_channel_t);
+  }
+  arg2 = *argp2;
+  
+  result = (esp_err_t)adc_i2s_mode_init(arg1,arg2);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_hall_sensor_read(lua_State* L) {
+  int SWIG_arg = 0;
+  int result;
+  
+  SWIG_check_num_args("hall_sensor_read",0,0)
+  result = (int)hall_sensor_read();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_dac_i2s_enable(lua_State* L) {
+  int SWIG_arg = 0;
+  esp_err_t result;
+  
+  SWIG_check_num_args("dac_i2s_enable",0,0)
+  result = (esp_err_t)dac_i2s_enable();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
+  return SWIG_arg;
+  
+  if(0) SWIG_fail;
+  
+fail:
+  lua_error(L);
+  return SWIG_arg;
+}
+
+
+static int _wrap_dac_i2s_disable(lua_State* L) {
+  int SWIG_arg = 0;
+  esp_err_t result;
+  
+  SWIG_check_num_args("dac_i2s_disable",0,0)
+  result = (esp_err_t)dac_i2s_disable();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6946,13 +6774,8 @@ static int _wrap_nvs_flash_init(lua_State* L) {
   esp_err_t result;
   
   SWIG_check_num_args("nvs_flash_init",0,0)
-  result = nvs_flash_init();
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_init();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -6971,13 +6794,8 @@ static int _wrap_nvs_flash_init_partition(lua_State* L) {
   SWIG_check_num_args("nvs_flash_init_partition",1,1)
   if(!SWIG_lua_isnilstring(L,1)) SWIG_fail_arg("nvs_flash_init_partition",1,"char const *");
   arg1 = (char *)lua_tostring(L, 1);
-  result = nvs_flash_init_partition((char const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_init_partition((char const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7000,13 +6818,8 @@ static int _wrap_nvs_flash_init_partition_ptr(lua_State* L) {
     SWIG_fail_ptr("nvs_flash_init_partition_ptr",1,SWIGTYPE_p_esp_partition_t);
   }
   
-  result = nvs_flash_init_partition_ptr((esp_partition_t const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_init_partition_ptr((esp_partition_t const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7022,13 +6835,8 @@ static int _wrap_nvs_flash_deinit(lua_State* L) {
   esp_err_t result;
   
   SWIG_check_num_args("nvs_flash_deinit",0,0)
-  result = nvs_flash_deinit();
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_deinit();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7047,13 +6855,8 @@ static int _wrap_nvs_flash_deinit_partition(lua_State* L) {
   SWIG_check_num_args("nvs_flash_deinit_partition",1,1)
   if(!SWIG_lua_isnilstring(L,1)) SWIG_fail_arg("nvs_flash_deinit_partition",1,"char const *");
   arg1 = (char *)lua_tostring(L, 1);
-  result = nvs_flash_deinit_partition((char const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_deinit_partition((char const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7069,13 +6872,8 @@ static int _wrap_nvs_flash_erase(lua_State* L) {
   esp_err_t result;
   
   SWIG_check_num_args("nvs_flash_erase",0,0)
-  result = nvs_flash_erase();
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_erase();
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7094,13 +6892,8 @@ static int _wrap_nvs_flash_erase_partition(lua_State* L) {
   SWIG_check_num_args("nvs_flash_erase_partition",1,1)
   if(!SWIG_lua_isnilstring(L,1)) SWIG_fail_arg("nvs_flash_erase_partition",1,"char const *");
   arg1 = (char *)lua_tostring(L, 1);
-  result = nvs_flash_erase_partition((char const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_erase_partition((char const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7123,13 +6916,8 @@ static int _wrap_nvs_flash_erase_partition_ptr(lua_State* L) {
     SWIG_fail_ptr("nvs_flash_erase_partition_ptr",1,SWIGTYPE_p_esp_partition_t);
   }
   
-  result = nvs_flash_erase_partition_ptr((esp_partition_t const *)arg1);
-  {
-    esp_err_t * resultptr;
-    resultptr = (esp_err_t *) malloc(sizeof(esp_err_t));
-    memmove(resultptr, &result, sizeof(esp_err_t));
-    SWIG_NewPointerObj(L,(void *) resultptr,SWIGTYPE_p_esp_err_t,1); SWIG_arg++;
-  }
+  result = (esp_err_t)nvs_flash_erase_partition_ptr((esp_partition_t const *)arg1);
+  lua_pushnumber(L, (lua_Number) result); SWIG_arg++;
   return SWIG_arg;
   
   if(0) SWIG_fail;
@@ -7146,31 +6934,24 @@ static swig_lua_attribute swig_SwigModule_attributes[] = {
 static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("CONFIG_IDF_TARGET_ESP32", 1)},
     {SWIG_LUA_CONSTTAB_INT("SOC_MCPWM_SUPPORTED", 1)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_0", GPIOSEL_0)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_1", GPIOSEL_1)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_2", GPIOSEL_2)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_3", GPIOSEL_3)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_4", GPIOSEL_4)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_5", GPIOSEL_5)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_6", GPIOSEL_6)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_7", GPIOSEL_7)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_8", GPIOSEL_8)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_9", GPIOSEL_9)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_10", GPIOSEL_10)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_11", GPIOSEL_11)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_12", GPIOSEL_12)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_13", GPIOSEL_13)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_14", GPIOSEL_14)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_15", GPIOSEL_15)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_16", GPIOSEL_16)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_17", GPIOSEL_17)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_18", GPIOSEL_18)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_19", GPIOSEL_19)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_20", GPIOSEL_20)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_21", GPIOSEL_21)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_22", GPIOSEL_22)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_23", GPIOSEL_23)},
-    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_25", GPIOSEL_25)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_OK", 0)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_FAIL", -1)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_NO_MEM", 0x101)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_ARG", 0x102)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_STATE", 0x103)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_SIZE", 0x104)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_NOT_FOUND", 0x105)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_NOT_SUPPORTED", 0x106)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_TIMEOUT", 0x107)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_RESPONSE", 0x108)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_CRC", 0x109)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_VERSION", 0x10A)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_INVALID_MAC", 0x10B)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_WIFI_BASE", 0x3000)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_MESH_BASE", 0x4000)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_FLASH_BASE", 0x6000)},
+    {SWIG_LUA_CONSTTAB_INT("ESP_ERR_HW_CRYPTO_BASE", 0xc000)},
+    {SWIG_LUA_CONSTTAB_STRING("__ASSERT_FUNC", "??")},
     {SWIG_LUA_CONSTTAB_INT("GPIO_PORT_0", GPIO_PORT_0)},
     {SWIG_LUA_CONSTTAB_INT("GPIO_PORT_MAX", GPIO_PORT_MAX)},
     {SWIG_LUA_CONSTTAB_INT("GPIO_NUM_NC", GPIO_NUM_NC)},
@@ -7242,15 +7023,6 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("GPIO_DRIVE_CAP_DEFAULT", GPIO_DRIVE_CAP_DEFAULT)},
     {SWIG_LUA_CONSTTAB_INT("GPIO_DRIVE_CAP_3", GPIO_DRIVE_CAP_3)},
     {SWIG_LUA_CONSTTAB_INT("GPIO_DRIVE_CAP_MAX", GPIO_DRIVE_CAP_MAX)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_ID_PIN0", 0)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_FUNC_IN_HIGH", 0x38)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_FUNC_IN_LOW", 0x30)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_DISABLE", GPIO_PIN_INTR_DISABLE)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_POSEDGE", GPIO_PIN_INTR_POSEDGE)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_NEGEDGE", GPIO_PIN_INTR_NEGEDGE)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_ANYEDGE", GPIO_PIN_INTR_ANYEDGE)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_LOLEVEL", GPIO_PIN_INTR_LOLEVEL)},
-    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_HILEVEL", GPIO_PIN_INTR_HILEVEL)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM0A", MCPWM0A)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM0B", MCPWM0B)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM1A", MCPWM1A)},
@@ -7288,6 +7060,40 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP0", MCPWM_SELECT_CAP0)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP1", MCPWM_SELECT_CAP1)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_SELECT_CAP2", MCPWM_SELECT_CAP2)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_0", GPIOSEL_0)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_1", GPIOSEL_1)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_2", GPIOSEL_2)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_3", GPIOSEL_3)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_4", GPIOSEL_4)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_5", GPIOSEL_5)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_6", GPIOSEL_6)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_7", GPIOSEL_7)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_8", GPIOSEL_8)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_9", GPIOSEL_9)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_10", GPIOSEL_10)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_11", GPIOSEL_11)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_12", GPIOSEL_12)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_13", GPIOSEL_13)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_14", GPIOSEL_14)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_15", GPIOSEL_15)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_16", GPIOSEL_16)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_17", GPIOSEL_17)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_18", GPIOSEL_18)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_19", GPIOSEL_19)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_20", GPIOSEL_20)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_21", GPIOSEL_21)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_22", GPIOSEL_22)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_23", GPIOSEL_23)},
+    {SWIG_LUA_CONSTTAB_INT("GPIOSEL_25", GPIOSEL_25)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_ID_PIN0", 0)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_FUNC_IN_HIGH", 0x38)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_FUNC_IN_LOW", 0x30)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_DISABLE", GPIO_PIN_INTR_DISABLE)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_POSEDGE", GPIO_PIN_INTR_POSEDGE)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_NEGEDGE", GPIO_PIN_INTR_NEGEDGE)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_ANYEDGE", GPIO_PIN_INTR_ANYEDGE)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_LOLEVEL", GPIO_PIN_INTR_LOLEVEL)},
+    {SWIG_LUA_CONSTTAB_INT("GPIO_PIN_INTR_HILEVEL", GPIO_PIN_INTR_HILEVEL)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP0", MCPWM_LL_INTR_CAP0)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP1", MCPWM_LL_INTR_CAP1)},
     {SWIG_LUA_CONSTTAB_INT("MCPWM_LL_INTR_CAP2", MCPWM_LL_INTR_CAP2)},
@@ -7324,6 +7130,44 @@ static swig_lua_const_info swig_SwigModule_constants[]= {
     {0,0,0,0,0,0}
 };
 static swig_lua_method swig_SwigModule_methods[]= {
+    { "esp_err_to_name", _wrap_esp_err_to_name},
+    { "esp_err_to_name_r", _wrap_esp_err_to_name_r},
+    { "_esp_error_check_failed", _wrap__esp_error_check_failed},
+    { "_esp_error_check_failed_without_abort", _wrap__esp_error_check_failed_without_abort},
+    { "mcpwm_gpio_init", _wrap_mcpwm_gpio_init},
+    { "mcpwm_set_pin", _wrap_mcpwm_set_pin},
+    { "mcpwm_init", _wrap_mcpwm_init},
+    { "mcpwm_set_frequency", _wrap_mcpwm_set_frequency},
+    { "mcpwm_set_duty", _wrap_mcpwm_set_duty},
+    { "mcpwm_set_duty_in_us", _wrap_mcpwm_set_duty_in_us},
+    { "mcpwm_set_duty_type", _wrap_mcpwm_set_duty_type},
+    { "mcpwm_get_frequency", _wrap_mcpwm_get_frequency},
+    { "mcpwm_get_duty", _wrap_mcpwm_get_duty},
+    { "mcpwm_set_signal_high", _wrap_mcpwm_set_signal_high},
+    { "mcpwm_set_signal_low", _wrap_mcpwm_set_signal_low},
+    { "mcpwm_start", _wrap_mcpwm_start},
+    { "mcpwm_stop", _wrap_mcpwm_stop},
+    { "mcpwm_carrier_init", _wrap_mcpwm_carrier_init},
+    { "mcpwm_carrier_enable", _wrap_mcpwm_carrier_enable},
+    { "mcpwm_carrier_disable", _wrap_mcpwm_carrier_disable},
+    { "mcpwm_carrier_set_period", _wrap_mcpwm_carrier_set_period},
+    { "mcpwm_carrier_set_duty_cycle", _wrap_mcpwm_carrier_set_duty_cycle},
+    { "mcpwm_carrier_oneshot_mode_enable", _wrap_mcpwm_carrier_oneshot_mode_enable},
+    { "mcpwm_carrier_oneshot_mode_disable", _wrap_mcpwm_carrier_oneshot_mode_disable},
+    { "mcpwm_carrier_output_invert", _wrap_mcpwm_carrier_output_invert},
+    { "mcpwm_deadtime_enable", _wrap_mcpwm_deadtime_enable},
+    { "mcpwm_deadtime_disable", _wrap_mcpwm_deadtime_disable},
+    { "mcpwm_fault_init", _wrap_mcpwm_fault_init},
+    { "mcpwm_fault_set_oneshot_mode", _wrap_mcpwm_fault_set_oneshot_mode},
+    { "mcpwm_fault_set_cyc_mode", _wrap_mcpwm_fault_set_cyc_mode},
+    { "mcpwm_fault_deinit", _wrap_mcpwm_fault_deinit},
+    { "mcpwm_capture_enable", _wrap_mcpwm_capture_enable},
+    { "mcpwm_capture_disable", _wrap_mcpwm_capture_disable},
+    { "mcpwm_capture_signal_get_value", _wrap_mcpwm_capture_signal_get_value},
+    { "mcpwm_capture_signal_get_edge", _wrap_mcpwm_capture_signal_get_edge},
+    { "mcpwm_sync_enable", _wrap_mcpwm_sync_enable},
+    { "mcpwm_sync_disable", _wrap_mcpwm_sync_disable},
+    { "mcpwm_isr_register", _wrap_mcpwm_isr_register},
     { "gpio_config", _wrap_gpio_config},
     { "gpio_reset_pin", _wrap_gpio_reset_pin},
     { "gpio_set_intr_type", _wrap_gpio_set_intr_type},
@@ -7369,40 +7213,6 @@ static swig_lua_method swig_SwigModule_methods[]= {
     { "hall_sensor_read", _wrap_hall_sensor_read},
     { "dac_i2s_enable", _wrap_dac_i2s_enable},
     { "dac_i2s_disable", _wrap_dac_i2s_disable},
-    { "mcpwm_gpio_init", _wrap_mcpwm_gpio_init},
-    { "mcpwm_set_pin", _wrap_mcpwm_set_pin},
-    { "mcpwm_init", _wrap_mcpwm_init},
-    { "mcpwm_set_frequency", _wrap_mcpwm_set_frequency},
-    { "mcpwm_set_duty", _wrap_mcpwm_set_duty},
-    { "mcpwm_set_duty_in_us", _wrap_mcpwm_set_duty_in_us},
-    { "mcpwm_set_duty_type", _wrap_mcpwm_set_duty_type},
-    { "mcpwm_get_frequency", _wrap_mcpwm_get_frequency},
-    { "mcpwm_get_duty", _wrap_mcpwm_get_duty},
-    { "mcpwm_set_signal_high", _wrap_mcpwm_set_signal_high},
-    { "mcpwm_set_signal_low", _wrap_mcpwm_set_signal_low},
-    { "mcpwm_start", _wrap_mcpwm_start},
-    { "mcpwm_stop", _wrap_mcpwm_stop},
-    { "mcpwm_carrier_init", _wrap_mcpwm_carrier_init},
-    { "mcpwm_carrier_enable", _wrap_mcpwm_carrier_enable},
-    { "mcpwm_carrier_disable", _wrap_mcpwm_carrier_disable},
-    { "mcpwm_carrier_set_period", _wrap_mcpwm_carrier_set_period},
-    { "mcpwm_carrier_set_duty_cycle", _wrap_mcpwm_carrier_set_duty_cycle},
-    { "mcpwm_carrier_oneshot_mode_enable", _wrap_mcpwm_carrier_oneshot_mode_enable},
-    { "mcpwm_carrier_oneshot_mode_disable", _wrap_mcpwm_carrier_oneshot_mode_disable},
-    { "mcpwm_carrier_output_invert", _wrap_mcpwm_carrier_output_invert},
-    { "mcpwm_deadtime_enable", _wrap_mcpwm_deadtime_enable},
-    { "mcpwm_deadtime_disable", _wrap_mcpwm_deadtime_disable},
-    { "mcpwm_fault_init", _wrap_mcpwm_fault_init},
-    { "mcpwm_fault_set_oneshot_mode", _wrap_mcpwm_fault_set_oneshot_mode},
-    { "mcpwm_fault_set_cyc_mode", _wrap_mcpwm_fault_set_cyc_mode},
-    { "mcpwm_fault_deinit", _wrap_mcpwm_fault_deinit},
-    { "mcpwm_capture_enable", _wrap_mcpwm_capture_enable},
-    { "mcpwm_capture_disable", _wrap_mcpwm_capture_disable},
-    { "mcpwm_capture_signal_get_value", _wrap_mcpwm_capture_signal_get_value},
-    { "mcpwm_capture_signal_get_edge", _wrap_mcpwm_capture_signal_get_edge},
-    { "mcpwm_sync_enable", _wrap_mcpwm_sync_enable},
-    { "mcpwm_sync_disable", _wrap_mcpwm_sync_disable},
-    { "mcpwm_isr_register", _wrap_mcpwm_isr_register},
     { "nvs_flash_init", _wrap_nvs_flash_init},
     { "nvs_flash_init_partition", _wrap_nvs_flash_init_partition},
     { "nvs_flash_init_partition_ptr", _wrap_nvs_flash_init_partition_ptr},
@@ -7443,7 +7253,6 @@ static swig_type_info _swigt__p_GPIO_INT_TYPE = {"_p_GPIO_INT_TYPE", "enum GPIO_
 static swig_type_info _swigt__p_adc_channel_t = {"_p_adc_channel_t", "adc_channel_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_adc_i2s_source_t = {"_p_adc_i2s_source_t", "adc_i2s_source_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_adc_unit_t = {"_p_adc_unit_t", "adc_unit_t *", 0, 0, (void*)0, 0};
-static swig_type_info _swigt__p_esp_err_t = {"_p_esp_err_t", "esp_err_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_esp_partition_t = {"_p_esp_partition_t", "esp_partition_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_f_p_void__void = {"_p_f_p_void__void", "gpio_isr_t|void (*)(void *)", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_gpio_config_t = {"_p_gpio_config_t", "gpio_config_t *", 0, 0, (void*)&_wrap_class_gpio_config_t, 0};
@@ -7456,7 +7265,7 @@ static swig_type_info _swigt__p_gpio_pull_mode_t = {"_p_gpio_pull_mode_t", "enum
 static swig_type_info _swigt__p_gpio_pulldown_t = {"_p_gpio_pulldown_t", "enum gpio_pulldown_t *|gpio_pulldown_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_gpio_pullup_t = {"_p_gpio_pullup_t", "enum gpio_pullup_t *|gpio_pullup_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_gpio_sel_t = {"_p_gpio_sel_t", "enum gpio_sel_t *|gpio_sel_t *", 0, 0, (void*)0, 0};
-static swig_type_info _swigt__p_int = {"_p_int", "intptr_t *|int *|int_least32_t *|int_fast32_t *|int32_t *|int_fast16_t *", 0, 0, (void*)0, 0};
+static swig_type_info _swigt__p_int = {"_p_int", "intptr_t *|int *|int_least32_t *|int_fast32_t *|int32_t *|esp_err_t *|int_fast16_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_intr_handle_t = {"_p_intr_handle_t", "intr_handle_t *|gpio_isr_handle_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_long_long = {"_p_long_long", "int_least64_t *|int_fast64_t *|int64_t *|long long *|intmax_t *", 0, 0, (void*)0, 0};
 static swig_type_info _swigt__p_mcpwm_capture_on_edge_t = {"_p_mcpwm_capture_on_edge_t", "enum mcpwm_capture_on_edge_t *|mcpwm_capture_on_edge_t *", 0, 0, (void*)0, 0};
@@ -7491,7 +7300,6 @@ static swig_type_info *swig_type_initial[] = {
   &_swigt__p_adc_channel_t,
   &_swigt__p_adc_i2s_source_t,
   &_swigt__p_adc_unit_t,
-  &_swigt__p_esp_err_t,
   &_swigt__p_esp_partition_t,
   &_swigt__p_f_p_void__void,
   &_swigt__p_gpio_config_t,
@@ -7539,7 +7347,6 @@ static swig_cast_info _swigc__p_GPIO_INT_TYPE[] = {  {&_swigt__p_GPIO_INT_TYPE, 
 static swig_cast_info _swigc__p_adc_channel_t[] = {  {&_swigt__p_adc_channel_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_adc_i2s_source_t[] = {  {&_swigt__p_adc_i2s_source_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_adc_unit_t[] = {  {&_swigt__p_adc_unit_t, 0, 0, 0},{0, 0, 0, 0}};
-static swig_cast_info _swigc__p_esp_err_t[] = {  {&_swigt__p_esp_err_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_esp_partition_t[] = {  {&_swigt__p_esp_partition_t, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_f_p_void__void[] = {  {&_swigt__p_f_p_void__void, 0, 0, 0},{0, 0, 0, 0}};
 static swig_cast_info _swigc__p_gpio_config_t[] = {  {&_swigt__p_gpio_config_t, 0, 0, 0},{0, 0, 0, 0}};
@@ -7587,7 +7394,6 @@ static swig_cast_info *swig_cast_initial[] = {
   _swigc__p_adc_channel_t,
   _swigc__p_adc_i2s_source_t,
   _swigc__p_adc_unit_t,
-  _swigc__p_esp_err_t,
   _swigc__p_esp_partition_t,
   _swigc__p_f_p_void__void,
   _swigc__p_gpio_config_t,
