@@ -5,6 +5,8 @@
 #include <sys/param.h>
 #include <time.h>
 #include <sys/time.h>
+#include <esp_vfs.h>
+#include <esp_vfs_fat.h>
 #include "esp_sntp.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -19,7 +21,7 @@
 extern void init_dlmalloc(char* heapstart, char* heapend); /* libbas.a */
 extern void barracuda(void); /* LspAppMgr.c */
 extern void smartConfig(void);
-
+extern int (*platformInitDiskIo)(DiskIo*);  /* LspAppMgr.c */
 
 /* Barracuda App Server fatal error callback */
 static void
@@ -40,6 +42,34 @@ writeHttpTrace(char* buf, int bufLen)
   ets_printf("%s",buf);
 }
 
+/* Configures DISK IO for examples/lspappmgr/src/LspAppMgr.c
+ */
+static int initDiskIo(DiskIo* io)
+{
+   static const char bp[] = {"/spiflash"}; 
+   const esp_vfs_fat_mount_config_t mcfg = {
+      .max_files = 20,
+      .format_if_mount_failed = true,
+      .allocation_unit_size = CONFIG_WL_SECTOR_SIZE
+   };
+   static BaBool mounted=FALSE;
+   if( ! mounted )
+   {
+      wl_handle_t hndl = WL_INVALID_HANDLE;
+      HttpTrace_printf(0,"Mounting FAT filesystem\n"); 
+      esp_err_t err = esp_vfs_fat_spiflash_mount(bp, "storage", &mcfg, &hndl); 
+      if (err != ESP_OK)
+      {
+         HttpTrace_printf(0,"Failed to mount FATFS (%s)", esp_err_to_name(err));
+         return -1;
+      }
+      mounted=TRUE;
+   }
+   /* Else: restarted internally by debugger */
+   DiskIo_setRootDir(io,bp);
+   return 0;
+}
+
 /* FreeRTOS task calling function barracuda() found in LspAppMgr.c
  */
 static void
@@ -53,6 +83,7 @@ mainServerTask(Thread *t)
 #else   
 #error must use dlmalloc
 #endif
+  platformInitDiskIo=initDiskIo; 
   HttpTrace_setFLushCallback(writeHttpTrace);
   HttpServer_setErrHnd(myErrHandler); 
   barracuda(); /* Does not return */
