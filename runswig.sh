@@ -1,3 +1,5 @@
+#!/bin/bash
+
 function installswig {
     read -p "SWIG is not installed. Do you want to install SWIG (Y/n)?"
     if [ "$REPLY" == "n" ]; then

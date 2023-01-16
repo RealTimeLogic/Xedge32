@@ -22,6 +22,18 @@ extern void init_dlmalloc(char* heapstart, char* heapend); /* libbas.a */
 extern void barracuda(void); /* LspAppMgr.c */
 extern void smartConfig(void);
 extern int (*platformInitDiskIo)(DiskIo*);  /* LspAppMgr.c */
+extern void installESP32Libs(lua_State* L); /* BaESP32.c */
+extern void luaopen_esp(lua_State* L);
+
+/* LspAppMgr.c calls this function. We use it to register the auto
+ * generated bindings and the bindings in installESP32Libs.
+*/
+void luaopen_LED(lua_State* L)
+{
+   installESP32Libs(L);
+   luaopen_esp(L);
+}
+
 
 /* Barracuda App Server fatal error callback */
 static void

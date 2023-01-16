@@ -1,7 +1,7 @@
 
 
 idf_component_register(
-  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "smartconfig.c" "BAS/examples/lspappmgr/src/LspAppMgr.c" "BAS/examples/lspappmgr/obj/LspZip.c" "esp_wrap.c"
+  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "smartconfig.c" "BAS/examples/lspappmgr/src/LspAppMgr.c" "BAS/examples/lspappmgr/obj/LspZip.c" "BaESP32.c" "esp_wrap.c"
   INCLUDE_DIRS "."
   "BAS/inc"
   "BAS/inc/arch/NET/LwIP"
@@ -15,7 +15,7 @@ idf_component_register(
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
 #  generates faulty BAS binary code without this setting.
 
-target_compile_options(${COMPONENT_LIB} PRIVATE -DNO_SMARTCONFIG -DNDEBUG -DBA_ESP32 -DUSE_DLMALLOC -DBA_FREERTOS -DBA_LWIP -DUSE_REVCON=1 -DB_LITTLE_ENDIAN -DLUA_NUMBER_INTEGER=0  -DUSE_DBGMON=1 -DSHARKSSL_ENABLE_ASN1_KEY_CREATION=1 -DSHARKSSL_ENABLE_RSAKEY_CREATE=1 -DSHARKSSL_ENABLE_ECCKEY_CREATE=1 -DSHARKSSL_ENABLE_CSR_CREATION=1 -DSHARKSSL_ENABLE_CSR_SIGNING=1 -fno-inline-small-functions -Dluaopen_LED=luaopen_esp -Wno-cast-function-type)
+target_compile_options(${COMPONENT_LIB} PRIVATE -DNO_SMARTCONFIG -DNDEBUG -DBA_ESP32 -DUSE_DLMALLOC -DBA_FREERTOS -DBA_LWIP -DUSE_REVCON=1 -DB_LITTLE_ENDIAN -DLUA_NUMBER_INTEGER=0  -DUSE_DBGMON=1 -DSHARKSSL_ENABLE_ASN1_KEY_CREATION=1 -DSHARKSSL_ENABLE_RSAKEY_CREATE=1 -DSHARKSSL_ENABLE_ECCKEY_CREATE=1 -DSHARKSSL_ENABLE_CSR_CREATION=1 -DSHARKSSL_ENABLE_CSR_SIGNING=1 -fno-inline-small-functions -Wno-cast-function-type)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-implicit-fallthrough -Wno-attributes)
 
