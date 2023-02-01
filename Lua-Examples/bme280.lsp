@@ -12,6 +12,9 @@ collectgarbage() -- Quickly release resources not used.
 --  3: Set your I2C GPIO settings below
 --  4: Run this file as an LSP page
 
+-- Check out the MQTT Sparkplug-Enabled Weather Station after testing
+-- this example: http://bit.ly/3DwZYZY
+
 local SDA_GPIO <const> = 21
 local SCL_GPIO <const> = 22
 local BME280_I2C_ADDR <const> = 0x76
