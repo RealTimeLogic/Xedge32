@@ -15,7 +15,7 @@
 #include "nvs_flash.h"
 #include "esp_netif.h"
 #include "protocol_examples_common.h"
-#include <mdns.h>
+//#include <mdns.h>
 #include <barracuda.h>
 
 extern void init_dlmalloc(char* heapstart, char* heapend); /* libbas.a */
@@ -23,7 +23,6 @@ extern void barracuda(void); /* LspAppMgr.c */
 extern void smartConfig(void);
 extern int (*platformInitDiskIo)(DiskIo*);  /* LspAppMgr.c */
 extern void installESP32Libs(lua_State* L); /* BaESP32.c */
-extern void luaopen_esp(lua_State* L);
 
 /* LspAppMgr.c calls this function. We use it to register the auto
  * generated bindings and the bindings in installESP32Libs.
@@ -31,7 +30,6 @@ extern void luaopen_esp(lua_State* L);
 void luaopen_AUX(lua_State* L)
 {
    installESP32Libs(L);
-   luaopen_esp(L);
 }
 
 
@@ -51,7 +49,7 @@ static void
 writeHttpTrace(char* buf, int bufLen)
 {
   buf[bufLen]=0; /* Zero terminate. Bufsize is at least bufLen+1. */
-  ets_printf("%s",buf);
+  ESP_LOGI("BAS","%s",buf);
 }
 
 /* Configures DISK IO for examples/lspappmgr/src/LspAppMgr.c
@@ -69,7 +67,7 @@ static int initDiskIo(DiskIo* io)
    {
       wl_handle_t hndl = WL_INVALID_HANDLE;
       HttpTrace_printf(0,"Mounting FAT filesystem\n"); 
-      esp_err_t err = esp_vfs_fat_spiflash_mount(bp, "storage", &mcfg, &hndl); 
+      esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl(bp, "storage", &mcfg, &hndl); 
       if (err != ESP_OK)
       {
          HttpTrace_printf(0,"Failed to mount FATFS (%s)", esp_err_to_name(err));
@@ -90,7 +88,7 @@ mainServerTask(Thread *t)
   (void)t;
 #ifdef USE_DLMALLOC
   /* Allocate server pool using 3MB pSRAM  */
-  EXT_RAM_ATTR static char poolBuf[3*1024*1024];
+  EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024];
   init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
 #else   
 #error must use dlmalloc
@@ -101,7 +99,7 @@ mainServerTask(Thread *t)
   barracuda(); /* Does not return */
 }
 
-
+#if 0
 static void
 startMdnsService()
 {
@@ -111,7 +109,7 @@ startMdnsService()
   mdns_instance_name_set("Barracuda App Server");
   mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
 }
-
+#endif
 
 
 void
@@ -139,12 +137,12 @@ app_main(void)
 #endif
 
 
-  sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  sntp_setservername(0, "pool.ntp.org");
-  sntp_init();
+  esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_init();
 
   /* Using BAS thread porting API */
   Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
   Thread_start(&t);
-  startMdnsService();
+  //startMdnsService();
 }
