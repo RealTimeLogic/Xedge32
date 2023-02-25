@@ -1,0 +1,53 @@
+BME280 Module
+=============
+
+This Lua module communicates with the Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensors through the I2C interface.
+
+Usage
+-----
+
+To use this module, you first need to create a BME280 object by calling the ``bme280`` function and passing the following parameters:
+
+``bme=require"bme280".bme280(port, address, sda, scl, settings)``
+
+Create a BME280 object.
+
+**Parameters:**
+
+- ``port`` (``int``): I2C port number, e.g., ``0``
+- ``address`` (``int``): the BME280 I2C address, typically ``0x76``
+- ``sda`` (``int``): the GPIO number used for the I2C Serial Data
+- ``scl`` (``int``): the GPIO number used for the I2C Serial Clock
+- ``settings`` (``table``, optional): a Lua table with settings. See the WeatherStation demo for example code.
+
+**Returns:**
+
+- A new BME280 object.
+
+BME280 Object Methods
+---------------------
+
+``bme:read()``
+
+Reads the temperature, humidity, and pressure from the BME280 sensor.
+
+**Returns:**
+
+- Three values: the temperature (in degrees Celsius), the humidity (as a percentage), and the pressure (in Pascals).
+
+Example
+-------
+
+Here's an example of how to use the ``bme280`` module:
+
+.. code-block:: lua
+
+    local bmeModule = require"bme280"
+    local port = 0
+    local address = 0x76
+    local sda = 5
+    local scl = 6
+    local bme = bmeModule.bme280(port, address, sda, scl)
+    local temp, hum, pres = bme:read()
+
+This example creates a new BME280 object, reads the temperature, humidity, and pressure from the sensor, and stores the values in the ``temp``, ``hum``, and ``pres`` variables. Note that we've assumed that the I2C port, address, SDA, and SCL pins are specified as local variables. You may need to adjust these variables to fit your specific use case.

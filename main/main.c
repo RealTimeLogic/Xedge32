@@ -28,7 +28,7 @@ extern void luaopen_esp(lua_State* L);
 /* LspAppMgr.c calls this function. We use it to register the auto
  * generated bindings and the bindings in installESP32Libs.
 */
-void luaopen_LED(lua_State* L)
+void luaopen_AUX(lua_State* L)
 {
    installESP32Libs(L);
    luaopen_esp(L);
