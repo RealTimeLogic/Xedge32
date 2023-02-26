@@ -4,12 +4,13 @@ gpio Module
 
 This module provides access to the GPIO (General Purpose Input/Output) subsystem.
 
-gpio.MODE
----------
+esp32.gpio(pin, mode, cfg)
+-----------------------------------
 
-The `gpio.MODE` table defines the available modes for a GPIO pin.
+The `gpio.init()` function initializes a GPIO pin and returns a `gpio` object.
 
-**Keys:**
+:param pin: A valid GPIO pin number.
+:param mode: The GPIO mode must be set to one of the following strings:
 
 - ``IN``: input-only mode.
 - ``OUT``: output-only mode.
@@ -17,34 +18,18 @@ The `gpio.MODE` table defines the available modes for a GPIO pin.
 - ``INOUTOD``: input/output mode with open-drain.
 - ``INOUT``: input/output mode.
 
-Use these keys to set the mode of a GPIO pin using the `gpio.init()` function.
-
-gpio.TYPE
----------
-
-The `gpio.TYPE` table specifies the interrupt type.
-
-**Keys:**
-
-- ``POSEDGE``: interrupt on rising edge.
-- ``NEGEDGE``: interrupt on falling edge.
-- ``ANYEDGE``: interrupt on both rising and falling edges.
-
-Use these keys to set the interrupt type in the `gpio.init()` function.
-
-gpio.init(pin, mode, cfg)
------------------------------------
-
-The `gpio.init()` function initializes a GPIO pin and returns a `gpio` object.
-
-:param pin: A valid GPIO pin number.
-:param mode: A key from the `gpio.MODE` table.
 :param cfg: An optional table with the following options:
 
-- ``type``: A key from the `gpio.TYPE` table. Defaults to ``POSEDGE`` if a callback is provided and is disabled if no callback is provided.
 - ``pullup``: Enables a GPIO pull-up. Defaults to ``false``.
 - ``pulldown``: Enables a GPIO pull-down. Defaults to ``false``.
 - ``callback``: A callback function. Enables interrupt mode. The interrupt is controlled by the `type` key.
+- ``type``:  The interrupt type can be set to one of the following strings:
+
+  - ``POSEDGE``: interrupt on rising edge.
+  - ``NEGEDGE``: interrupt on falling edge.
+  - ``ANYEDGE``: interrupt on both rising and falling edges.
+
+  Defaults to ``POSEDGE`` if a callback is provided; interrupts are disabled if no callback is provided.
 
 
 gpio object Methods

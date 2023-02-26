@@ -5,15 +5,10 @@
 /* The LThreadMgr configured in LspAppMgr.c */
 extern LThreadMgr ltMgr;
 /* The Socket Dispatcher (SoDisp) mutex protecting everything. */
-ThreadMutex* soDispMutex;
+static ThreadMutex* soDispMutex;
+/* A mutex used for protecting small regions */
+static ThreadMutex rMutex;
 
-
-/* Translates names (strings) in Lua to numbers in C code
- */
-typedef struct {
-   int t;
-   const char* n;
-} LTranslate;
 
 typedef void (*EventBrokerCallback)(gpio_num_t pin);
 
@@ -41,23 +36,6 @@ static void eventBrokerTask(void *params)
 }
 
 
-/* Set fields defined in lt in table at top of stack: t[name]=number
- */
-static void setFields(lua_State* L, const LTranslate lt[], int len)
-{
-   int i;
-   for(i=0 ; i < len; i++)
-   {
-      lua_pushinteger(L,lt[i].t);
-      lua_setfield(L, -2, lt[i].n);
-   }
-}
-
-static void createTabAndSetFields(lua_State* L, const LTranslate lt[], int len)
-{
-   lua_createtable(L, 0, len);
-   setFields(L,lt,len);
-}
 
 
 
@@ -79,7 +57,6 @@ typedef struct
 } LGPIO;
 
 static LGPIO** activeGPOI; /* Array of LGPIO pointers with len GPIO_NUM_MAX */
-static portMUX_TYPE gpioSpinlock=portMUX_INITIALIZER_UNLOCKED;
 
 
 typedef struct
@@ -108,7 +85,7 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    U8 queue[GPIO_QUEUE_SIZE];
    GpioThreadJob* job = (GpioThreadJob*)jb;
    
-   taskENTER_CRITICAL(&gpioSpinlock); 
+   ThreadMutex_set(&rMutex);
    LGPIO* gpio = activeGPOI[job->pin];
    if(gpio)
    {
@@ -116,7 +93,7 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
       memcpy(queue,gpio->queue,queueLen);
       gpio->queueLen=0;
    }
-   taskEXIT_CRITICAL(&gpioSpinlock);
+   ThreadMutex_release(&rMutex);
 
    if(gpio)
    {
@@ -144,7 +121,7 @@ static void gpioEventBroker(gpio_num_t pin)
    int queueLen=0;
    int level = gpio_get_level(pin);
 
-   taskENTER_CRITICAL(&gpioSpinlock);
+   ThreadMutex_set(&rMutex);
    gpio = activeGPOI[pin];
    if(gpio)
    {
@@ -154,7 +131,7 @@ static void gpioEventBroker(gpio_num_t pin)
          queueLen=gpio->queueLen;
       }
    }
-   taskEXIT_CRITICAL(&gpioSpinlock);
+   ThreadMutex_release(&rMutex);
 
    /* If transitioning from empty to one element in the queue */
    if(1 == queueLen)
@@ -236,24 +213,18 @@ static const luaL_Reg gpioObjLib[] = {
 };
 
 
-static int GPIO_open(lua_State* L)
+static int lgpio(lua_State* L)
 {
    gpio_config_t cfg;
    gpio_num_t pin=(gpio_num_t)lua_tointeger(L, 1);
    if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid pin");
-   cfg.mode = (gpio_mode_t)lua_tointeger(L, 2);
-   switch(cfg.mode)
-   {
-      case GPIO_MODE_INPUT:
-      case GPIO_MODE_OUTPUT:
-      case GPIO_MODE_OUTPUT_OD:
-      case GPIO_MODE_INPUT_OUTPUT_OD:
-      case GPIO_MODE_INPUT_OUTPUT:
-         break;
-      default:
-         luaL_argerror(L, 2, "Invalid mode");
-   }
+   const char* mode = luaL_checkstring(L,2);
+   cfg.mode = 'I' == mode[0] && !mode[2] ? GPIO_MODE_INPUT :
+      ('O' == mode[0] && !mode[3] ? GPIO_MODE_OUTPUT :
+       ('O' == mode[0] ? GPIO_MODE_OUTPUT_OD :
+        ('I' == mode[0] && !mode[5] ? GPIO_MODE_INPUT_OUTPUT :
+         GPIO_MODE_INPUT_OUTPUT_OD)));
    if(activeGPOI[pin])
       luaL_error(L,"INUSE");
    if( ! lua_istable(L, 3) )
@@ -261,14 +232,26 @@ static int GPIO_open(lua_State* L)
       lua_settop(L,2);
       lua_createtable(L, 0, 0); /* empty config table */
    }
+   else
+      lua_settop(L,3);
    lua_getfield(L, 3, "callback"); /* callback IX is now 4 */
    int hasCB = lua_isfunction(L, 4);
    cfg.pull_up_en = balua_getBoolField(L, 3, "pullup", FALSE) ?
       GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
    cfg.pull_down_en = balua_getBoolField(L, 3, "pulldown", FALSE) ?
       GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
-   cfg.intr_type = hasCB ? balua_getIntField(L, 3, "type", GPIO_INTR_POSEDGE):
-      GPIO_INTR_DISABLE;
+   if(hasCB)
+   {
+      const char* type = balua_getStringField(L, 3, "type", 0);
+      cfg.intr_type = type ?
+         ('L' == *type ? GPIO_INTR_LOW_LEVEL   :
+          ('H' == *type ? GPIO_INTR_HIGH_LEVEL :
+           ('N' == *type ? GPIO_INTR_NEGEDGE   :
+            ('A' == *type ? GPIO_INTR_ANYEDGE  : GPIO_INTR_POSEDGE )))) :
+         GPIO_INTR_POSEDGE;
+   }
+   else
+      cfg.intr_type = GPIO_INTR_DISABLE;
    cfg.pin_bit_mask = BIT64(pin);
    LGPIO* gpio = (LGPIO*)lua_newuserdata(L, sizeof(LGPIO));
    memset(gpio,0,sizeof(LGPIO));
@@ -292,28 +275,6 @@ static int GPIO_open(lua_State* L)
    }
    return 1;
 }
-
-static const luaL_Reg gpioLib[] = {
-   {"open", GPIO_open},
-   {NULL, NULL}
-};
-
-static const LTranslate gpioModes[] = {
-   {GPIO_MODE_INPUT,"IN"},
-   {GPIO_MODE_OUTPUT,"OUT"},
-   {GPIO_MODE_OUTPUT_OD,"OUTOD"},
-   {GPIO_MODE_INPUT_OUTPUT_OD,"INOUTOD"},
-   {GPIO_MODE_INPUT_OUTPUT,"INOUT"}
-};
-
-static const LTranslate gpioTypes[] = {
-   {GPIO_INTR_POSEDGE, "POSEDGE"},
-   {GPIO_INTR_NEGEDGE, "NEGEDGE"},
-   {GPIO_INTR_ANYEDGE, "ANYEDGE"},
-   {GPIO_INTR_LOW_LEVEL, "LOWLEVEL"},
-   {GPIO_INTR_HIGH_LEVEL, "HIGHLEVEL"}
-};
-
 
 /*********************************************************************
  *********************************************************************
@@ -526,7 +487,7 @@ static const luaL_Reg i2cMasterLib[] = {
 };
 
 /* ic2.master(port, pinSDA, pinSCL, speed) */
-static int i2cMaster(lua_State* L)
+static int li2cMaster(lua_State* L)
 {
    i2c_port_t port=(i2c_port_t)luaL_checkinteger(L, 1); /* port */
    if(port < 0 || port >= I2C_NUM_MAX)
@@ -550,27 +511,21 @@ static int i2cMaster(lua_State* L)
       lua_pushvalue(L, -1);
       lua_setfield(L, -2, "__index");
       luaL_setfuncs(L,i2cMasterLib,0);
-      static const LTranslate types[] = {
-         {I2C_MASTER_ACK, "ACK"},
-         {I2C_MASTER_NACK, "NACK"},
-         {I2C_MASTER_LAST_NACK, "LAST_NACK"},
-         {I2C_MASTER_READ,"READ"},
-         {I2C_MASTER_WRITE,"WRITE"}
-      };
-      /* Add the ACK types to the table */
-      setFields(L, types, sizeof(types) / sizeof(types[0])); 
    }
    lua_setmetatable(L, -2); /* Set meta for userdata */
    return 1;
 }
 
-static const luaL_Reg i2cLib[] = {
-   {"master", i2cMaster},
+static const luaL_Reg esp32Lib[] = {
+   {"i2cmaster", li2cMaster},
+   {"gpio", lgpio},
    {NULL, NULL}
 };
 
+
 void installESP32Libs(lua_State* L)
 {
+   ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
    eventBrokerQueue = xQueueCreate(20, sizeof(EventBrokerQueueNode));
    xTaskCreate(eventBrokerTask,"eventBroker",1024,0,configMAX_PRIORITIES-1,0);
@@ -578,17 +533,6 @@ void installESP32Libs(lua_State* L)
    activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
    memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
 
-   /* _G.gpio */
-   lua_createtable(L, 0, 0);
-   luaL_setfuncs(L, gpioLib, 0);
-   createTabAndSetFields(L, gpioModes, sizeof(gpioModes)/ sizeof(gpioModes[0]));
-   lua_setfield(L, -2, "MODE");
-   createTabAndSetFields(L, gpioTypes, sizeof(gpioTypes)/ sizeof(gpioTypes[0]));
-   lua_setfield(L, -2, "TYPE");
-   lua_setglobal(L, "gpio");
-
-   /* _G.i2c */
-   lua_createtable(L, 0, 1);
-   luaL_setfuncs(L, i2cLib,0);
-   lua_setglobal(L,"i2c");
+   luaL_newlib(L, esp32Lib);
+   lua_setglobal(L,"esp32");
 }

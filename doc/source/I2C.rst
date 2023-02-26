@@ -1,14 +1,14 @@
 I2C
 ========================
 
-To use the I2C API, start by creating an I2C object using ``i2c.master``, specifying the port, SDA GPIO, SCL GPIO, and the I2C speed. Then, call ``i2cm:start``, followed by ``i2cm:address``. You can then call ``i2cm:write`` and/or ``i2c:read`` several times. Finally, end the complete sequence by calling ``i2cm:commit``.
+To use the I2C API, start by creating an I2C object by calling ``esp32.i2cmaster``, specifying the port, SDA GPIO, SCL GPIO, and the I2C speed. Then, call ``i2cm:start``, followed by ``i2cm:address``. You can then call ``i2cm:write`` and/or ``i2c:read`` several times. Finally, end the complete sequence by calling ``i2cm:commit``.
 
 Creating an I2C object
 ----------------------
 
 .. code-block:: lua
 
-    i2cm=i2c.master(port, pinSDA, pinSCL, speed)
+    i2cm=esp32.i2cmaster(port, pinSDA, pinSCL, speed)
 
 Create an I2C object.
 
@@ -84,6 +84,6 @@ The following example shows the read and write functions in the `bme280.lua driv
     end
     
     local function bme280(port, address, sda, scl, settings)
-       i2cm = i2c.master(port, sda, scl, settings.speed or 100000)
+       i2cm = esp32.i2cmaster(port, sda, scl, settings.speed or 100000)
        ......
     end

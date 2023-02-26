@@ -300,7 +300,7 @@ local function bme280(port, address, sda, scl, settings)
    local ok,data,err
    settings = settings or {}
    settings.tempCorrection = settings.tempCorrection or 0.0
-   local i2cm = i2c.master(port, sda, scl, settings.speed or 100000)
+   local i2cm = esp32.i2cmaster(port, sda, scl, settings.speed or 100000)
    i2cm:start()
    i2cm:address(address, i2cm.WRITE)
    if not i2cm:commit() then
