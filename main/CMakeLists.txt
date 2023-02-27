@@ -1,12 +1,10 @@
 
-
 idf_component_register(
-  SRCS "BAS/amalgamation/BAS.c" "main.c" "smartconfig.c" "BAS/examples/lspappmgr/src/LspAppMgr.c" "BAS/examples/lspappmgr/obj/LspZip.c" "BAS/xrc/DiskIo/posix/BaFile.c" "BaESP32.c"
+  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "smartconfig.c" "BAS/examples/lspappmgr/src/LspAppMgr.c" "BAS/examples/lspappmgr/obj/LspZip.c" "BaESP32.c"
   INCLUDE_DIRS "."
   "BAS/inc"
-  "BAS/inc/arch/bsd/LwIP"
+  "BAS/inc/arch/NET/LwIP"
   "BAS/inc/arch/FreeRTOS"
-  "BAS/src/plugins/lua"
 )
 
 # Change -DNO_SMARTCONFIG to -DSMARTCONFIG below if you want to enable this feature.
