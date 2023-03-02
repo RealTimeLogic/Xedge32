@@ -23,3 +23,10 @@ git clone https://github.com/RealTimeLogic/BAS.git BAS
 ```
 
 See the [Barracuda Application Server for ESP32](https://realtimelogic.com/downloads/bas/ESP32/) tutorial for details.
+
+
+## Lua ESP32 API
+
+- [GPIO](doc/source/GPIO.rst)
+- [I2C](doc/source/I2C.rst)
+- [BME280 Lua Module](doc/source/BME280.rst)
