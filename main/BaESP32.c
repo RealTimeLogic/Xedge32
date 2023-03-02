@@ -2,12 +2,77 @@
 #include <driver/i2c.h>
 #include <barracuda.h>
 
-/* The LThreadMgr configured in LspAppMgr.c */
+/*
+  The LThreadMgr configured in LspAppMgr.c
+  https://realtimelogic.com/ba/doc/en/C/reference/html/structLThreadMgr.html
+*/
 extern LThreadMgr ltMgr;
-/* The Socket Dispatcher (SoDisp) mutex protecting everything. */
+
+/*
+  The Socket Dispatcher (SoDisp) mutex protecting everything; set in
+  installESP32Libs() below.
+  https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadMutex.html
+*/
 static ThreadMutex* soDispMutex;
-/* A mutex used for protecting small regions */
+
+/*
+  A mutex used for protecting small regions
+*/
 static ThreadMutex rMutex;
+
+/*********************************************************************
+ *********************************************************************
+                           Misc functions
+ *********************************************************************
+ *********************************************************************/
+
+/* This function creates and pushes on the stack a userdata object
+   with one associated Lua value. The function also sets the object's
+   metatable if it is the first time the function is called with 'tname'.
+   The space for one associated Lua value is for function lReferenceCallback().
+   Params:
+     size: Required userdata size.
+     tname: The name of the metatable
+     l: Registers all functions listed in l in metatable, if created.
+ */
+
+static void* lNewUdata(
+   lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
+{
+   void* o = lua_newuserdatauv(L, size, 1);
+   memset(o,0,size);
+   if(luaL_newmetatable(L, tname))
+   {  /*
+        Create metatable and register functions:
+      */
+      lua_pushvalue(L, -1); /* Copy meta */
+      lua_setfield(L, -2, "__index"); /* meta.__index=meta */
+      /* set all function in meta: for-loop -> meta[fname]=f */
+      luaL_setfuncs(L,l,0);
+   }
+   lua_setmetatable(L, -2); /*  setmetatable(userdata, table) */
+   return o;
+}
+
+/* Sets userdata[associated Lua value postition 1] = callback. The
+   above prevents the garbage collector from collecting the callback
+   as long as the userdata exists. The callback is also registered in
+   the server's weak table, making it easy to push the function on the
+   stack using the call: balua_wkPush().
+   https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
+
+   This function does not push any values on the stack.
+*/
+static int
+lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
+{
+   lua_pushvalue(L, callbackIx);
+   baAssert(lua_type(L, userdataIx) == LUA_TUSERDATA);
+   baAssert(lua_type(L, -1) == LUA_TFUNCTION);
+   lua_setiuservalue(L, userdataIx, 1);
+   lua_pushvalue(L, callbackIx);
+   return balua_wkRef(L);
+}
 
 
 typedef void (*EventBrokerCallback)(gpio_num_t pin);
@@ -70,7 +135,6 @@ static void GPIO_close(lua_State* L, LGPIO* o)
    if(GPIO_NUM_MAX != o->pin)
    {
       gpio_reset_pin(o->pin);
-      luaL_unref(L, LUA_REGISTRYINDEX, o->callbackRef);
       activeGPOI[o->pin]=0; /* should be atomic */
       o->pin = GPIO_NUM_MAX;
    }
@@ -100,7 +164,7 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
       lua_State* L = jb->Lt;
       for(ix=0 ; ix < queueLen && GPIO_NUM_MAX != gpio->pin ; ix++)
       {
-         lua_rawgeti(L, LUA_REGISTRYINDEX, gpio->callbackRef);
+         balua_wkPush(L, gpio->callbackRef);
          lua_pushboolean(L, queue[ix]);
          if(LUA_OK != lua_pcall(L, 1, 0, msgh))
          {
@@ -253,15 +317,7 @@ static int lgpio(lua_State* L)
    else
       cfg.intr_type = GPIO_INTR_DISABLE;
    cfg.pin_bit_mask = BIT64(pin);
-   LGPIO* gpio = (LGPIO*)lua_newuserdata(L, sizeof(LGPIO));
-   memset(gpio,0,sizeof(LGPIO));
-   if(luaL_newmetatable(L, BAGPIO))
-   {
-      lua_pushvalue(L, -1);
-      lua_setfield(L, -2, "__index");
-      luaL_setfuncs(L,gpioObjLib,0);
-   }
-   lua_setmetatable(L, -2); /* Set meta for userdata */
+   LGPIO* gpio = (LGPIO*)lNewUdata(L,sizeof(LGPIO),BAGPIO,gpioObjLib);
    gpio->pin=pin;
    gpio_reset_pin(pin);
    if(ESP_OK != gpio_config(&cfg))
@@ -269,8 +325,8 @@ static int lgpio(lua_State* L)
    activeGPOI[pin]=gpio;
    if(hasCB)
    {
-      lua_pushvalue(L, 4); /* callback IX is 4 */
-      gpio->callbackRef=luaL_ref(L, LUA_REGISTRYINDEX);
+      /* Userdata at -1 and callback ix is 4 */
+      gpio->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
       gpio_isr_handler_add(pin, gpioInterruptHandler, (void *)pin); 
    }
    return 1;
@@ -502,19 +558,33 @@ static int li2cMaster(lua_State* L)
    };
    i2c_param_config(port, &i2cConfig);
    i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
-   LI2CMaster* i2cm = (LI2CMaster*)lua_newuserdata(L, sizeof(LI2CMaster));
-   memset(i2cm,0,sizeof(LI2CMaster));
+   LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(
+      L,sizeof(LI2CMaster),BAI2CMASTER,i2cMasterLib);
    i2cm->port = port;
-   /* Create meta table if this is the first time this function is called */
-   if(luaL_newmetatable(L, BAI2CMASTER))
-   {
-      lua_pushvalue(L, -1);
-      lua_setfield(L, -2, "__index");
-      luaL_setfuncs(L,i2cMasterLib,0);
-   }
-   lua_setmetatable(L, -2); /* Set meta for userdata */
    return 1;
 }
+
+
+
+
+/*********************************************************************
+ *********************************************************************
+                                  UART
+ *********************************************************************
+ *********************************************************************/
+
+
+
+
+
+
+/*********************************************************************
+ *********************************************************************
+                             Install ESP32
+ *********************************************************************
+ *********************************************************************/
+
+
 
 static const luaL_Reg esp32Lib[] = {
    {"i2cmaster", li2cMaster},
@@ -528,7 +598,7 @@ void installESP32Libs(lua_State* L)
    ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
    eventBrokerQueue = xQueueCreate(20, sizeof(EventBrokerQueueNode));
-   xTaskCreate(eventBrokerTask,"eventBroker",1024,0,configMAX_PRIORITIES-1,0);
+   xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
    gpio_install_isr_service(0);
    activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
    memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
