@@ -120,7 +120,7 @@ lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
    return balua_wkRef(L);
 }
 
-/* Check if index 'ix' is a table and if not, create a table at 'ix'.
+/* Checks if index 'ix' is a table and if not, creates a table at 'ix'.
  */
 static void lInitConfigTable(lua_State* L, int ix)
 {
@@ -190,6 +190,7 @@ typedef struct
    gpio_num_t pin;
 } GpioThreadJob;
 
+
 static void GPIO_close(lua_State* L, LGPIO* o)
 {
    if(GPIO_NUM_MAX != o->pin)
@@ -199,7 +200,6 @@ static void GPIO_close(lua_State* L, LGPIO* o)
       o->pin = GPIO_NUM_MAX;
    }
 }
-
 
 /* This function runs in the context of a thread in the LThreadMgr.
  */
@@ -271,7 +271,7 @@ static void gpioEventBroker(gpio_num_t pin)
 }
 
 
-/* Queue a GPIO event and send to the eventBrokerTask, which then
+/* Send a GPIO event to the eventBrokerTask, which then
  * calls function gpioEventBroker.
  */
 static void IRAM_ATTR gpioInterruptHandler(void *arg)
@@ -295,6 +295,7 @@ static LGPIO* GPIO_getUD(lua_State* L)
    return (LGPIO*)luaL_checkudata(L,1,BAGPIO);
 }
 
+
 static LGPIO* GPIO_checkUD(lua_State* L)
 {
    LGPIO* o = GPIO_getUD(L);
@@ -302,7 +303,6 @@ static LGPIO* GPIO_checkUD(lua_State* L)
       luaL_error(L,"CLOSED");
    return o;
 }
-
 
 
 static int GPIO_read(lua_State* L)
@@ -406,21 +406,23 @@ typedef struct
 /* Time to wait for I2c. Default is 500ms */
 #define I2CWT(L,ix) ((TickType_t)luaL_optinteger(L,ix,500)/portTICK_PERIOD_MS)
 
+
 static LI2CMaster* I2CMaster_getUD(lua_State* L)
 {
    return (LI2CMaster*)luaL_checkudata(L,1,BAI2CMASTER);
 }
+
 
 static void throwInvArg(lua_State* L)
 {
    luaL_error(L, "Invalid arg. comb.");
 }
 
+
 static void throwInvDirection(lua_State* L)
 {
    luaL_error(L, "Invalid direction");
 }
-
 
 
 static int pushEspRetVal(lua_State* L, esp_err_t err)
@@ -441,6 +443,7 @@ static int pushEspRetVal(lua_State* L, esp_err_t err)
    return 2;
 }
 
+
 static LI2CMaster* I2CMaster_checkUD(lua_State* L, int checkCmd)
 {
    LI2CMaster* i2cm = I2CMaster_getUD(L);
@@ -450,6 +453,7 @@ static LI2CMaster* I2CMaster_checkUD(lua_State* L, int checkCmd)
       luaL_error(L, "Not started");
    return i2cm;
 }
+
 
 /* i2cm:start() */
 static int I2CMaster_start(lua_State* L)
@@ -461,6 +465,7 @@ static int I2CMaster_start(lua_State* L)
    return pushEspRetVal(
       L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM);
 }
+
 
 /* i2cm:address(addr, direction, [,ack]) */
 static int I2CMaster_address(lua_State* L)
@@ -474,6 +479,7 @@ static int I2CMaster_address(lua_State* L)
       ((uint8_t)luaL_checkinteger(L, 2) << 1) | i2cm->direction,
       balua_optboolean(L, 4, TRUE)));
 }
+
 
 /* i2cm:write(data [,ack]) */
 static int I2CMaster_write(lua_State* L)
@@ -498,6 +504,7 @@ static int I2CMaster_write(lua_State* L)
    return pushEspRetVal(L,dlen==1 ? i2c_master_write_byte(i2cm->cmd,*data,ack) :
                         i2c_master_write(i2cm->cmd,data,dlen,ack));
 }
+
 
 /* i2cm:read(len [, i2cm.ACK | i2cm.NACK | i2cm.LAST_NACK]) */
 static int I2CMaster_read(lua_State* L)
@@ -565,6 +572,7 @@ static int I2CMaster_commit(lua_State* L)
    return pushEspRetVal(L,status);
 }
 
+
 /* Lua close */
 static int I2CMaster_close(lua_State* L)
 {
@@ -582,6 +590,7 @@ static int I2CMaster_close(lua_State* L)
    return 1;
 }
 
+
 static const luaL_Reg i2cMasterLib[] = {
    {"start", I2CMaster_start},
    {"address", I2CMaster_address},
@@ -593,6 +602,7 @@ static const luaL_Reg i2cMasterLib[] = {
    {"__gc", I2CMaster_close},
    {NULL, NULL}
 };
+
 
 /* ic2.master(port, pinSDA, pinSCL, speed) */
 static int li2cMaster(lua_State* L)
@@ -637,11 +647,13 @@ typedef struct {
    TaskHandle_t uartTaskHandle;
 } LUart;
 
+
 typedef struct {
    ThreadJob super;
    LUart* lu;
    uart_event_type_t etype;
 } LUartJob;
+
 
 static int Uart_lclose(lua_State* L);
 
@@ -781,6 +793,7 @@ static LUart* Uart_checkUD(lua_State* L)
       luaL_error(L,"CLOSED");
    return o;
 }
+
 
 /* uart:read([timeout]) */
 static int Uart_read(lua_State* L)
@@ -936,10 +949,9 @@ static int luart(lua_State* L)
  *********************************************************************/
 
 
-
 static const luaL_Reg esp32Lib[] = {
-   {"i2cmaster", li2cMaster},
    {"gpio", lgpio},
+   {"i2cmaster", li2cMaster},
    {"uart", luart},
    {NULL, NULL}
 };
