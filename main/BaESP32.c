@@ -1,10 +1,50 @@
 
-#include <driver/i2c.h>
+/* 
+   ESP32 Lua Bindings
+
+The APIs that allow for asynchronous Lua callbacks work in the
+following way: an interrupt is triggered and a message is inserted
+into a queue using xQueueSendFromISR. A high-priority thread waits for
+messages using xQueueReceive. Once a message is received, it is
+packaged into a ThreadJob and dispatched to the LThreadMgr
+instance. The LThreadMgr selects a thread from its pool and calls a
+callback that then calls the appropriate Lua callback.
+
+
+Interrupt Function
+   Event Queue
+        |
+        |                         LThreadMgr instance
+        v                        +-------------------------------+
++---------------+                |                               |
+|               |                |    +-------+      +-------+   |
+| High Priority |--------------->|    | Task1 |      | Task2 |   |
+| Task (Thread) |  LThreadMgr    |    +---+---+      +---+---+   |
+|               |   Queue        |        |              |       |
++---------------+                ---------+--------------+-------+
+                                          |              |
+                                          |              |
+                                          v              v
+                                      C Callback:   C Callback:
+                                      Execute Lua   Execute Lua
+
+LThreadMgr doc:
+https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadJob.html
+Introductory example:
+https://github.com/RealTimeLogic/BAS/blob/main/examples/lspappmgr/src/AsynchLua.c
+
+
+*/ 
+
 #include <barracuda.h>
+#include <driver/i2c.h>
+#include <driver/uart.h>
+#include <esp_log.h>
+
+
 
 /*
-  The LThreadMgr configured in LspAppMgr.c
-  https://realtimelogic.com/ba/doc/en/C/reference/html/structLThreadMgr.html
+  The LThreadMgr created and configured in LspAppMgr.c
 */
 extern LThreadMgr ltMgr;
 
@@ -25,6 +65,11 @@ static ThreadMutex rMutex;
                            Misc functions
  *********************************************************************
  *********************************************************************/
+
+static void invalidArgErr(lua_State* L, const char* type)
+{
+   luaL_error(L,"Invalidarg: %d", type);
+}
 
 /* This function creates and pushes on the stack a userdata object
    with one associated Lua value. The function also sets the object's
@@ -55,13 +100,14 @@ static void* lNewUdata(
 }
 
 /* Sets userdata[associated Lua value postition 1] = callback. The
-   above prevents the garbage collector from collecting the callback
-   as long as the userdata exists. The callback is also registered in
-   the server's weak table, making it easy to push the function on the
-   stack using the call: balua_wkPush().
+   above code prevents the garbage collector from collecting the
+   callback function as long as the user data associated with it still
+   exists. The callback is also registered in the server's weak table,
+   making it easy to push the function on the stack using the call:
+   balua_wkPush().
    https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
-
-   This function does not push any values on the stack.
+   This function returns a reference to the function, but does not
+   push any values on the stack.
 */
 static int
 lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
@@ -74,6 +120,18 @@ lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
    return balua_wkRef(L);
 }
 
+/* Check if index 'ix' is a table and if not, create a table at 'ix'.
+ */
+static void lInitConfigTable(lua_State* L, int ix)
+{
+   if( ! lua_istable(L, ix) )
+   {
+      lua_settop(L,ix -1);
+      lua_createtable(L, 0, 0); /* empty config table */
+   }
+   else
+      lua_settop(L,ix);
+}
 
 typedef void (*EventBrokerCallback)(gpio_num_t pin);
 
@@ -85,7 +143,9 @@ typedef struct {
 
 static QueueHandle_t eventBrokerQueue;
 
-/*
+/* This high-priority task waits for 'eventBrokerQueue' events and
+ * dispatches them to a callback function running in the context of an
+ * LThreadMgr thread.
  */
 static void eventBrokerTask(void *params)
 {
@@ -148,7 +208,6 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    int queueLen,ix;
    U8 queue[GPIO_QUEUE_SIZE];
    GpioThreadJob* job = (GpioThreadJob*)jb;
-   
    ThreadMutex_set(&rMutex);
    LGPIO* gpio = activeGPOI[job->pin];
    if(gpio)
@@ -158,12 +217,12 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
       gpio->queueLen=0;
    }
    ThreadMutex_release(&rMutex);
-
    if(gpio)
    {
       lua_State* L = jb->Lt;
       for(ix=0 ; ix < queueLen && GPIO_NUM_MAX != gpio->pin ; ix++)
       {
+         /* Push user's callback on the stack */
          balua_wkPush(L, gpio->callbackRef);
          lua_pushboolean(L, queue[ix]);
          if(LUA_OK != lua_pcall(L, 1, 0, msgh))
@@ -291,13 +350,7 @@ static int lgpio(lua_State* L)
          GPIO_MODE_INPUT_OUTPUT_OD)));
    if(activeGPOI[pin])
       luaL_error(L,"INUSE");
-   if( ! lua_istable(L, 3) )
-   {
-      lua_settop(L,2);
-      lua_createtable(L, 0, 0); /* empty config table */
-   }
-   else
-      lua_settop(L,3);
+   lInitConfigTable(L, 3);
    lua_getfield(L, 3, "callback"); /* callback IX is now 4 */
    int hasCB = lua_isfunction(L, 4);
    cfg.pull_up_en = balua_getBoolField(L, 3, "pullup", FALSE) ?
@@ -321,7 +374,7 @@ static int lgpio(lua_State* L)
    gpio->pin=pin;
    gpio_reset_pin(pin);
    if(ESP_OK != gpio_config(&cfg))
-      luaL_error(L,"INVALIDARG");
+      invalidArgErr(L,"config");
    activeGPOI[pin]=gpio;
    if(hasCB)
    {
@@ -487,11 +540,10 @@ static int I2CMaster_read(lua_State* L)
 static int I2CMaster_commit(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   ThreadMutex* m = balua_getmutex(L);
    i2c_master_stop(i2cm->cmd);
-   balua_releasemutex(m);
+   ThreadMutex_release(soDispMutex);
    int status=i2c_master_cmd_begin(i2cm->port,i2cm->cmd,I2CWT(L,2));
-   balua_setmutex(m);
+   ThreadMutex_set(soDispMutex);
    i2c_cmd_link_delete(i2cm->cmd);
    i2cm->cmd=0;
    if(i2cm->direction == I2C_MASTER_READ && status == ESP_OK)
@@ -573,9 +625,308 @@ static int li2cMaster(lua_State* L)
  *********************************************************************
  *********************************************************************/
 
+#define BALUART "UART"
 
 
+typedef struct {
+   QueueHandle_t uartQueue; /* Used by uartTask */
+   uart_port_t port;
+   int patternLen;
+   int callbackRef;
+   int jobInQueue;
+   TaskHandle_t uartTaskHandle;
+} LUart;
 
+typedef struct {
+   ThreadJob super;
+   LUart* lu;
+   uart_event_type_t etype;
+} LUartJob;
+
+static int Uart_lclose(lua_State* L);
+
+
+/* This function runs in the context of a thread in the LThreadMgr.
+ */
+static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   luaL_Buffer lb;
+   char* buf;
+   int len=0;
+   int lArgs=0;
+
+   LUartJob* ujob=(LUartJob*)jb;
+   LUart* lu = ujob->lu;
+   lua_State* L = jb->Lt;
+   const char* emsg = 0;
+   int luaStatus = LUA_OK;
+   /* Push user's callback on the stack */
+   balua_wkPush(L, lu->callbackRef);
+   switch(ujob->etype)
+   {
+      case UART_BUFFER_FULL:
+         emsg="full";
+      case UART_FIFO_OVF:
+         if(!emsg) emsg="overflow";
+      case UART_FRAME_ERR:
+         if(!emsg) emsg="frame";
+      case UART_PARITY_ERR:
+         if(!emsg) emsg="parity";
+      case UART_DATA_BREAK:
+         if(!emsg) emsg="databreak";
+      case UART_BREAK:
+         if(!emsg) emsg="break";
+         lua_pushnil(L);
+         lua_pushstring(L, emsg);
+         luaStatus=lua_pcall(L, 2, 0, msgh);
+         break; /* End fall through */
+
+      case UART_PATTERN_DET:
+         if(lu->patternLen)
+         {
+            len = uart_pattern_pop_pos(lu->port);
+            if(len > 0)
+            {
+               luaL_buffinit(L, &lb);
+               buf = luaL_prepbuffsize(&lb, len);
+               uart_read_bytes(lu->port, buf, len, 0);
+               luaL_pushresultsize(&lb, len);
+               lArgs=1;
+               len=lu->patternLen;
+            }
+            else
+               len=0;
+         }
+         /* Fall through */
+      case UART_DATA:
+         if(0 == len)
+         {
+            size_t size;
+            ESP_ERROR_CHECK(uart_get_buffered_data_len(lu->port, &size));
+            len=(int)size;
+         }
+         if(len > 0)
+         {
+            luaL_buffinit(L, &lb);
+            buf = luaL_prepbuffsize(&lb, len);
+            uart_read_bytes(lu->port, buf, len, 0);
+            luaL_pushresultsize(&lb, len);
+            luaStatus=lua_pcall(L, lArgs+1, 0, msgh);
+         }
+         break;
+
+      default:
+   }
+   lu->jobInQueue=FALSE;
+   if(LUA_OK != luaStatus)
+   {
+      Uart_lclose(L);
+   }
+}
+
+
+/* This high priority UART task waits for UART messages and sends the
+ * messages to executeLuaUartCB() via LThreadMgr.
+ */
+static void uartTask(void *param)
+{
+   LUart* lu = (LUart*)param;
+   for(;;)
+   {
+      uart_event_t event;
+      if(xQueueReceive(lu->uartQueue, &event, portMAX_DELAY))
+      {
+         switch(event.type)
+         {
+            case UART_DATA: if(lu->jobInQueue) break;
+            case UART_BREAK:
+            case UART_DATA_BREAK:
+            case UART_BUFFER_FULL:
+            case UART_FIFO_OVF:
+            case UART_FRAME_ERR:
+            case UART_PARITY_ERR:
+            case UART_PATTERN_DET:
+               LUartJob* ujob=(LUartJob*)ThreadJob_lcreate(
+                  sizeof(LUartJob),executeLuaUartCB);
+               if( ! ujob )
+                  baFatalE(FE_MALLOC,0);
+               ujob->lu=lu;
+               ujob->etype = event.type;
+               ThreadMutex_set(soDispMutex);
+               lu->jobInQueue=TRUE;
+               LThreadMgr_run(&ltMgr, (ThreadJob*)ujob);
+               ThreadMutex_release(soDispMutex);
+               if(UART_BUFFER_FULL == event.type || UART_FIFO_OVF == event.type)
+               {
+                  uart_flush_input(lu->port);
+                  xQueueReset(lu->uartQueue);
+               }
+            default:
+         }
+      }
+   }
+}
+
+
+static LUart* Uart_getUD(lua_State* L)
+{
+   return (LUart*)luaL_checkudata(L,1, BALUART);
+}
+
+
+static LUart* Uart_checkUD(lua_State* L)
+{
+   LUart* o = Uart_getUD(L);
+   if(o->port == UART_NUM_MAX)
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+/* uart:read([timeout]) */
+static int Uart_read(lua_State* L)
+{
+   size_t size;
+   LUart* o = Uart_checkUD(L);
+   lua_Integer msSec = luaL_optinteger(L, 2, 0);
+   ESP_ERROR_CHECK(uart_get_buffered_data_len(o->port,&size));
+   if(size || msSec)
+   {
+      luaL_Buffer lb;
+      if(0 == size)
+         size=1024;
+      luaL_buffinit(L, &lb);
+      char* buf = luaL_prepbuffsize(&lb, size);
+      ThreadMutex_release(soDispMutex);
+      int len = uart_read_bytes(
+         o->port,buf,size,msSec ? (TickType_t)(msSec/portTICK_PERIOD_MS) : 0);
+      ThreadMutex_set(soDispMutex);
+      if(len > 0)
+      {
+         luaL_pushresultsize(&lb, len);
+         return 1;
+      }
+   }
+   lua_pushnil(L);
+   return 1;
+}
+
+
+/* uart:write(data) */
+static int Uart_write(lua_State* L)
+{
+   size_t size;
+   LUart* o = Uart_checkUD(L);
+   const char* data = luaL_checklstring(L, 2, &size);
+   ThreadMutex_release(soDispMutex);
+   uart_write_bytes(o->port, data, size);
+   ThreadMutex_set(soDispMutex);
+   return 0;
+}
+
+
+/* uart:close() */
+static int Uart_lclose(lua_State* L)
+{
+   LUart* o = Uart_getUD(L);
+   if(o->port < UART_NUM_MAX)
+   {
+      uart_driver_delete(o->port);
+      if(o->uartTaskHandle)
+         vTaskDelete(o->uartTaskHandle);
+      o->port=UART_NUM_MAX;
+   }
+   return 0;
+}
+
+
+static const luaL_Reg uartObjLib[] = {
+   {"read", Uart_read},
+   {"write", Uart_write},
+   {"close", Uart_lclose},
+   {"__close", Uart_lclose},
+   {"__gc", Uart_lclose},
+   {NULL, NULL}
+};
+
+
+/* esp32.uart(port [,config])
+ */
+static int luart(lua_State* L)
+{
+   uart_port_t port=(uart_port_t)lua_tointeger(L, 1);
+   if(port < UART_NUM_0 || port > UART_NUM_MAX)
+      luaL_argerror(L, 1, "Invalid port");
+   lInitConfigTable(L, 2);
+   lua_getfield(L, 2, "callback"); /* callback IX is now 3 */
+   int hasCB = lua_isfunction(L, 3);
+   int databits = (int)balua_getIntField(L, 2, "databits", 8);
+   int baudrate = (int)balua_getIntField(L, 2, "baudrate",  9600);
+   int rxbufsize = (int)balua_getIntField(L, 2, "rxbufsize",  1024);
+   int txbufsize = (int)balua_getIntField(L, 2, "txbufsize",  1024);
+   int txpin = (int)balua_getIntField(L, 2, "txpin", UART_PIN_NO_CHANGE);
+   int rxpin = (int)balua_getIntField(L, 2, "rxpin", UART_PIN_NO_CHANGE);
+   int rtspin = (int)balua_getIntField(L, 2, "rtspin", UART_PIN_NO_CHANGE);
+   int ctspin = (int)balua_getIntField(L, 2, "ctspin", UART_PIN_NO_CHANGE);
+   int stopbits = (int)balua_getIntField(L, 2, "stopbits", 1);
+   const char* parity = balua_getStringField(L, 2, "parity", 0);
+   const char* flowctrl = balua_getStringField(L, 2, "flowctrl", 0);
+
+   /* The following is used if pattern enabled */
+   const char* pattern = balua_getStringField(L, 2, "pattern", 0);
+   int maxlen = (int)balua_getIntField(L, 2, "maxlen", 0);
+   int chr_tout = (int)balua_getIntField(L, 2, "timeout", 9);
+   int pre_idle = (int)balua_getIntField(L, 2, "preidle", 0);
+   int post_idle = (int)balua_getIntField(L, 2, "postidle", 0);
+
+   uart_config_t cfg = {
+      .baud_rate = baudrate,
+      .data_bits = databits - 5 + UART_DATA_5_BITS,
+      .parity = parity ? ('O' == *parity ?UART_PARITY_ODD :
+          UART_PARITY_EVEN) : UART_PARITY_DISABLE,
+      .stop_bits = 1 == stopbits ? UART_STOP_BITS_1 :
+         (2 == stopbits ? UART_STOP_BITS_2 : UART_STOP_BITS_1_5),
+      .flow_ctrl = flowctrl ? ('R' == *flowctrl ? UART_HW_FLOWCTRL_RTS :
+         (flowctrl[3] ? UART_HW_FLOWCTRL_CTS_RTS : UART_HW_FLOWCTRL_CTS)) :
+         UART_HW_FLOWCTRL_DISABLE,
+      .source_clk = UART_SCLK_DEFAULT,
+   };
+   QueueHandle_t uartQueue=0;
+   if(rxbufsize < 1024) rxbufsize=1024;
+   if(txbufsize < 1024) txbufsize=1024;
+   if(ESP_OK != uart_driver_install(
+         port, rxbufsize, txbufsize, 10, hasCB ? &uartQueue : 0, 0))
+   {
+      invalidArgErr(L,"install");
+   }
+   if(ESP_OK != uart_param_config(port, &cfg))
+   {
+      uart_driver_delete(port);
+      invalidArgErr(L,"config");
+   }
+   if(ESP_OK != uart_set_pin(port, txpin, rxpin, rtspin, ctspin))
+   {
+      uart_driver_delete(port);
+      invalidArgErr(L,"setpin");
+   }
+   if(hasCB && pattern)
+   {
+      uart_enable_pattern_det_baud_intr(
+         port,pattern[0],(uint8_t)strlen(pattern),chr_tout,pre_idle,post_idle);
+      if(maxlen)
+         uart_pattern_queue_reset(port, maxlen);
+   }
+   LUart* lu = (LUart*)lNewUdata(L, sizeof(LUart), BALUART, uartObjLib);
+   lu->port=port;
+   lu->patternLen= hasCB && pattern ? strlen(pattern) : 0;
+   if(hasCB)
+   {
+      lu->callbackRef=lReferenceCallback(L, lua_absindex(L, -1), 3);
+      lu->uartQueue=uartQueue;
+      xTaskCreate(
+         uartTask,"uart",1024,lu,configMAX_PRIORITIES-1,&lu->uartTaskHandle);
+   }
+   return 1;
+}
 
 
 /*********************************************************************
@@ -589,6 +940,7 @@ static int li2cMaster(lua_State* L)
 static const luaL_Reg esp32Lib[] = {
    {"i2cmaster", li2cMaster},
    {"gpio", lgpio},
+   {"uart", luart},
    {NULL, NULL}
 };
 

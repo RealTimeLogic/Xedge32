@@ -1,8 +1,8 @@
 
-gpio Module
+gpio API
 ===========
 
-This module provides access to the GPIO (General Purpose Input/Output) subsystem.
+This API provides access to the GPIO (General Purpose Input/Output) subsystem.
 
 esp32.gpio(pin, mode, cfg)
 -----------------------------------

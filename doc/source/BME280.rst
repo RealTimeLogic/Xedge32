@@ -1,7 +1,7 @@
 BME280 Module
 =============
 
-This Lua module communicates with the Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensors through the I2C interface.
+This Lua module communicates with the Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensors through the I2C interface. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_ for details.
 
 Usage
 -----

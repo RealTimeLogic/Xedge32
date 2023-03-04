@@ -1,7 +1,8 @@
-I2C
+I2C API
 ========================
 
-To use the I2C API, start by creating an I2C object by calling ``esp32.i2cmaster``, specifying the port, SDA GPIO, SCL GPIO, and the I2C speed. Then, call ``i2cm:start``, followed by ``i2cm:address``. You can then call ``i2cm:write`` and/or ``i2c:read`` several times. Finally, end the complete sequence by calling ``i2cm:commit``.
+To use the I2C API, begin by creating an I2C object through a call to ``esp32.i2cmaster``,, where you specify the I2C port, SDA GPIO, SCL GPIO, and the desired I2C speed. Next, start the I2C communication sequence by calling ``i2cm:start``, followed by ``i2cm:address`` to specify the address of the I2C device you want to communicate with. You can then proceed to call ``i2cm:write`` and/or ``i2c:read`` as needed. Finally, end the sequence by calling ``i2cm:commit`` to commit the I2C transaction.
+
 
 Creating an I2C object
 ----------------------
@@ -56,7 +57,7 @@ I2C object methods
 Example
 ------------------
 
-The following example shows the read and write functions in the `bme280.lua driver <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_. Variable regAddr is the register to read in the BME280 chip.
+The following example shows the read and write functions in the `BME280 Lua Module <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_. Variable regAddr is the register to read in the BME280 chip.
 
 
 .. code-block:: lua
@@ -65,7 +66,7 @@ The following example shows the read and write functions in the `bme280.lua driv
        i2cm:start()
        i2cm:address(self.address, i2cm.WRITE)
        i2cm:write(regAddr)
-       i2cm:start()
+       i2cm:start() -- Repeated Start Condition
        i2cm:address(self.address, i2cm.READ)
        i2cm:read(len)
        local x,err=i2cm:commit()

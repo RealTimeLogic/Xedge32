@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to ESP32 Lua API's documentation!
+ESP32 Lua API
 =========================================
 
 .. toctree::
@@ -11,8 +11,9 @@ Welcome to ESP32 Lua API's documentation!
    :caption: Contents:
 
    source/I2C
-   source/BME280
    source/GPIO
+   source/UART
+   source/BME280
 
 
 
