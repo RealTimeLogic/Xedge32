@@ -5,10 +5,14 @@ This API provides a Lua API to the UART (Universal Asynchronous Receiver/Transmi
 
 To use the API, begin by creating a UART object through a call to `esp32.uart`, where you specify configuration options such as the UART port number and GPIO pins. It is recommended to use the asynchronous (interrupt-driven) API by providing a callback instead of pulling for received data using `uart:read`.
 
-esp32.uart(port [,config])
--------------------------------
+esp32.uart()
+----------------------------
 
-This method creates, configures, and returns a UART object.
+.. code-block:: lua
+
+  uart = esp32.uart(port [,config])
+
+This function creates, configures, and returns a UART object.
 
 ``port`` - UART port number, e.g., 0.
 
@@ -50,18 +54,18 @@ UART Object Methods
 
 The UART object has the following methods:
 
-``gpio:read([timeout])``
+uart:read([timeout])
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 This method reads data from the RX queue and optionally waits for the specified ``timeout`` in milliseconds.
 
-``gpio:write(data)``
+uart:write(data)
 ~~~~~~~~~~~~~~~~~~~~
 
 This method sends data to the UART. It will not return until all the data have been pushed into the TX FIFO, which means that it may block if the FIFO is full.
 
-``gpio:close()``
+uart:close()
 ~~~~~~~~~~~~~~~~
 
 This method releases the UART and frees the resources associated with it. Use this method when you have finished using the UART.

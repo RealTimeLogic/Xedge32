@@ -8,7 +8,12 @@ Usage
 
 To use this module, you first need to create a BME280 object by calling the ``bme280`` function and passing the following parameters:
 
-``bme=require"bme280".bme280(port, address, sda, scl, settings)``
+module.bme280()
+---------------
+
+.. code-block:: lua
+
+   bme=require"bme280".bme280(port, address, sda, scl, settings)
 
 Create a BME280 object.
 
@@ -18,7 +23,7 @@ Create a BME280 object.
 - ``address`` (``int``): the BME280 I2C address, typically ``0x76``
 - ``sda`` (``int``): the GPIO number used for the I2C Serial Data
 - ``scl`` (``int``): the GPIO number used for the I2C Serial Clock
-- ``settings`` (``table``, optional): a Lua table with settings. See the WeatherStation demo for example code.
+- ``settings`` (``table``, optional): a Lua table with settings. See the `WeatherStation demo <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug#ready-to-run-sparkplug-enabled-weather-station-example>`_ for example code.
 
 **Returns:**
 
@@ -27,7 +32,13 @@ Create a BME280 object.
 BME280 Object Methods
 ---------------------
 
-``bme:read()``
+bme:read()
+~~~~~~~~~~~
+
+.. code-block:: lua
+
+   local temperature, humidity, pressure = bme:read()
+
 
 Reads the temperature, humidity, and pressure from the BME280 sensor.
 

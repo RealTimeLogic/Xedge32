@@ -1,5 +1,11 @@
-
 /* 
+Copyright (c) Real Time Logic
+This software may only be used by the terms and conditions stipulated
+in the corresponding license agreement under which the software has
+been supplied. All use of this code is subject to the terms and
+conditions of the included License Agreement.
+
+
    ESP32 Lua Bindings
 
 The APIs that allow for asynchronous Lua callbacks work in the
@@ -28,20 +34,34 @@ Interrupt Function
                                       C Callback:   C Callback:
                                       Execute Lua   Execute Lua
 
-LThreadMgr doc:
+Let's look at how the PWM/LEDC implementation below works to
+understand better how this works. In this code, we have an interrupt
+handler called ledInterruptHandler. When this function gets called by
+an interrupt, it sends a message to the eventBrokerTask using a
+message queue.
+
+Once the eventBrokerTask receives the message, it wakes up and calls a
+function called ledEventCB. This function creates a ThreadJob and
+dispatches it to the LThreadMgr instance. The LThreadMgr instance then
+selects one of its tasks to handle the job.
+
+The selected task calls executeLuaLedEventCB, which in turn calls the
+Lua callback function. This Lua function runs in the context of the
+LThreadMgr task.
+
+LThreadMgr concept:
+https://realtimelogic.com/ba/doc/en/C/reference/html/md_en_C_md_LuaBindings.html#fullsolution
+LThreadMgr API:
 https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadJob.html
 Introductory example:
 https://github.com/RealTimeLogic/BAS/blob/main/examples/lspappmgr/src/AsynchLua.c
-
-
 */ 
 
 #include <barracuda.h>
 #include <driver/i2c.h>
 #include <driver/uart.h>
+#include <driver/ledc.h>
 #include <esp_log.h>
-
-
 
 /*
   The LThreadMgr created and configured in LspAppMgr.c
@@ -66,10 +86,32 @@ static ThreadMutex rMutex;
  *********************************************************************
  *********************************************************************/
 
-static void invalidArgErr(lua_State* L, const char* type)
+static int throwInvArg(lua_State* L, const char* type)
 {
-   luaL_error(L,"Invalidarg: %d", type);
+   return luaL_error(L,"Invalidarg: %d", type); /* does not return; throws */
 }
+
+static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
+{
+   const char* emsg=0;
+   switch(err)
+   {
+      case ESP_OK: lua_pushboolean(L,TRUE); return 1;
+      case ESP_ERR_INVALID_ARG: emsg="invalidarg"; break;
+      case ESP_ERR_NO_MEM: emsg="nomem"; break;
+      case ESP_ERR_INVALID_STATE: emsg="invalidstate"; break;
+      case ESP_ERR_TIMEOUT: emsg="timeout"; break;
+      default:
+         emsg="fail";
+   }
+   lua_pushnil(L);
+   if(msg)
+      lua_pushfstring(L,"%s: %s",msg,emsg);
+   else
+      lua_pushstring(L,emsg);
+   return 2;
+}
+
 
 /* This function creates and pushes on the stack a userdata object
    with one associated Lua value. The function also sets the object's
@@ -99,16 +141,16 @@ static void* lNewUdata(
    return o;
 }
 
+
 /* Sets userdata[associated Lua value postition 1] = callback. The
-   above code prevents the garbage collector from collecting the
+   above code prevents the garbage collector from collecting the Lua
    callback function as long as the user data associated with it still
    exists. The callback is also registered in the server's weak table,
    making it easy to push the function on the stack using the call:
    balua_wkPush().
    https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
    This function returns a reference to the function, but does not
-   push any values on the stack.
-*/
+   push any values on the stack.  */
 static int
 lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
 {
@@ -178,6 +220,7 @@ typedef struct
    int callbackRef;
    gpio_num_t pin;
    int queueLen;
+   gpio_mode_t mode;
    U8 queue[GPIO_QUEUE_SIZE]; /* holds GPIO level(s) high/low */
 } LGPIO;
 
@@ -201,7 +244,7 @@ static void GPIO_close(lua_State* L, LGPIO* o)
    }
 }
 
-/* This function runs in the context of a thread in the LThreadMgr.
+/* This CB runs in the context of a thread in the LThreadMgr.
  */
 static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
@@ -236,9 +279,24 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 }
 
 
-/* This function runs in the context of the eventBrokerTask.
+/* Create a GpioThreadJob and send job to the LThreadMgr instance.
  */
-static void gpioEventBroker(gpio_num_t pin)
+static void dispatchGpioThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
+{
+   GpioThreadJob* job;
+   job = (GpioThreadJob*)ThreadJob_lcreate(sizeof(GpioThreadJob),lrun);
+   if( ! job )
+      baFatalE(FE_MALLOC,0);
+   job->pin=pin;
+   ThreadMutex_set(soDispMutex);
+   LThreadMgr_run(&ltMgr, (ThreadJob*)job);
+   ThreadMutex_release(soDispMutex);
+}
+
+
+/* This CB runs in the context of the eventBrokerTask.
+ */
+static void gpioEventCB(gpio_num_t pin)
 {
    LGPIO* gpio;
    int queueLen=0;
@@ -258,26 +316,17 @@ static void gpioEventBroker(gpio_num_t pin)
 
    /* If transitioning from empty to one element in the queue */
    if(1 == queueLen)
-   {
-      GpioThreadJob* job=(GpioThreadJob*)ThreadJob_lcreate(
-         sizeof(GpioThreadJob),executeLuaGpioCB);
-      if( ! job )
-         baFatalE(FE_MALLOC,0);
-      job->pin=pin;
-      ThreadMutex_set(soDispMutex);
-      LThreadMgr_run(&ltMgr, (ThreadJob*)job);
-      ThreadMutex_release(soDispMutex);
-   }
+      dispatchGpioThreadJob(pin,executeLuaGpioCB);
 }
 
 
 /* Send a GPIO event to the eventBrokerTask, which then
- * calls function gpioEventBroker.
+ * calls function gpioEventCB.
  */
 static void IRAM_ATTR gpioInterruptHandler(void *arg)
 {
    EventBrokerQueueNode n = {
-      .callback=gpioEventBroker,
+      .callback=gpioEventCB,
       .pin=(gpio_num_t)arg
    };
    xQueueSendFromISR(eventBrokerQueue, &n, 0);
@@ -305,17 +354,26 @@ static LGPIO* GPIO_checkUD(lua_State* L)
 }
 
 
-static int GPIO_read(lua_State* L)
+static int GPIO_value(lua_State* L)
 {
-   lua_pushboolean(L,gpio_get_level(GPIO_checkUD(L)->pin));
+   LGPIO* o = GPIO_checkUD(L);
+   if(GPIO_MODE_OUTPUT == o->mode || GPIO_MODE_OUTPUT_OD == o->mode)
+   {
+     L_write:
+      return pushEspRetVal(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)),0);
+   }
+   else
+   {
+      if(lua_isboolean(L, 2))
+      {
+         goto L_write;
+      }
+      else
+      {
+         lua_pushboolean(L,gpio_get_level(o->pin));
+      }
+   }
    return 1;
-}
-
-
-static int GPIO_write(lua_State* L)
-{
-   gpio_set_level(GPIO_checkUD(L)->pin, balua_checkboolean(L, 2));
-   return 0;
 }
 
 
@@ -327,8 +385,7 @@ static int GPIO_lclose(lua_State* L)
 
 
 static const luaL_Reg gpioObjLib[] = {
-   {"read", GPIO_read},
-   {"write", GPIO_write},
+   {"value", GPIO_value},
    {"close", GPIO_lclose},
    {"__close", GPIO_lclose},
    {"__gc", GPIO_lclose},
@@ -371,10 +428,11 @@ static int lgpio(lua_State* L)
       cfg.intr_type = GPIO_INTR_DISABLE;
    cfg.pin_bit_mask = BIT64(pin);
    LGPIO* gpio = (LGPIO*)lNewUdata(L,sizeof(LGPIO),BAGPIO,gpioObjLib);
+   gpio->mode = cfg.mode;
    gpio->pin=pin;
    gpio_reset_pin(pin);
    if(ESP_OK != gpio_config(&cfg))
-      invalidArgErr(L,"config");
+      throwInvArg(L,"config");
    activeGPOI[pin]=gpio;
    if(hasCB)
    {
@@ -384,6 +442,220 @@ static int lgpio(lua_State* L)
    }
    return 1;
 }
+
+
+/*********************************************************************
+ *********************************************************************
+                       PWM:   LED Control (LEDC)
+ *********************************************************************
+ *********************************************************************/
+
+#define BALEDC "LEDC"
+
+
+typedef struct{
+   gpio_num_t pin;
+   ledc_mode_t mode;
+   ledc_channel_t channel;
+   int callbackRef;
+   U8 running;
+} LLEDC;
+
+static int ledsRunning=0;
+
+static LLEDC* LLEDC_getUD(lua_State* L)
+{
+   return (LLEDC*)luaL_checkudata(L,1,BALEDC);
+}
+
+static LLEDC* LLEDC_checkUD(lua_State* L)
+{
+   LLEDC* o = LLEDC_getUD(L);
+   if( ! o->running )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+
+static int LLEDC_duty(lua_State* L)
+{
+   LLEDC* o = LLEDC_checkUD(L);
+   uint32_t duty = (uint32_t)luaL_checkinteger(L, 2);
+   uint32_t hpoint = (uint32_t)(lua_isinteger(L,3) ? lua_tointeger(L,3) :
+                                ledc_get_hpoint(o->mode,o->channel));
+   return pushEspRetVal(L,ledc_set_duty_and_update(
+                           o->mode,o->channel, duty, hpoint),0);
+}
+
+
+static int LLEDC_fade(lua_State* L)
+{
+   LLEDC* o = LLEDC_checkUD(L);
+   if(!o->callbackRef)
+      luaL_error(L,"No callback");
+   uint32_t duty = (uint32_t)luaL_checkinteger(L, 2);
+   uint32_t fadeTime = (uint32_t)luaL_checkinteger(L, 3);
+   return pushEspRetVal(L,ledc_set_fade_time_and_start(
+      o->mode,o->channel,duty,fadeTime,LEDC_FADE_NO_WAIT),0);
+}
+
+
+static void LLEDC_close(lua_State* L, LLEDC* o)
+{
+   if(o->running)
+   {
+      activeGPOI[o->pin]=0;
+      ESP_ERROR_CHECK(ledc_stop(o->mode,o->channel,0));
+      if(0 == --ledsRunning)
+         ledc_fade_func_uninstall();
+      gpio_reset_pin(o->pin);
+      o->running=FALSE;
+   }
+}
+
+
+static int LLEDC_lclose(lua_State* L)
+{
+   LLEDC_close(L,LLEDC_getUD(L));
+   return 0;
+}
+
+
+static const luaL_Reg ledcObjLib[] = {
+   {"duty", LLEDC_duty},
+   {"fade", LLEDC_fade},
+   {"close", LLEDC_lclose},
+   {"__close", LLEDC_lclose},
+   {"__gc", LLEDC_lclose},
+   {NULL, NULL}
+};
+
+
+/* This CB runs in the context of a thread in the LThreadMgr.
+ */
+static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   LLEDC* led = (LLEDC*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   if(led)
+   {
+      lua_State* L = jb->Lt;
+      /* Push user's callback on the stack */
+      balua_wkPush(L, led->callbackRef);
+      if(LUA_OK != lua_pcall(L, 0, 0, msgh))
+         LLEDC_close(L,led);
+   }
+}
+
+
+/* This CB runs in the context of the eventBrokerTask.
+ */
+static void ledEventCB(gpio_num_t pin)
+{
+   if(activeGPOI[pin])
+      dispatchGpioThreadJob(pin, executeLuaLedEventCB);
+}
+
+
+/* Interrupt CB: send event to ledEventCB
+ */
+static IRAM_ATTR bool
+ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
+{
+    if(param->event == LEDC_FADE_END_EVT)
+    {
+       EventBrokerQueueNode n = {
+          .callback=ledEventCB,
+          .pin=(gpio_num_t)arg
+       };
+       xQueueSendFromISR(eventBrokerQueue, &n, 0);
+       return TRUE;
+    }
+    return FALSE;
+}
+
+
+static ledc_mode_t lLedGetSpeedMode(lua_State* L, int ix)
+{
+   const char* mode = balua_checkStringField(L, 1, "mode");
+   return 'H' == mode[0] ? LEDC_HIGH_SPEED_MODE :
+      ('L' == mode[0] ? LEDC_LOW_SPEED_MODE : throwInvArg(L, "mode"));
+}
+
+
+static int lLedChannel(lua_State* L)
+{
+   luaL_checktype(L, 1, LUA_TTABLE);
+   gpio_num_t pin = (gpio_num_t)balua_checkIntField(L, 1, "gpio");
+   ledc_mode_t mode = lLedGetSpeedMode(L,1);
+   ledc_channel_t channel = (ledc_channel_t)balua_checkIntField(L,1,"channel");
+   ledc_timer_t timer = (ledc_timer_t)balua_checkIntField(L, 1, "timer");
+   uint32_t duty = (uint32_t)balua_getIntField(L, 1, "duty", 0);
+   uint32_t hpoint = (uint32_t)balua_getIntField(L, 1, "hpoint", 0);
+   lua_settop(L,1);
+   lua_getfield(L, 1, "callback"); /* callback IX is now 2 */
+   int hasCB = lua_isfunction(L, 2);
+   if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
+      luaL_argerror(L, 1, "Invalid GPIO pin");
+   if(activeGPOI[pin])
+      luaL_error(L,"GPIO INUSE");
+   if(channel < LEDC_CHANNEL_0 || channel >= LEDC_CHANNEL_MAX)
+      throwInvArg(L, "channel");
+   if(timer < LEDC_TIMER_0 || timer >= LEDC_TIMER_MAX)
+      throwInvArg(L, "timer");
+   if(0 == ledsRunning++)
+      ledc_fade_func_install(0);
+   ledc_channel_config_t cfg={
+      .gpio_num=pin,
+      .speed_mode=mode,
+      .channel=channel,
+      .intr_type =  hasCB ? LEDC_INTR_FADE_END : LEDC_INTR_DISABLE,
+      .timer_sel = timer,
+      .duty= duty
+   };
+   esp_err_t status = ledc_channel_config(&cfg);
+   if(ESP_OK != status)
+      return pushEspRetVal(L,status,"channel_config");
+   status = ledc_set_duty_and_update(mode, channel, duty, hpoint);
+   if(ESP_OK != status)
+      return pushEspRetVal(L,status,"set_duty_and_update");
+   LLEDC* led = (LLEDC*)lNewUdata(L,sizeof(LLEDC),BALEDC,ledcObjLib);
+   led->pin=pin;
+   led->mode=mode;
+   led->channel=channel;
+   led->running=TRUE;
+   activeGPOI[pin]=(LGPIO*)led;
+   if(hasCB)
+   {
+      led->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 2);
+      ledc_cbs_t cb = { .fade_cb = ledInterruptHandler };
+      ESP_ERROR_CHECK(ledc_cb_register(mode,channel,&cb,(void*)pin));
+   }
+   return 1;
+}
+
+
+static int lLedTimer(lua_State* L)
+{
+   luaL_checktype(L, 1, LUA_TTABLE);
+   ledc_mode_t mode = lLedGetSpeedMode(L,1);
+   ledc_timer_bit_t bits = (ledc_timer_bit_t)balua_checkIntField(L, 1, "bits");
+   ledc_timer_t timer = (ledc_timer_t)balua_checkIntField(L, 1, "timer");
+   uint32_t freq = (uint32_t)balua_checkIntField(L, 1, "freq");
+   if(bits < LEDC_TIMER_1_BIT || bits >= LEDC_TIMER_BIT_MAX)
+      throwInvArg(L, "bits");
+   if(timer < LEDC_TIMER_0 || timer >= LEDC_TIMER_MAX)
+      throwInvArg(L, "timer");
+   ledc_timer_config_t cfg={
+      .speed_mode=mode,
+      .duty_resolution=bits,
+      .timer_num=timer,
+      .freq_hz=freq,
+      .clk_cfg=LEDC_AUTO_CLK
+   };
+   return pushEspRetVal(L,ledc_timer_config(&cfg),0);
+}
+
+
 
 /*********************************************************************
  *********************************************************************
@@ -407,40 +679,14 @@ typedef struct
 #define I2CWT(L,ix) ((TickType_t)luaL_optinteger(L,ix,500)/portTICK_PERIOD_MS)
 
 
-static LI2CMaster* I2CMaster_getUD(lua_State* L)
-{
-   return (LI2CMaster*)luaL_checkudata(L,1,BAI2CMASTER);
-}
-
-
-static void throwInvArg(lua_State* L)
-{
-   luaL_error(L, "Invalid arg. comb.");
-}
-
-
 static void throwInvDirection(lua_State* L)
 {
    luaL_error(L, "Invalid direction");
 }
 
-
-static int pushEspRetVal(lua_State* L, esp_err_t err)
+static LI2CMaster* I2CMaster_getUD(lua_State* L)
 {
-   const char* emsg=0;
-   switch(err)
-   {
-      case ESP_OK: lua_pushboolean(L,TRUE); return 1;
-      case ESP_ERR_INVALID_ARG: emsg="invalidarg"; break;
-      case ESP_ERR_NO_MEM: emsg="nomem"; break;
-      case ESP_ERR_INVALID_STATE: emsg="invalidstate"; break;
-      case ESP_ERR_TIMEOUT: emsg="timeout"; break;
-      default:
-         emsg="fail";
-   }
-   lua_pushnil(L);
-   lua_pushstring(L,emsg);
-   return 2;
+   return (LI2CMaster*)luaL_checkudata(L,1,BAI2CMASTER);
 }
 
 
@@ -463,7 +709,7 @@ static int I2CMaster_start(lua_State* L)
       i2cm->cmd = i2c_cmd_link_create();
    /* else recursive: https://www.i2c-bus.org/repeated-start-condition/ */
    return pushEspRetVal(
-      L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM);
+      L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM, 0);
 }
 
 
@@ -473,11 +719,11 @@ static int I2CMaster_address(lua_State* L)
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    i2cm->direction = (uint8_t)luaL_checkinteger(L, 3);
    if(i2cm->direction != I2C_MASTER_READ && i2cm->direction != I2C_MASTER_WRITE)
-      throwInvArg(L);
+      throwInvArg(L, "direction");
    return pushEspRetVal(L,i2c_master_write_byte(
       i2cm->cmd,
       ((uint8_t)luaL_checkinteger(L, 2) << 1) | i2cm->direction,
-      balua_optboolean(L, 4, TRUE)));
+      balua_optboolean(L, 4, TRUE)), 0);
 }
 
 
@@ -502,7 +748,7 @@ static int I2CMaster_write(lua_State* L)
    }
    bool ack = balua_optboolean(L, 3, TRUE);
    return pushEspRetVal(L,dlen==1 ? i2c_master_write_byte(i2cm->cmd,*data,ack) :
-                        i2c_master_write(i2cm->cmd,data,dlen,ack));
+                        i2c_master_write(i2cm->cmd,data,dlen,ack), 0);
 }
 
 
@@ -516,10 +762,10 @@ static int I2CMaster_read(lua_State* L)
    i2cm->recblen = (size_t )luaL_checkinteger(L, 2);
    lua_Integer ack = luaL_optinteger(L, 3, -1);
    if(i2cm->recbuf || i2cm->recblen == 0)
-      throwInvArg(L);
+      throwInvArg(L, "no recbuf");
    i2cm->recbuf = (uint8_t*)baLMalloc(L, i2cm->recblen+1);
    if( ! i2cm->recbuf )
-      return pushEspRetVal(L,ESP_ERR_NO_MEM);
+      return pushEspRetVal(L,ESP_ERR_NO_MEM, 0);
    if(ack == -1 && i2cm->recblen > 1)
    {
       i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen-1,I2C_MASTER_ACK);
@@ -539,7 +785,7 @@ static int I2CMaster_read(lua_State* L)
       baFree(i2cm->recbuf);
       i2cm->recbuf=0;
    }
-   return pushEspRetVal(L,status);
+   return pushEspRetVal(L,status, 0);
 }
 
 
@@ -569,7 +815,7 @@ static int I2CMaster_commit(lua_State* L)
       baFree(i2cm->recbuf);
       i2cm->recbuf=0;
    }
-   return pushEspRetVal(L,status);
+   return pushEspRetVal(L,status,0);
 }
 
 
@@ -909,17 +1155,17 @@ static int luart(lua_State* L)
    if(ESP_OK != uart_driver_install(
          port, rxbufsize, txbufsize, 10, hasCB ? &uartQueue : 0, 0))
    {
-      invalidArgErr(L,"install");
+      throwInvArg(L,"install");
    }
    if(ESP_OK != uart_param_config(port, &cfg))
    {
       uart_driver_delete(port);
-      invalidArgErr(L,"config");
+      throwInvArg(L,"config");
    }
    if(ESP_OK != uart_set_pin(port, txpin, rxpin, rtspin, ctspin))
    {
       uart_driver_delete(port);
-      invalidArgErr(L,"setpin");
+      throwInvArg(L,"setpin");
    }
    if(hasCB && pattern)
    {
@@ -952,6 +1198,8 @@ static int luart(lua_State* L)
 static const luaL_Reg esp32Lib[] = {
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
+   {"pwmtimer", lLedTimer},
+   {"pwmchannel", lLedChannel},
    {"uart", luart},
    {NULL, NULL}
 };
