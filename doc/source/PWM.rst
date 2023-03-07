@@ -95,8 +95,8 @@ channel:close()
 This method is used to release the channel and free the resources associated with it. Use this method when you have finished using the channel.
 
 
-Examples
---------
+PWM Examples
+-------------
 
 The following example demonstrates how to use interrupt mode by providing a callback and using the ``led:fade()`` method. After creating a channel object, the code calls the callback to activate the channel instance ``led``. The code is triggered when ``led:fade()`` is called. Upon completion of the fading, the callback is called via an interrupt, and the fading direction is inverted, repeating the cycle.
 

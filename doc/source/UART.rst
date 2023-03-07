@@ -70,8 +70,8 @@ uart:close()
 
 This method releases the UART and frees the resources associated with it. Use this method when you have finished using the UART.
 
-Example
--------
+UART Example
+------------
 
 The following UART echo example demonstrates how to open a UART object and configure it for asynchronous receive mode:
 

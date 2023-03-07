@@ -1,5 +1,5 @@
 
-gpio API
+GPIO API
 ===========
 
 This API provides access to the GPIO (General Purpose Input/Output) subsystem.

@@ -1,7 +1,9 @@
 BME280 Module
 =============
 
-This Lua module communicates with the Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensors through the I2C interface. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_ for details.
+This module provides an easy-to-use interface for communicating with the BME280 chip, a popular environmental sensor that measures temperature, humidity, and pressure.
+
+The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor communicates with the ESP32 using the :ref:`I2C interface <I2C API>`. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_ for details.
 
 Usage
 -----
@@ -46,8 +48,11 @@ Reads the temperature, humidity, and pressure from the BME280 sensor.
 
 - Three values: the temperature (in degrees Celsius), the humidity (as a percentage), and the pressure (in Pascals).
 
-Example
--------
+BME280 Examples
+----------------
+
+Basic example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here's an example of how to use the ``bme280`` module:
 
@@ -62,3 +67,16 @@ Here's an example of how to use the ``bme280`` module:
     local temp, hum, pres = bme:read()
 
 This example creates a new BME280 object, reads the temperature, humidity, and pressure from the sensor, and stores the values in the ``temp``, ``hum``, and ``pres`` variables. Note that we've assumed that the I2C port, address, SDA, and SCL pins are specified as local variables. You may need to adjust these variables to fit your specific use case.
+
+MQTT Sparkplug Enabled Weather Station
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+The MQTT Sparkplug Enabled Weather Station example available on `GitHub <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug>`_ is a ready-to-run example that demonstrates the power and capabilities of MQTT Sparkplug. One of the key components used in this example is the BME280 Lua module.
+
+The example code demonstrates how to use the BME280 Lua module to read environmental data from the BME280 chip and publish it to an MQTT broker using the Sparkplug protocol. This data can then be consumed by other Sparkplug-enabled devices or applications.
+
+.. image:: https://realtimelogic.com/images/ESP32WeatherStationEoN.jpg
+   :alt: MQTT Sparkplug Enabled Weather Station
+
+

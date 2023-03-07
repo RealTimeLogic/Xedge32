@@ -29,7 +29,8 @@ author = 'RTL'
 # ones.
 extensions = [
     'sphinxcontrib.luadomain',
-    'sphinx_lua'
+    'sphinx_lua',
+    'sphinx.ext.autosectionlabel'
 ]
 
 # Available options and default values

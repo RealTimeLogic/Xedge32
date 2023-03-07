@@ -1263,7 +1263,7 @@ static const luaL_Reg esp32Lib[] = {
    {"uart", luart},
    {"wscan", lwscan},
    {"wconnect", lwconnect},
-   {"wip", lmac},
+   {"mac", lmac},
    {NULL, NULL}
 };
 

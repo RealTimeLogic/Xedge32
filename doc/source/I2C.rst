@@ -64,7 +64,7 @@ i2cm:commit([timeout])
 
 Commit the job and wait for a response. The default time is 500ms. Method commit returns ``x,err``, where x is true for a successful write operation and the response data for a read operation.
 
-Example
+I2C Example
 ------------------
 
 The following example shows the read and write functions in the `BME280 Lua Module <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_. Variable regAddr is the register to read in the BME280 chip.
