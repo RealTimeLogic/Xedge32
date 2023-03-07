@@ -57,23 +57,20 @@ Introductory example:
 https://github.com/RealTimeLogic/BAS/blob/main/examples/lspappmgr/src/AsynchLua.c
 */ 
 
-#include <barracuda.h>
 #include <driver/i2c.h>
 #include <driver/uart.h>
 #include <driver/ledc.h>
+#include <esp_wifi.h>
+#include <esp_mac.h>
 #include <esp_log.h>
-
-/*
-  The LThreadMgr created and configured in LspAppMgr.c
-*/
-extern LThreadMgr ltMgr;
+#include "BaESP32.h"
 
 /*
   The Socket Dispatcher (SoDisp) mutex protecting everything; set in
   installESP32Libs() below.
   https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadMutex.html
 */
-static ThreadMutex* soDispMutex;
+ThreadMutex* soDispMutex;
 
 /*
   A mutex used for protecting small regions
@@ -101,6 +98,7 @@ static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
       case ESP_ERR_NO_MEM: emsg="nomem"; break;
       case ESP_ERR_INVALID_STATE: emsg="invalidstate"; break;
       case ESP_ERR_TIMEOUT: emsg="timeout"; break;
+      case ESP_ERR_WIFI_SSID: emsg="wifi ssid"; break;
       default:
          emsg="fail";
    }
@@ -1190,6 +1188,68 @@ static int luart(lua_State* L)
 
 /*********************************************************************
  *********************************************************************
+                             MISC
+ *********************************************************************
+ *********************************************************************/
+
+static void
+wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
+         const char* authmode,const char*  pchiper,
+         const char* gcipher, int channel)
+{
+   ThreadMutex_set(soDispMutex);
+   lua_createtable(L, 0, 6);
+   lua_pushstring(L,(const char*)ssid);
+   lua_setfield(L,-2,"ssid");
+   lua_pushinteger(L,rssi);
+   lua_setfield(L,-2,"rssi");
+   lua_pushstring(L,authmode);
+   lua_setfield(L,-2,"authmode");
+   lua_pushstring(L,pchiper);
+   lua_setfield(L,-2,"pchiper");
+   lua_pushstring(L,gcipher);
+   lua_setfield(L,-2,"gcipher");
+   lua_pushinteger(L,channel);
+   lua_setfield(L,-2,"channel");
+   lua_rawseti(L, -2, (int)lua_rawlen(L, -2) + 1); 
+   ThreadMutex_release(soDispMutex);
+}
+
+
+static int lwscan(lua_State* L)
+{
+   int print = balua_optboolean(L,1,FALSE);
+   lua_settop(L,1);
+   lua_newtable(L);
+   ThreadMutex_release(soDispMutex);
+   wifiScan(print, L, wifiScanCB);
+   ThreadMutex_set(soDispMutex);
+   return 1;
+}
+
+static int lwconnect(lua_State* L)
+{
+   if(lua_gettop(L) == 0)
+   {
+      return pushEspRetVal(L,wconnect(0,0),0);
+   }
+   const char* ssid = luaL_checkstring(L,1);
+   const char* pwd = luaL_checkstring(L,2);
+   return pushEspRetVal(L,wconnect(ssid, pwd),0);
+}
+
+static int lmac(lua_State* L)
+{
+   uint8_t base[6];
+   esp_base_mac_addr_get(base);
+   lua_pushlstring(L,(char*)base,6);
+   return 1;
+}
+
+
+
+/*********************************************************************
+ *********************************************************************
                              Install ESP32
  *********************************************************************
  *********************************************************************/
@@ -1201,8 +1261,16 @@ static const luaL_Reg esp32Lib[] = {
    {"pwmtimer", lLedTimer},
    {"pwmchannel", lLedChannel},
    {"uart", luart},
+   {"wscan", lwscan},
+   {"wconnect", lwconnect},
+   {"wip", lmac},
    {NULL, NULL}
 };
+
+static const luaL_Reg basLib[] = {
+   {"mac", lmac}
+};
+
 
 
 void installESP32Libs(lua_State* L)
@@ -1214,7 +1282,9 @@ void installESP32Libs(lua_State* L)
    gpio_install_isr_service(0);
    activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
    memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
-
    luaL_newlib(L, esp32Lib);
    lua_setglobal(L,"esp32");
+   lua_getglobal(L, "ba");
+   luaL_setfuncs(L,basLib,0);
+   lua_pop(L,1);
 }
