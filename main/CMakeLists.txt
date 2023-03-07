@@ -5,7 +5,6 @@ idf_component_register(
   "BAS/inc"
   "BAS/inc/arch/NET/LwIP"
   "BAS/inc/arch/FreeRTOS"
-  "BAS/src/plugins/lua"
 )
 
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
