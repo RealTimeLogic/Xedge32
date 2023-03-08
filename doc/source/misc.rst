@@ -3,10 +3,10 @@ Miscellaneous API
 
 The `esp32` module provides some miscellaneous functions.
 
-esp32.scan([print])
+esp32.wscan([print])
 ~~~~~~~~~~~~~~~~~~~~
 
-Scan for Wi-Fi networks. The function returns a list of tables, where each table represents a network. The optional `print` argument can be set to `true` to print the data to the LuaShell32.
+Scan for Wi-Fi networks. The function returns a list of tables, where each table represents a network. The optional `print` argument can be set to `true` to print the data to :ref:`LuaShell32`.
 
 Example:
 
@@ -20,7 +20,7 @@ Example:
 
 Note that this function takes some time to return.
 
-esp32.connect([ssid, password])
+esp32.wconnect([ssid, password])
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Connect to a Wi-Fi network by providing the SSID and password. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`.

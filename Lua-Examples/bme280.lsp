@@ -8,7 +8,7 @@ collectgarbage() -- Quickly release resources not used.
 -- https://learn.sparkfun.com/tutorials/sparkfun-bme280-breakout-hookup-guide/all
 --  1: Upload the bme280.lua module to the .lua directory i.e. to
 --     http://esp32-ip/fs/.lua/ (ESP32 web-file-manager and WebDAV address)
---  2: Create an app using the LSP App Manager and add this file to the app
+--  2: Create an app using Xedge and add this file to the app
 --  3: Set your I2C GPIO settings below
 --  4: Run this file as an LSP page
 

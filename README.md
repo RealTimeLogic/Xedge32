@@ -1,12 +1,12 @@
 # Barracuda Application Server for ESP32
 
 Turn your ESP32 into an advanced Edge Controller and/or IoT Gateway
-with the Barracuda Application Server. The included LSP Application
-Manager turns the Barracuda Application Server library into an awesome
-development tool, thus enabling virtually anyone to program the ESP32
-using the super easy to learn Lua Scripting language. Lua is a
-beginner-friendly coding language and is in fact promoted as a first
-programming language for children.
+with the Barracuda Application Server. The included Xedge turns the
+Barracuda Application Server library into an awesome development tool,
+thus enabling virtually anyone to program the ESP32 using the super
+easy to learn Lua Scripting language. Lua is a beginner-friendly
+coding language and is in fact promoted as a first programming
+language for children.
 
 ![ESP32 Edge Controller](https://realtimelogic.com/GZ/images/BAS-ESP32.svg)
 
