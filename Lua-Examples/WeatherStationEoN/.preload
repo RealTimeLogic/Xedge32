@@ -1,0 +1,206 @@
+-- The following is a Lua program designed for Xedge32 and uses MQTT
+-- Sparkplug
+-- Details:https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug
+
+-- The program reads temperature, humidity, and pressure via I2C from
+-- a BME280 sensor. This data is sent to an online MQTT broker using
+-- MQTT Sparkplug encoded data.
+
+-- The program begins by setting the MQTT Sparkplug settings,
+-- including the server address, group ID, and node name.
+
+-- Next, the program sets the I2C pin connections for the BME280
+-- sensor. The program then starts by creating a BME280 instance and
+-- reading the initial temperature, humidity, and pressure values.
+
+-- After creating a NBIRTH message to set up the Sparkplug Node
+-- Controls and add sensor metrics, the program creates a timer
+-- function that sends the sensor metrics in a timer controlled loop.
+
+-- The program also creates an MQTT status callback function which is
+-- called when there is a change in the MQTT connection status. This
+-- function is used to handle any errors or status updates for the
+-- MQTT connection.
+
+-- The program sets up 3 functions for accepting default NCMD messages
+-- sent by the Primary Application (SCADA App). These functions are
+-- called via 'ondata', the MQTT Sparkplug callback function.
+
+-- Finally, the program creates the MQTT Sparkplug connection and
+-- starts the metrics timer. The MQTT connection is used when sending
+-- data to the online MQTT broker and the metrics timer regularly
+-- sends sensor metrics in Sparkplug (Protocol Buffers) format to the
+-- broker.
+
+-- NOTE: before running this example code, make sure to initially test
+-- the BME280 chip and the I2C configuration using the following LSP
+-- program:
+-- https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lsp
+
+
+
+-- The Sparkplug settings for this example:
+local mqttServer = "broker.hivemq.com"
+local groupId = "BME280" -- Keep the Sparkplug group ID
+local nodeName = "PacificCoastHighway" -- Change to your address
+-- Wire up a BME280 via I2C:
+-- https://learn.sparkfun.com/tutorials/sparkfun-bme280-breakout-hookup-guide/all
+--  1: Upload the bme280.lua module to the .lua directory i.e. to
+--     http://esp32-ip/fs/.lua/ (ESP32 web-file-manager and WebDAV address)
+--  2: Create an app using the LSP App Manager and add this file to the app
+--  3: Set your I2C GPIO settings below
+--  4: Restart the Lua app
+local SDA_GPIO <const> = 21 -- I2C SDA pin
+local SCL_GPIO <const> = 22  -- I2C SCL pin
+local BME280_I2C_ADDR <const> = 0x76 -- Default BME280 I2C address
+
+
+
+if not esp32 then error"This example is designed for ESP32" end
+collectgarbage() -- Cleans up any resources that are not used
+
+trace"Starting BME280 EoN"
+
+local SP,sp -- SP: Sparkplug module, sp: Sparkplug instance
+SP=require"sparkplug" -- Load the module
+local DataTypes <const> = SP.DataTypes
+
+-- Create the BME280 instance
+local settings={
+   tStandby=1,
+   filter=4,
+   pressOverSample=5,
+   humidOverSample=1,
+   tempOverSample=2
+}
+collectgarbage() -- Clean up previous instance, if any
+local bme,err = require"bme280".create(0,BME280_I2C_ADDR,SDA_GPIO,SCL_GPIO,settings)
+if not bme then
+   trace("Cannot create bme280 instance:", err)
+   return
+end
+-- 'read' returns 3 values
+local temperature, humidity, pressure = bme:read()
+trace("Starting with:",temperature, humidity, pressure)
+
+------- Create the NBIRTH message with sensor metrics
+local nbirth=SP.payload()
+-- Set up the Node Controls
+nbirth:metric("Node Control/Next Server", DataTypes.Boolean, false)
+nbirth:metric("Node Control/Rebirth", DataTypes.Boolean, false)
+nbirth:metric("Node Control/Reboot", DataTypes.Boolean, false)
+-- Add sensor metrics
+nbirth:metric("Temperature", DataTypes.Double, temperature)
+nbirth:metric("Humidity", DataTypes.Double, humidity)
+nbirth:metric("Pressure",DataTypes.Double, pressure/100)
+------- End NBIRTH
+
+
+-- Timer function sending the sensor metrics defined in NBIRTH.
+local function publishMetrics()
+   while true do -- forever, but will stop when timer is stopped
+      local pl = SP.payload()
+      temperature, humidity, pressure = bme:read()
+      pl:metric("Temperature", DataTypes.Double, temperature)
+      pl:metric("Humidity", DataTypes.Double, humidity)
+      pl:metric("Pressure",DataTypes.Double, pressure/100)
+      sp:ndata(pl) -- publish
+      coroutine.yield(true) -- Wait for next timer tick
+   end
+end
+
+local metricsTimer -- Set below
+
+-- MQTT status callback. See
+-- https://realtimelogic.com/ba/doc/?url=MQTT.html#create
+-- and the onstatus callback.
+local function onstatus(type,code,status)
+   if "mqtt" == type and "connect" == code and 0 == status.reasoncode then
+      trace"Successful new connection"
+      metricsTimer=ba.timer(publishMetrics)
+      metricsTimer:set(2000) -- Every two seconds
+   else -- Failed connecting or a broker disconnect
+      trace(type,code,status)
+      if metricsTimer then
+         metricsTimer:cancel() -- Stop sending data
+         metricsTimer=nil
+      end
+   end
+   return true -- Always connect/reconnect
+end
+
+-- The next 3 functions are called when the Primary Application sends
+-- NCMD with metrics defined in NBIRTH.
+
+local function nodeControlNextServer(metric)
+   trace("Next server command: not implemented", metric[metric.value])
+end
+
+local function nodeControlRebirth(metric)
+   trace("Node Control/Rebirth",metric[metric.value])
+   if true == metric[metric.value] then
+      sp:nodebirth() -- Resend NBIRTH
+   end
+end
+
+local function nodeControlReboot(metric)
+   trace("Reboot command: not implemented", metric[metric.value])
+end
+
+-- The 3 above functions and their metric names as "key"
+local commands <const> = {
+   ["Node Control/Next Server"]=nodeControlNextServer,
+   ["Node Control/Rebirth"]=nodeControlRebirth,
+   ["Node Control/Reboot"]=nodeControlReboot,
+}
+
+-- We received an NCMD from a Sparkplug Primary Application
+local function ncmd(payload)
+   -- Loop over all metrics in the Sparkplug payload
+   for _,metric in ipairs(payload.metrics) do
+      -- Typical solution for implementing 'switch' statement in
+      -- Lua. A table with keys and the values are functions.
+      local func = commands[metric.name]
+      if func then
+         func(metric)
+      else
+         trace("Cannot process NCMD with metric",metric.name)
+      end
+   end
+end
+
+
+-- MQTT/Sparkplug callback for 'NCMD' and 'STATE' commands
+-- Called when a Primary Application sends a command
+local function ondata(cmd,data,topic)
+   trace(cmd,data,topic)
+   if "NCMD" == cmd then
+      ncmd(data)
+   elseif "STATE" == cmd then
+      -- The Primary Application state
+      -- data is the string 'ONLINE' or 'OFFLINE'.
+      trace("Sparkplug STATE",topic,data)
+   else
+      error"Unknown command"
+   end
+end
+
+
+-- Function runs if app is closed using the LSP App Manager
+function onunload()
+   trace"Closing EoN MQTT connection"
+   if metricsTimer then metricsTimer:cancel() end -- Stop sending data
+   bme:close()
+   sp:disconnect() -- Close MQTT connection
+end 
+
+-- MQTT options, See
+-- https://realtimelogic.com/ba/doc/?url=MQTT.html#create
+-- and the 'options' argument.
+local op={
+   clientidentifier="", -- Let the server set a unique ID
+   keepalive=3*60, -- PING every 3'rd minute
+}
+
+-- Create and connect the Sparkplug instance.
+sp=SP.create(mqttServer,onstatus,ondata,groupId,nodeName,nbirth,op)

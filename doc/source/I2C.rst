@@ -1,16 +1,18 @@
-I2C
+I2C API
 ========================
 
-To use the I2C API, start by creating an I2C object using ``i2c.master``, specifying the port, SDA GPIO, SCL GPIO, and the I2C speed. Then, call ``i2cm:start``, followed by ``i2cm:address``. You can then call ``i2cm:write`` and/or ``i2c:read`` several times. Finally, end the complete sequence by calling ``i2cm:commit``.
+To use the I2C API, begin by creating an I2C object through a call to ``esp32.i2cmaster``,, where you specify the I2C port, SDA GPIO, SCL GPIO, and the desired I2C speed. Next, start the I2C communication sequence by calling ``i2cm:start``, followed by ``i2cm:address`` to specify the address of the I2C device you want to communicate with. You can then proceed to call ``i2cm:write`` and/or ``i2c:read`` as needed. Finally, end the sequence by calling ``i2cm:commit`` to commit the I2C transaction.
 
-Creating an I2C object
-----------------------
+
+esp32.i2cmaster
+----------------
+
+Create an I2C master object.
 
 .. code-block:: lua
 
-    i2cm=i2c.master(port, pinSDA, pinSCL, speed)
+   i2cm=esp32.i2cmaster(port, pinSDA, pinSCL, speed)
 
-Create an I2C object.
 
 **Parameters:**
 
@@ -22,19 +24,24 @@ Create an I2C object.
 I2C object methods
 ------------------
 
-``i2cm:start()``
+i2cm:start()
+~~~~~~~~~~~~~~~~
+
     Start a new command sequence (new job).
 
-``i2cm:address(addr, direction, [,ack])``
+i2cm:address(addr, direction, [,ack])
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Add an address message to the I2C job.
 
     **Parameters:**
 
     - ``addr`` (``int``): the slave’s I2C address
-    - ``direction`` (``const``): ``i2cm.READ`` or ``i2cm.WRITE``
+    - ``direction`` (``string``): ``READ`` or ``WRITE``
     - ``ack`` (``bool``, optional): the I2C ack, defaults to ``true``
 
-``i2cm:write(data [,ack])``
+i2cm:write(data [,ack])
+~~~~~~~~~~~~~~~~~~~~~~~~
+
     Add a write message to the I2C job.
 
     **Parameters:**
@@ -42,31 +49,35 @@ I2C object methods
     - ``data`` (``string``): the data to write
     - ``ack`` (``bool``, optional): the I2C ack, defaults to ``true``
 
-``i2cm:read(len [, acktype])``
+i2cm:read(len [, acktype])
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     Read data from the I2C job.
 
     **Parameters:**
 
     - ``len`` (``int``): how much data to read
-    - ``acktype`` (``const``, optional): is one of ``i2cm.ACK`` | ``i2cm.NACK`` | ``i2cm.LAST_NACK``, and defaults to ``i2cm.NACK``
+    - ``acktype`` (``string``, optional): is one of ``ACK`` | ``NACK`` | ``LASTNACK``, and defaults to ``NACK``
 
-``i2cm:commit([timeout])``
-    Commit the job and wait for a response. The default time is 500ms. Method commit returns ``x,err``, where x is true for a successful write operation and the response data for a read operation.
+i2cm:commit([timeout])
+~~~~~~~~~~~~~~~~~~~~~~~
 
-Example
+Commit the job and wait for a response. The default time is 500ms. Method commit returns ``x,err``, where x is true for a successful write operation and the response data for a read operation.
+
+I2C Example
 ------------------
 
-The following example shows the read and write functions in the `bme280.lua driver <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lua>`_. Variable regAddr is the register to read in the BME280 chip.
+The following example shows the read and write functions in the :ref:`BME280 Lua Module <BME280 Module>`. Variable regAddr is the register to read in the BME280 chip.
 
 
 .. code-block:: lua
 
     local function read(i2cm,regAddr,len)
        i2cm:start()
-       i2cm:address(self.address, i2cm.WRITE)
+       i2cm:address(self.address, "WRITE")
        i2cm:write(regAddr)
-       i2cm:start()
-       i2cm:address(self.address, i2cm.READ)
+       i2cm:start() -- Repeated Start Condition
+       i2cm:address(self.address, "READ")
        i2cm:read(len)
        local x,err=i2cm:commit()
        if not x then trace("read failed",err) end
@@ -75,7 +86,7 @@ The following example shows the read and write functions in the `bme280.lua driv
     
     local function write(i2cm,regAddr,data)
        i2cm:start()
-       i2cm:address(self.address, i2cm.WRITE)
+       i2cm:address(self.address, "WRITE")
        i2cm:write(regAddr)
        i2cm:write(data)
        local x,err=i2cm:commit()
@@ -84,6 +95,6 @@ The following example shows the read and write functions in the `bme280.lua driv
     end
     
     local function bme280(port, address, sda, scl, settings)
-       i2cm = i2c.master(port, sda, scl, settings.speed or 100000)
+       i2cm = esp32.i2cmaster(port, sda, scl, settings.speed or 100000)
        ......
     end

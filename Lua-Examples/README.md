@@ -2,7 +2,7 @@
 
 Simply copy the content of these files into an LSP page created using
 the Web-IDE or copy the files directly to the directory for an
-application created using the LSP App Manager.
+application created using Xedge.
 
 ### Blinking LED
 
