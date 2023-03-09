@@ -1,43 +1,37 @@
--- The following is a Lua program designed for Xedge32 and uses MQTT
--- Sparkplug
--- Details:https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug
+-- This is a Lua program designed for Xedge32 that uses MQTT Sparkplug
+-- to send temperature, humidity, and pressure data obtained via I2C
+-- from a BME280 sensor to an online MQTT broker.
 
--- The program reads temperature, humidity, and pressure via I2C from
--- a BME280 sensor. This data is sent to an online MQTT broker using
--- MQTT Sparkplug encoded data.
+-- Sparkplug: https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug
+-- Xedge32: https://realtimelogic.com/ba/ESP32/
 
--- The program begins by setting the MQTT Sparkplug settings,
--- including the server address, group ID, and node name.
+-- To start, the program sets the MQTT Sparkplug settings for the
+-- server address, group ID, and node name. It then sets the I2C pin
+-- connections for the BME280 sensor and creates a BME280 instance to
+-- read the initial temperature, humidity, and pressure values.
 
--- Next, the program sets the I2C pin connections for the BME280
--- sensor. The program then starts by creating a BME280 instance and
--- reading the initial temperature, humidity, and pressure values.
-
--- After creating a NBIRTH message to set up the Sparkplug Node
+-- After creating an NBIRTH message to set up the Sparkplug Node
 -- Controls and add sensor metrics, the program creates a timer
--- function that sends the sensor metrics in a timer controlled loop.
+-- function to send the sensor metrics in a loop.
 
--- The program also creates an MQTT status callback function which is
--- called when there is a change in the MQTT connection status. This
--- function is used to handle any errors or status updates for the
--- MQTT connection.
+-- The program also creates an MQTT status callback function to handle
+-- any errors or status updates for the MQTT connection.
 
--- The program sets up 3 functions for accepting default NCMD messages
--- sent by the Primary Application (SCADA App). These functions are
--- called via 'ondata', the MQTT Sparkplug callback function.
+-- The program sets up 3 functions to accept default NCMD messages
+-- sent by the Primary Application (SCADA App) via the 'ondata' MQTT
+-- Sparkplug callback function.
 
--- Finally, the program creates the MQTT Sparkplug connection and
--- starts the metrics timer. The MQTT connection is used when sending
--- data to the online MQTT broker and the metrics timer regularly
--- sends sensor metrics in Sparkplug (Protocol Buffers) format to the
--- broker.
+-- Finally, the program establishes the MQTT Sparkplug connection and
+-- starts the metrics timer to regularly send sensor metrics in
+-- Sparkplug (Protocol Buffers) format to the online MQTT broker.
 
 -- NOTE: before running this example code, make sure to initially test
 -- the BME280 chip and the I2C configuration using the following LSP
 -- program:
 -- https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/bme280.lsp
 
-
+-- BME280 wiring instructions:
+-- https://randomnerdtutorials.com/esp32-bme280-arduino-ide-pressure-temperature-humidity/
 
 -- The Sparkplug settings for this example:
 local mqttServer = "broker.hivemq.com"
@@ -45,9 +39,7 @@ local groupId = "BME280" -- Keep the Sparkplug group ID
 local nodeName = "PacificCoastHighway" -- Change to your address
 -- Wire up a BME280 via I2C:
 -- https://learn.sparkfun.com/tutorials/sparkfun-bme280-breakout-hookup-guide/all
---  1: Upload the bme280.lua module to the .lua directory i.e. to
---     http://esp32-ip/fs/.lua/ (ESP32 web-file-manager and WebDAV address)
---  2: Create an app using the LSP App Manager and add this file to the app
+--  2: Create an app using the LSP App Manager and add this .preload file to the app
 --  3: Set your I2C GPIO settings below
 --  4: Restart the Lua app
 local SDA_GPIO <const> = 21 -- I2C SDA pin
