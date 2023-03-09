@@ -8,7 +8,7 @@ easy to learn Lua Scripting language. Lua is a beginner-friendly
 coding language and is in fact promoted as a first programming
 language for children.
 
-![ESP32 Edge Controller](https://realtimelogic.com/GZ/images/BAS-ESP32.svg)
+![ESP32 Edge Controller](https://realtimelogic.com/GZ/images/Xedge32.svg)
 
 ## Getting Started
 
@@ -22,11 +22,8 @@ cd xedge/main
 git clone https://github.com/RealTimeLogic/BAS.git BAS
 ```
 
-See the [Barracuda Application Server for ESP32](https://realtimelogic.com/downloads/bas/ESP32/) tutorial for details.
 
 
-## Lua ESP32 API
+## Documentation and Getting Started Guide
 
-- [GPIO](doc/source/GPIO.rst)
-- [I2C](doc/source/I2C.rst)
-- [BME280 Lua Module](doc/source/BME280.rst)
+[realtimelogic.com/ba/ESP32/](https://realtimelogic.com/ba/ESP32/)
