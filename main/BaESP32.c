@@ -715,9 +715,9 @@ static int I2CMaster_start(lua_State* L)
 static int I2CMaster_address(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   i2cm->direction = (uint8_t)luaL_checkinteger(L, 3);
-   if(i2cm->direction != I2C_MASTER_READ && i2cm->direction != I2C_MASTER_WRITE)
-      throwInvArg(L, "direction");
+   const char* d = luaL_checkstring(L,3);
+   i2cm->direction = 'R' == d[0] ? I2C_MASTER_READ :
+      ('W' == d[0] ? I2C_MASTER_WRITE : throwInvArg(L, "direction"));
    return pushEspRetVal(L,i2c_master_write_byte(
       i2cm->cmd,
       ((uint8_t)luaL_checkinteger(L, 2) << 1) | i2cm->direction,
@@ -750,7 +750,7 @@ static int I2CMaster_write(lua_State* L)
 }
 
 
-/* i2cm:read(len [, i2cm.ACK | i2cm.NACK | i2cm.LAST_NACK]) */
+/* i2cm:read(len [, "ACK" "NACK" "LASTNACK"]) */
 static int I2CMaster_read(lua_State* L)
 {
    esp_err_t status;
@@ -758,13 +758,16 @@ static int I2CMaster_read(lua_State* L)
    if(i2cm->direction != I2C_MASTER_READ)
       throwInvDirection(L);
    i2cm->recblen = (size_t )luaL_checkinteger(L, 2);
-   lua_Integer ack = luaL_optinteger(L, 3, -1);
+   const char* as = luaL_optstring(L, 3, 0);
+   i2c_ack_type_t ack = as ?
+      ('L' == as[0] ? I2C_MASTER_LAST_NACK :
+       ('A' == as[0] ? I2C_MASTER_ACK : I2C_MASTER_NACK)) : I2C_MASTER_NACK;
    if(i2cm->recbuf || i2cm->recblen == 0)
       throwInvArg(L, "no recbuf");
    i2cm->recbuf = (uint8_t*)baLMalloc(L, i2cm->recblen+1);
    if( ! i2cm->recbuf )
       return pushEspRetVal(L,ESP_ERR_NO_MEM, 0);
-   if(ack == -1 && i2cm->recblen > 1)
+   if(I2C_MASTER_NACK == ack && i2cm->recblen > 1)
    {
       i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen-1,I2C_MASTER_ACK);
       status=i2c_master_read_byte(
@@ -772,8 +775,6 @@ static int I2CMaster_read(lua_State* L)
    }
    else
    {
-      if(ack == -1)
-         ack=I2C_MASTER_NACK;
       status = i2cm->recblen == 1 ?
          i2c_master_read_byte(i2cm->cmd,i2cm->recbuf,ack) :
          i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen,ack);

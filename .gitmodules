@@ -1,0 +1,6 @@
+[submodule "main/BAS"]
+	path = main/BAS
+	url = https://github.com/RealTimeLogic/BAS.git
+[submodule "main/protobuf"]
+	path = main/protobuf
+	url = https://github.com/surfskidude/lua-protobuf

@@ -36,7 +36,7 @@ i2cm:address(addr, direction, [,ack])
     **Parameters:**
 
     - ``addr`` (``int``): the slave’s I2C address
-    - ``direction`` (``const``): ``i2cm.READ`` or ``i2cm.WRITE``
+    - ``direction`` (``string``): ``READ`` or ``WRITE``
     - ``ack`` (``bool``, optional): the I2C ack, defaults to ``true``
 
 i2cm:write(data [,ack])
@@ -57,7 +57,7 @@ i2cm:read(len [, acktype])
     **Parameters:**
 
     - ``len`` (``int``): how much data to read
-    - ``acktype`` (``const``, optional): is one of ``i2cm.ACK`` | ``i2cm.NACK`` | ``i2cm.LAST_NACK``, and defaults to ``i2cm.NACK``
+    - ``acktype`` (``string``, optional): is one of ``ACK`` | ``NACK`` | ``LASTNACK``, and defaults to ``NACK``
 
 i2cm:commit([timeout])
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -74,10 +74,10 @@ The following example shows the read and write functions in the :ref:`BME280 Lua
 
     local function read(i2cm,regAddr,len)
        i2cm:start()
-       i2cm:address(self.address, i2cm.WRITE)
+       i2cm:address(self.address, "WRITE")
        i2cm:write(regAddr)
        i2cm:start() -- Repeated Start Condition
-       i2cm:address(self.address, i2cm.READ)
+       i2cm:address(self.address, "READ")
        i2cm:read(len)
        local x,err=i2cm:commit()
        if not x then trace("read failed",err) end
@@ -86,7 +86,7 @@ The following example shows the read and write functions in the :ref:`BME280 Lua
     
     local function write(i2cm,regAddr,data)
        i2cm:start()
-       i2cm:address(self.address, i2cm.WRITE)
+       i2cm:address(self.address, "WRITE")
        i2cm:write(regAddr)
        i2cm:write(data)
        local x,err=i2cm:commit()
