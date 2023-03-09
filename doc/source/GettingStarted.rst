@@ -1,7 +1,8 @@
 Getting Started
 ================
 
-To get started, you must upload the firmware to the ESP32 using a flashing tool or programming software. You can either use ready-to-use firmware binary files or compile the C source code using the ESP-IDF (Espressif IoT Development Framework).
+To get started, you must upload the firmware to an ESP32 with PSRAM, such as the `ESP32 WROVER <https://www.google.com/search?q=esp32+wrover>`_ board, using a flashing tool or programming software. You can either use our ready-to-use firmware binary files or compile the C source code using the Espressif ESP-IDF.
+
 
 Option 1: Use Binary
 ---------------------

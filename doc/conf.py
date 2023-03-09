@@ -17,7 +17,7 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'ESP32 Lua API'
+project = 'Xedge32'
 copyright = '2023, RTL'
 author = 'RTL'
 
