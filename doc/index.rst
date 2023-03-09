@@ -1,6 +1,9 @@
 .. ESP32 Lua API documentation master file, created by
    sphinx-quickstart on Wed Feb 22 12:03:44 2023.
 
+Xedge32 Introduction
+=======================
+
 :ref:`Xedge32` is `Xedge <https://realtimelogic.com/ba/doc/?url=examples/xedge/readme.html>`_ with a peripheral Lua API designed for the ESP32. Xedge is a Lua REPL designed for edge devices and powered by the `Barracuda App Server library <https://github.com/RealTimeLogic/BAS>`_. Xedge32 enables developers to quickly test and prototype code without the need for a full compile and deploy cycle, enabling faster iteration and development. Additionally, Xedge32's Lua peripheral API simplifies the interaction with the device's sensors, motors, and other hardware components, making it easier to develop and test code that interacts with the device's peripherals. The immediate feedback provided by the REPL also makes it easier to debug and troubleshoot code, reducing development time and improving the overall quality of the code. The use of the Xedge32 LUA REPL can help to reduce development costs by allowing for faster development and testing cycles and by making it easier to reuse and share code across different projects.
 
 Note that the LUA API, provided by the `C function BaESP32.c <https://github.com/RealTimeLogic/xedge-ESP32/blob/master/main/BaESP32.c>`_, currently exports a subset of the ESP-IDF C peripheral API to Lua.
