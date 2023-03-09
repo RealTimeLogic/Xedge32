@@ -6,14 +6,16 @@ To get started, you must upload the firmware to the ESP32 using a flashing tool 
 Option 1: Use Binary
 ---------------------
 
-To upload code to your ESP32 board, begin by downloading the `ESP32 firmware archive file <https://realtimelogic.com/downloads/bas/ESP32-firmware.zip>`_, which includes the ESP32 Flash Tool. Once you have downloaded the file, unzip the archive to any directory, and follow the steps below.
+To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and `Xedge32-Firmware.zip <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_. Unzip both archives.
+
 
 1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
-2. Start the `flash_download_tool_3.9.4.exe` executable.
+2. Start the ESPRESSIF Flash Tool `flash_download_tool_3.9.4.exe` executable.
 3. When the tool starts, select ChipType ESP32 and click OK.
-4. On the SPIDownload page, click the 3 dots (...) to browse to the bin files you downloaded.
-5. Select the following binary files and set the address accordingly:
-
+4. On the SPIDownload page, set the COM port to the one used by the ESP32 and set Speed to 115200.
+5. Click the ERASE button and wait for it to complete.
+6. Click the 3 dots (...) to browse to the bin files you downloaded.
+7. Select the following binary files and set the address accordingly:
 
 +-----------------------+-------------------+
 | Binary File           | Address           |
@@ -25,22 +27,17 @@ To upload code to your ESP32 board, begin by downloading the `ESP32 firmware arc
 | `xedge.bin`           | `0x10000`         |
 +-----------------------+-------------------+
 
-6. Click the three checkboxes to the left of the three bin files to select them.
-7. Set the COM port to the one used by your ESP32. Do not change any other values.
-8. Click the ERASE button and wait for it to complete.
-9. Click the START button and wait for it to upload the bin files to your ESP32.
-10. When completed, open a terminal emulator such as Putty.
-11. Set the COM port to the one used by the ESP32 and set Speed to 115200.
+8.  Click the three checkboxes to the left of the three bin files to select them.
+9.  Do not change any other values.
+10. Click the START button and wait for it to upload the bin files to your ESP32.
+11. When completed, open a terminal emulator such as Putty.
 12. You should see a terminal window with text being printed, as shown in the screenshot below.
 13. When you see `LuaShell32 ready` being printed, proceed by :ref:`setting the Wi-Fi credentials <wificredentials>` as explained below.
 
-.. image:: https://realtimelogic.com/images/ESP32-Upload-Tool.png
+.. image:: https://realtimelogic.com/images/Xedg32-Flash-Firmware.png
    :alt: Firmware Upload Tool
 
 In the screenshot above, the firmware tool is shown on the left and a Putty terminal connected to the device is shown on the right.
-
-Note that the included `flash_download_tool_3.9.4.exe` can also be downloaded from:
-https://www.espressif.com/en/support/download/other-tools
 
 Option 2: Compile The Code
 --------------------------

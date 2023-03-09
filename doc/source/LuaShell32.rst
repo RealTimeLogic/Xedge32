@@ -49,6 +49,6 @@ This would output:
 
 In LuaShell32, you have access to all of the standard Lua libraries and functions, the Barracuda App Server APIs, and the ESP32 APIs.
 
-That's a quick introduction to LuaShell32. With this powerful tool at your fingertips, you can experiment with Lua code and explore the capabilities of the ESP32 microcontroller. However, note that the web-based Lua REPL included in Xedge provides a much better user experience. For example, you can modify an LSP page containing Lua code and refresh the page, using your browser, to compile the new code.
+That's a quick introduction to LuaShell32. With this tool, you can experiment with Lua code and explore the capabilities of the ESP32 microcontroller. However, note that the :ref:`Web-Based Lua REPL <Xedge32>` included in Xedge provides a much better user experience. For example, you can modify an LSP page containing Lua code and refresh the page, using your browser, to compile the new code.
 
-See the :ref:`Xedge` for more information.
+See the :ref:`Xedge32` for more information.
