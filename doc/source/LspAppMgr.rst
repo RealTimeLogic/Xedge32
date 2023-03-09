@@ -51,15 +51,15 @@ To mount the ESP32's WebDAV server, use the URL https://ip-address/fs/. Note tha
 How To Debug Lua Code
 ---------------------
 
-Debugging Lua code is made easy with the Barracuda App Server's `Lua debug module <https://realtimelogic.com/ba/doc/?url=auxlua.html#dbgmon>`__, which is compatible with Visual Studio Code and the Lua plugin. To use the debugger, you need access to the Lua files, but it's not possible to access them via WebDAV from the device when debugging. This is because the debug module stops all activity in the server, including the WebDAV server, when a breakpoint is hit. Instead, keep the Lua files on your host computer and access them from the device using the NetIo feature. Refer to the Xedge documentation for `additional NetIo details <https://realtimelogic.com/ba/doc/?url=lspappmgr/readme.html#netio>`__.
+Debugging Lua code is made easy with the Barracuda App Server's `Lua debug module <https://realtimelogic.com/ba/doc/?url=auxlua.html#dbgmon>`__, which is compatible with Visual Studio Code and the Lua plugin. To use the debugger, you need access to the Lua files, but it's not possible to access them via WebDAV from the device when debugging. This is because the debug module stops all activity in the server, including the WebDAV server, when a breakpoint is hit. Instead, keep the Lua files on your host computer and access them from the device using the NetIo feature. Refer to the Xedge documentation for `additional NetIo details <https://realtimelogic.com/ba/doc/?url=xedge/readme.html#netio>`__.
 
 **Configure a debug session as follows:**
 
 Follow the instructions in our `How to Debug Lua Code Using Visual Studio Code <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug>`__ guide on GitHub. Make sure to install all tools listed in the `Prerequisites <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#prerequisites>`__ section and configure Visual Studio Code as explained in the `Configuring VS <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#configuring-vs>`__ section.
 
-Next, navigate to your local ``lspappmgr`` directory and copy the `File Server Directory from GitHub <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug/FileServer>`__ to ``LspAppMgr-ESP32/BAS/examples/lspappmgr/FileServer``.
+Next, navigate to your local ``xedge`` directory and copy the `File Server Directory from GitHub <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug/FileServer>`__ to ``xedge-ESP32/BAS/examples/xedge/FileServer``.
 
-To start the Mako Server, run the following command in the ``LspAppMgr-ESP32/BAS/examples/lspappmgr`` directory:
+To start the Mako Server, run the following command in the ``xedge-ESP32/BAS/examples/xedge`` directory:
 
 .. container:: cmd
 
@@ -93,7 +93,7 @@ The following printout should appear in the File Server console as soon as the N
 
 As detailed in the GitHub documentation, a launch.json file is required with a `sourceMaps attribute <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#setting-up-sourcemaps-in-launchjson>`__.  This file with the sourceMaps attribute is automatically created by the File Server App.
 
-Start Visual Studio Code and open the local directory: LspAppMgr-ESP32/BAS/examples/lspappmgr/Lua-Examples
+Start Visual Studio Code and open the local directory: xedge-ESP32/BAS/examples/xedge/Lua-Examples
 
 Click on the httpclient.lsp file and add the two following lines at the top of the file just below the comment:
 
@@ -126,7 +126,7 @@ Further Reading
    Prior to reading any of the following tutorials, check out the
    `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and
    read the `Xedge
-   Documentation <https://realtimelogic.com/ba/doc/?url=examples/lspappmgr/readme.html#ide>`__.
+   Documentation <https://realtimelogic.com/ba/doc/?url=examples/xedge/readme.html#ide>`__.
 
 **Lua examples and tutorials compatible with ESP32:**
 

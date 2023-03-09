@@ -1,7 +1,7 @@
 .. ESP32 Lua API documentation master file, created by
    sphinx-quickstart on Wed Feb 22 12:03:44 2023.
 
-Welcome to the `Barracuda App Server <https://realtimelogic.com/products/barracuda-application-server/>`_'s ESP32 peripheral API documentation! This API allows Lua code to easily call the underlying C functions provided by the `ESP-IDF <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/index.html>`_ without the need to understand the C API. The LUA API, provided by the `C function BaESP32.c <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/main/BaESP32.c>`_, exports a subset of the ESP-IDF C peripheral API to Lua.
+Welcome to the `Barracuda App Server <https://realtimelogic.com/products/barracuda-application-server/>`_'s ESP32 peripheral API documentation! This API allows Lua code to easily call the underlying C functions provided by the `ESP-IDF <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/index.html>`_ without the need to understand the C API. The LUA API, provided by the `C function BaESP32.c <https://github.com/RealTimeLogic/xedge-ESP32/blob/master/main/BaESP32.c>`_, exports a subset of the ESP-IDF C peripheral API to Lua.
 
 Please note that this documentation exclusively documents the ESP32 peripheral API and how to use the :ref:`Xedge on the ESP32 <Xedge>`. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_.
 
@@ -22,7 +22,7 @@ ESP32 Lua API
 
    source/GettingStarted
    source/LuaShell32
-   source/LspAppMgr
+   source/xedge
    source/GPIO
    source/I2C
    source/PWM

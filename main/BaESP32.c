@@ -54,7 +54,7 @@ https://realtimelogic.com/ba/doc/en/C/reference/html/md_en_C_md_LuaBindings.html
 LThreadMgr API:
 https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadJob.html
 Introductory example:
-https://github.com/RealTimeLogic/BAS/blob/main/examples/lspappmgr/src/AsynchLua.c
+https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 */ 
 
 #include <driver/i2c.h>

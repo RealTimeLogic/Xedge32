@@ -136,7 +136,7 @@ The following example demonstrates how to use interrupt mode by providing a call
     end
 
 
-The following example is similar to the above, but is designed to slowly turn a servo from 0 to 180 degrees and then back again. This cycle continues as long as the channel object is not garbage collected. If you put this example in an LSP page, no references to the channel object remain after running the page, so it may be collected and released. The two variables, ``minServoDuty`` and ``maxServoDuty``, were calculated by the ``calculatePwmDutyCycle()`` function in the `servo.lsp source code example <https://github.com/RealTimeLogic/LspAppMgr-ESP32/blob/master/Lua-Examples/servo.lsp>`_.
+The following example is similar to the above, but is designed to slowly turn a servo from 0 to 180 degrees and then back again. This cycle continues as long as the channel object is not garbage collected. If you put this example in an LSP page, no references to the channel object remain after running the page, so it may be collected and released. The two variables, ``minServoDuty`` and ``maxServoDuty``, were calculated by the ``calculatePwmDutyCycle()`` function in the `servo.lsp source code example <https://github.com/RealTimeLogic/xedge-ESP32/blob/master/Lua-Examples/servo.lsp>`_.
 
 .. code-block:: lua
 

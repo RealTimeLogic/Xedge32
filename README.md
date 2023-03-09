@@ -17,8 +17,8 @@ This repository includes the ESP32 (esp-idf) build files for the
 complete environment as follows:
 
 ```
-git clone https://github.com/RealTimeLogic/LspAppMgr-ESP32.git LspAppMgr
-cd LspAppMgr/main
+git clone https://github.com/RealTimeLogic/xedge-ESP32.git xedge
+cd xedge/main
 git clone https://github.com/RealTimeLogic/BAS.git BAS
 ```
 

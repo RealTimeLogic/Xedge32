@@ -1,6 +1,6 @@
 
 idf_component_register(
-  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "BAS/examples/lspappmgr/src/LspAppMgr.c" "BAS/examples/lspappmgr/obj/LspZip.c" "console.c" "BaESP32.c"
+  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/LspZip.c" "console.c" "BaESP32.c"
   INCLUDE_DIRS "."
   "BAS/inc"
   "BAS/inc/arch/NET/LwIP"

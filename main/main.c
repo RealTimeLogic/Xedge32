@@ -1,5 +1,5 @@
 /* 
-   ESP-IDF startup code calling LspAppMgr.c after ESP initialization.
+   ESP-IDF startup code calling xedge.c after ESP initialization.
 
    Copyright (c) Real Time Logic
 
@@ -38,7 +38,7 @@ struct {
 
 static U8 gotIP=FALSE; /* if IP set */
 static SemaphoreHandle_t semGotIp = 0;
-extern int (*platformInitDiskIo)(DiskIo*);  /* LspAppMgr.c */
+extern int (*platformInitDiskIo)(DiskIo*);  /* xedge.c */
 
 typedef struct
 {
@@ -148,7 +148,7 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 }
 
 
-/* LspAppMgr.c calls this function. We use it to register the auto
+/* xedge.c calls this function. We use it to register the auto
  * generated bindings and the bindings in installESP32Libs.
 */
 void luaopen_AUX(lua_State* L)
@@ -187,7 +187,7 @@ writeHttpTrace(char* buf, int bufLen)
   printf("%s",buf);
 }
 
-/* Configures DISK IO for examples/lspappmgr/src/LspAppMgr.c
+/* Configures DISK IO for examples/xedge/src/xedge.c
  */
 static int initDiskIo(DiskIo* io)
 {
@@ -215,7 +215,7 @@ static int initDiskIo(DiskIo* io)
    return 0;
 }
 
-/* FreeRTOS task calling function barracuda() found in LspAppMgr.c
+/* FreeRTOS task calling function barracuda() found in xedge.c
  */
 static void
 mainServerTask(Thread *t)
@@ -460,7 +460,7 @@ app_main(void)
 {
    initComponents();
    consoleInit();
-   HttpTrace_printf(5,"\n\nLua REPL ready.\n");
+   HttpTrace_printf(5,"\n\nLuaShell32 ready.\n");
    for(;;)
    {
       char* line = linenoise("> ");

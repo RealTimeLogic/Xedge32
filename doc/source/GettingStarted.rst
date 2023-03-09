@@ -22,7 +22,7 @@ To upload code to your ESP32 board, begin by downloading the `ESP32 firmware arc
 +-----------------------+-------------------+
 | `partition_table.bin` | `0x8000`          |
 +-----------------------+-------------------+
-| `lspappmgr.bin`       | `0x10000`         |
+| `xedge.bin`           | `0x10000`         |
 +-----------------------+-------------------+
 
 6. Click the three checkboxes to the left of the three bin files to select them.
@@ -45,7 +45,7 @@ https://www.espressif.com/en/support/download/other-tools
 Option 2: Compile The Code
 --------------------------
 
-The ESP32 source code is currently available on `GitHub under the V5 branch <https://github.com/RealTimeLogic/LspAppMgr-ESP32/tree/V5>`_.
+The ESP32 source code is currently available on `GitHub under the V5 branch <https://github.com/RealTimeLogic/xedge-ESP32/tree/V5>`_.
 
 To compile the source code, you must use the latest ESP-IDF, which can be found on `GitHub <https://github.com/espressif/esp-idf>`_.
 
@@ -69,9 +69,9 @@ The following Linux commands show all steps required for installing the developm
    cd ..
    source esp-idf/export.sh
 
-   # Download the V5 LspAppMgr branch and latest BAS
-   git clone --branch V5 https://github.com/RealTimeLogic/LspAppMgr-ESP32.git LspAppMgr
-   cd LspAppMgr/main
+   # Download the V5 xedge branch and latest BAS
+   git clone --branch V5 https://github.com/RealTimeLogic/xedge-ESP32.git xedge
+   cd xedge/main
    git clone https://github.com/RealTimeLogic/BAS.git BAS
    cd ..
 
