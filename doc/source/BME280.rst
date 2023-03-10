@@ -3,7 +3,7 @@ BME280 Module
 
 This module provides an easy-to-use interface for communicating with the BME280 chip, a popular environmental sensor that measures temperature, humidity, and pressure.
 
-The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor communicates with the ESP32 using the :ref:`I2C interface <I2C API>`. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/xedge-ESP32/blob/master/Lua-Examples/bme280.lua>`_ for details.
+The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor communicates with the ESP32 using the :ref:`I2C interface <I2C API>`. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/Xedge-ESP32/blob/master/Lua-Examples/.lua/bme280.lua>`_ for details.
 
 Usage
 -----

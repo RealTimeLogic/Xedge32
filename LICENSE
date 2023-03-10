@@ -1,5 +1,10 @@
 License Agreement
 
+This License Agreement applies to the Xedge32 Repository.
+Please see the submodules for their respective licenses:
+https://github.com/RealTimeLogic/BAS/blob/main/LICENSE
+https://github.com/surfskidude/lua-protobuf/blob/master/LICENSE
+
 Copyright (c) 2023 Real Time Logic
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
