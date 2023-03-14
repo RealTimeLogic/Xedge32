@@ -14,8 +14,6 @@
 
 This LSP page creates a new blinking LED timer coroutine each time it runs.
 Click the refresh button to create a new.
-Each timer runs until the garbage collector kicks in.
-You may run the collector by adding ?gc= to the URL
 
 The timer object is free-floating since we are not referencing
 (anchoring) the object. The created timer(s) will eventually be
@@ -34,25 +32,15 @@ https://github.com/espressif/esp-idf/blob/master/examples/get-started/blink/main
 <?lsp
 response:setcontenttype"text/plain"
 
-if request:data"gc" then -- Trigger by adding the following to the URL: ?gc=
-   local before=collectgarbage"count"
-   collectgarbage()
-   local after = collectgarbage"count"
-   print(string.format("KBytes in use: %d\nCollected %d KBytes",
-                       after,
-                       before - after))
-   return
-end
+collectgarbage()
 
 local function blink()
-   local gn = esp.GPIO_NUM_4
-    esp.gpio_pad_select_gpio(gn);
-    esp.gpio_set_direction(gn, esp.GPIO_MODE_OUTPUT);
+    local pin = esp32.gpio(4,"OUT")
    while true do
       trace"blink"
-      esp.gpio_set_level(gn, 1)
+      pin:value(true)
       coroutine.yield(true) -- Sleep
-      esp.gpio_set_level(gn, 0)
+      pin:value(false)
       coroutine.yield(true) -- Sleep
    end
 end

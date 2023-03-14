@@ -22,7 +22,8 @@ Navigate to ``http://ip-address/fs/`` and click the :guilabel:`+` button to crea
 
 |Web File Manager: Upload|
 
-When the upload is complete, navigate to ``http://ip-address`` and click the :guilabel:`New Application` button. Then, click browse (1) and select the Lua-Examples. Click the Submit button (2) and complete the New Application Wizard using the default settings.
+After completing the upload process, go to ``http://ip-address`` and click on the :guilabel:`New Application` button. Then, click :guilabel:`Browse` (1) to open the file browser. In the file browser, expand the directory tree by clicking on the small expand symbol to the left of the folder icon. Double-click on the 'Lua-Examples' directory to select it. Next, click the :guilabel:`Submit` button (2) and follow the prompts in the New Application Wizard, making sure to use the default settings.
+
 
 |Xedge32: New-Application|
 

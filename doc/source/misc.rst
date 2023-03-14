@@ -3,6 +3,18 @@ Miscellaneous API
 
 The `esp32` module provides some miscellaneous functions.
 
+esp32.mac()
+~~~~~~~~~~~~~~~~~~~~
+This function returns the ESP32's 6 byte base MAC address.
+
+Example:
+
+.. code-block:: lua
+
+   local mac=esp32.mac():gsub(".",function(x) return string.format("%02X",string.byte(x)) end)
+   print(mac) -- Print MAC as hexadecimal numbers
+
+
 esp32.wscan([print])
 ~~~~~~~~~~~~~~~~~~~~
 

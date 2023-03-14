@@ -99,7 +99,7 @@ local function publishMetrics()
          t, h, p = toint(t*10), toint(h*10), toint(p)
          -- Only publish if there is a reasonable amount of change.
          -- Divide // in Lua yields integer
-         if temperature ~= t or humidity//5 ~= h//5 or pressure//10 ~= p//10 then
+         if temperature ~= t or humidity//10 ~= h//10 or pressure//100 ~= p//100 then
             temperature, humidity, pressure = t, h, p
             local pl = SP.payload()
             pl:metric("Temperature", DataTypes.Double, temperature/10)

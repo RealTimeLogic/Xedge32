@@ -4,8 +4,13 @@ Getting Started
 To get started, you must upload the firmware to an ESP32 with PSRAM, such as the `ESP32 WROVER <https://www.google.com/search?q=esp32+wrover>`_ board, using a flashing tool or programming software. You can either use our ready-to-use firmware binary files or compile the C source code using the Espressif ESP-IDF.
 
 
-Option 1: Use Binary
----------------------
+Option 1: Use Binaries
+------------------------
+
+The binaries can be installed using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
+
+Windows
+~~~~~~~~
 
 To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and `Xedge32-Firmware.zip <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_. Unzip both archives.
 
@@ -39,6 +44,22 @@ To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ES
    :alt: Firmware Upload Tool
 
 In the screenshot above, the firmware tool is shown on the left and a Putty terminal connected to the device is shown on the right.
+
+How To Install The Binaries Using `esptool`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following example shows how to use Linux. The commands are similar for Mac and Windows.
+
+.. code-block:: shell
+
+   sudo apt install python3-pip
+   pip install esptool
+   wget https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip
+   unzip Xedge32-Firmware.zip
+   ~/.local/bin/esptool.py -p /dev/ttyUSB0 --before default_reset --after hard_reset --chip esp32  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
+
+
+
 
 Option 2: Compile The Code
 --------------------------

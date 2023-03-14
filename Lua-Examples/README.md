@@ -17,11 +17,6 @@ generated ESP-IDF Lua bindings.
 The LSP file uiservo.lsp extends servo.lsp and provides an HTML5 based
 real time user interface for controlling the servo.
 
-### HTTP Client
-
-The httpclient.lsp example shows how to use the HTTP client library
-for connecting to online REST services.
-
 ### WebSockets
 
 The following example shows how to use WebSockets via the SMQ
@@ -57,8 +52,3 @@ App Manager's Web-IDE is to copy the examples directly from the online
 tutorial server:
 
 https://tutorial.realtimelogic.com/
-
-### Mako Server LSP Book
-
-https://makoserver.net/book/
-
