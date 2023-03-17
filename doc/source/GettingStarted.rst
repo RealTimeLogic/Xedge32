@@ -83,9 +83,6 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 2. After a second or two, the ESP32 should connect to your network.
 3. Using your web browser, navigate to the IP address printed in the :ref:`LuaShell32` to access the ESP32.
 
+The next time you power on the ESP32 device, it should automatically connect to your Wi-Fi network.
 
-To have the ESP32 automatically connect at startup, create a file named ``.boot`` and insert the code used for connecting to your Wi-Fi e.g., ``esp32.wconnect("your-Wi-Fi-SSID","password")`` into .boot.
-
-1. Navigate to the web file manager at ``http://esp-32-ip-address/fs/`` using your browser.
-2. Drag and drop the ``.boot`` file onto the web file manager to upload it.
-3. Verify that the ESP32 automatically connects to your Wi-Fi by rebooting it.
+.. 1. Navigate to the web file manager at ``http://esp-32-ip-address/fs/`` using your browser. 2. Drag and drop the ``.boot`` file onto the web file manager to upload it. 3. Verify that the ESP32 automatically connects to your Wi-Fi by rebooting it.
