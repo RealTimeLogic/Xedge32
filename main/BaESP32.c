@@ -90,18 +90,7 @@ static int throwInvArg(lua_State* L, const char* type)
 
 static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
 {
-   const char* emsg=0;
-   switch(err)
-   {
-      case ESP_OK: lua_pushboolean(L,TRUE); return 1;
-      case ESP_ERR_INVALID_ARG: emsg="invalidarg"; break;
-      case ESP_ERR_NO_MEM: emsg="nomem"; break;
-      case ESP_ERR_INVALID_STATE: emsg="invalidstate"; break;
-      case ESP_ERR_TIMEOUT: emsg="timeout"; break;
-      case ESP_ERR_WIFI_SSID: emsg="wifi ssid"; break;
-      default:
-         emsg="fail";
-   }
+   const char* emsg=esp_err_to_name(err);
    lua_pushnil(L);
    if(msg)
       lua_pushfstring(L,"%s: %s",msg,emsg);
@@ -173,15 +162,7 @@ static void lInitConfigTable(lua_State* L, int ix)
       lua_settop(L,ix);
 }
 
-typedef void (*EventBrokerCallback)(gpio_num_t pin);
-
-typedef struct {
-   EventBrokerCallback callback;
-   gpio_num_t pin;
-} EventBrokerQueueNode;
-
-
-static QueueHandle_t eventBrokerQueue;
+QueueHandle_t eventBrokerQueue;
 
 /* This high-priority task waits for 'eventBrokerQueue' events and
  * dispatches them to a callback function running in the context of an
@@ -195,7 +176,7 @@ static void eventBrokerTask(void *params)
       EventBrokerQueueNode n;
       if(xQueueReceive(eventBrokerQueue, &n, portMAX_DELAY))
       {
-         n.callback(n.pin);
+         n.callback(n.arg);
       }
    }
 }
@@ -294,14 +275,14 @@ static void dispatchGpioThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
 
 /* This CB runs in the context of the eventBrokerTask.
  */
-static void gpioEventCB(gpio_num_t pin)
+static void gpioEventCB(EventBrokerCallbackArg arg)
 {
    LGPIO* gpio;
    int queueLen=0;
-   int level = gpio_get_level(pin);
+   int level = gpio_get_level(arg.pin);
 
    ThreadMutex_set(&rMutex);
-   gpio = activeGPOI[pin];
+   gpio = activeGPOI[arg.pin];
    if(gpio)
    {
       if(gpio->queueLen < GPIO_QUEUE_SIZE)
@@ -314,7 +295,7 @@ static void gpioEventCB(gpio_num_t pin)
 
    /* If transitioning from empty to one element in the queue */
    if(1 == queueLen)
-      dispatchGpioThreadJob(pin,executeLuaGpioCB);
+      dispatchGpioThreadJob(arg.pin,executeLuaGpioCB);
 }
 
 
@@ -325,7 +306,7 @@ static void IRAM_ATTR gpioInterruptHandler(void *arg)
 {
    EventBrokerQueueNode n = {
       .callback=gpioEventCB,
-      .pin=(gpio_num_t)arg
+      .arg.pin=(gpio_num_t)arg
    };
    xQueueSendFromISR(eventBrokerQueue, &n, 0);
 }
@@ -547,10 +528,10 @@ static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 
 /* This CB runs in the context of the eventBrokerTask.
  */
-static void ledEventCB(gpio_num_t pin)
+static void ledEventCB(EventBrokerCallbackArg arg)
 {
-   if(activeGPOI[pin])
-      dispatchGpioThreadJob(pin, executeLuaLedEventCB);
+   if(activeGPOI[arg.pin])
+      dispatchGpioThreadJob(arg.pin, executeLuaLedEventCB);
 }
 
 
@@ -563,7 +544,7 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
     {
        EventBrokerQueueNode n = {
           .callback=ledEventCB,
-          .pin=(gpio_num_t)arg
+          .arg.pin=(gpio_num_t)arg
        };
        xQueueSendFromISR(eventBrokerQueue, &n, 0);
        return TRUE;
@@ -572,6 +553,9 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
 }
 
 
+#if CONFIG_IDF_TARGET_ESP32S3
+#define LEDC_HIGH_SPEED_MODE LEDC_SPEED_MODE_MAX
+#endif
 static ledc_mode_t lLedGetSpeedMode(lua_State* L, int ix)
 {
    const char* mode = balua_checkStringField(L, 1, "mode");
@@ -1248,6 +1232,13 @@ static int lmac(lua_State* L)
 }
 
 
+static int lrestart(lua_State* L)
+{
+   esp_restart();
+   return 0;
+}
+
+
 
 /*********************************************************************
  *********************************************************************
@@ -1265,6 +1256,7 @@ static const luaL_Reg esp32Lib[] = {
    {"wscan", lwscan},
    {"wconnect", lwconnect},
    {"mac", lmac},
+   {"restart", lrestart},
    {NULL, NULL}
 };
 

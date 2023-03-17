@@ -1,5 +1,20 @@
 #include <barracuda.h>
 
+typedef union {
+   gpio_num_t pin;
+   void* ptr;
+} EventBrokerCallbackArg;
+
+typedef void (*EventBrokerCallback)(EventBrokerCallbackArg arg);
+
+typedef struct {
+   EventBrokerCallback callback;
+   EventBrokerCallbackArg arg;
+} EventBrokerQueueNode;
+
+extern QueueHandle_t eventBrokerQueue;
+
+
 void init_dlmalloc(char* heapstart, char* heapend); /* BAS.c */
 void barracuda(void); /* xedge.c */
 void installESP32Libs(lua_State* L); /* BaESP32.c */
@@ -15,4 +30,3 @@ void wifiScan(int print, lua_State* L, /* main.c */
 */
 extern LThreadMgr ltMgr;
 extern ThreadMutex* soDispMutex; /* BaESP32.c */
-
