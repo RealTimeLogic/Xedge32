@@ -57,6 +57,10 @@ Introductory example:
 https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 */ 
 
+#include <esp_adc/adc_oneshot.h>
+#include <esp_adc/adc_cali.h>
+#include <esp_adc/adc_cali_scheme.h>
+
 #include <driver/i2c.h>
 #include <driver/uart.h>
 #include <driver/ledc.h>
@@ -64,6 +68,9 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <esp_mac.h>
 #include <esp_log.h>
 #include "BaESP32.h"
+
+#define ECHK ESP_ERROR_CHECK
+
 
 /*
   The Socket Dispatcher (SoDisp) mutex protecting everything; set in
@@ -77,6 +84,12 @@ ThreadMutex* soDispMutex;
 */
 static ThreadMutex rMutex;
 
+/* Array of pointers with len GPIO_NUM_MAX */
+struct LGPIO;
+static struct LGPIO** activeGPOI;
+
+
+
 /*********************************************************************
  *********************************************************************
                            Misc functions
@@ -85,11 +98,13 @@ static ThreadMutex rMutex;
 
 static int throwInvArg(lua_State* L, const char* type)
 {
-   return luaL_error(L,"Invalidarg: %d", type); /* does not return; throws */
+   return luaL_error(L,"Invalidarg %s", type); /* does not return; throws */
 }
 
 static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
 {
+   if(ESP_ERR_INVALID_ARG == err)
+      throwInvArg(L, msg ? msg : "");
    const char* emsg=esp_err_to_name(err);
    lua_pushnil(L);
    if(msg)
@@ -183,6 +198,187 @@ static void eventBrokerTask(void *params)
 
 
 
+/*********************************************************************
+ *********************************************************************
+                                 ADC
+ *********************************************************************
+ *********************************************************************/
+
+#define BAADC "ADC"
+
+typedef struct
+{
+   union {
+      struct {
+         adc_oneshot_unit_handle_t handle;
+      } oneShot;
+   } u;
+   int type; /* 0: closed, 1: one shot, 2: continuous */
+   int pin; /* gpio */
+   int callbackRef;
+   adc_channel_t channel;
+   adc_cali_handle_t caliHandle;
+} LADC;
+
+
+static void ADC_close(lua_State* L, LADC* o)
+{
+   if(o && o->type)
+   {
+      if(1 == o->type)
+      {
+         ECHK(adc_oneshot_del_unit(o->u.oneShot.handle));
+         if(o->caliHandle)
+         {
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+            ECHK(adc_cali_delete_scheme_curve_fitting(o->caliHandle));
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+            ECHK(adc_cali_delete_scheme_line_fitting(o->caliHandle));
+#endif
+         }
+      }
+      else
+      {
+         //PATCH
+      }
+      activeGPOI[o->pin]=0;
+
+   }
+}
+
+
+static LADC* ADC_getUD(lua_State* L)
+{
+   return (LADC*)luaL_checkudata(L,1,BAADC);
+}
+
+
+static LADC* ADC_checkUD(lua_State* L)
+{
+   LADC* o = ADC_getUD(L);
+   if( ! o->type )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+
+static int ADC_lclose(lua_State* L)
+{
+   ADC_close(L,ADC_getUD(L));
+   return 0;
+}
+
+static int ADC_lread(lua_State* L)
+{
+   esp_err_t err;
+   int val;
+   LADC* o = ADC_checkUD(L);
+   err = adc_oneshot_read(o->u.oneShot.handle, o->channel, &val);
+   if(ESP_OK != err)
+      return pushEspRetVal(L, err, "read");
+   lua_pushinteger(L,val);
+   if(o->caliHandle)
+   {
+      int volt;
+      err = adc_cali_raw_to_voltage(o->caliHandle, val, &volt);
+      if(ESP_OK != err)
+         return pushEspRetVal(L, err, "calibrate");
+      lua_pushinteger(L,volt);
+      return 2;
+   }
+   return 1;
+}
+
+
+static const luaL_Reg adcObjLib[] = {
+   {"read", ADC_lread},
+   {"close", ADC_lclose},
+   {"__close", ADC_lclose},
+   {"__gc", ADC_lclose},
+   {NULL, NULL}
+};
+
+/*
+  esp32.adc(unit, channel [, cfg])
+  cfg.attenuation = "0db" | "2.5db" | "6db" | "11db"
+calibrate
+callback
+bitwidth
+
+ */
+static int ladc(lua_State* L)
+{
+   esp_err_t err;
+   int pin;
+   adc_oneshot_unit_handle_t oneShotHandle;
+   if(lua_gettop(L) == 0)
+   {
+      lua_pushinteger(L,SOC_ADC_SAMPLE_FREQ_THRES_LOW);
+      lua_pushinteger(L,SOC_ADC_SAMPLE_FREQ_THRES_HIGH);
+      return 2;
+   }
+   adc_unit_t unitId = 1 == luaL_checkinteger(L, 1) ? ADC_UNIT_1 : ADC_UNIT_2;
+   baAssert(0 == ADC_CHANNEL_0); /* next line fails if this is not true */
+   adc_channel_t channel = (adc_channel_t)luaL_checkinteger(L, 2);
+   lInitConfigTable(L, 3);
+   lua_getfield(L, 3, "callback"); /* callback IX is now 4 */
+   int hasCB = lua_isfunction(L, 4);
+   const char* aStr = balua_getStringField(L, 3, "attenuation", "11db");
+   adc_atten_t atten = '0' == *aStr ? ADC_ATTEN_DB_0 :
+      ('2' == *aStr ? ADC_ATTEN_DB_2_5 :
+       ('6' == *aStr ? ADC_ATTEN_DB_6 : ADC_ATTEN_DB_11));
+   int calibrate = balua_getBoolField(L, 3, "calibrate", FALSE);
+   adc_bitwidth_t bitwidth = (adc_bitwidth_t)balua_getIntField(
+      L, 1, "bitwidth", ADC_BITWIDTH_DEFAULT);
+   
+   err = adc_oneshot_channel_to_io(unitId, channel, &pin);
+   if(ESP_OK != err)
+      return pushEspRetVal(L, err, "channel_to_io");
+   if(activeGPOI[pin])
+      luaL_error(L,"INUSE");
+    adc_oneshot_unit_init_cfg_t oneShotCfg = { .unit_id = unitId };
+    err=adc_oneshot_new_unit(&oneShotCfg, &oneShotHandle);
+    adc_oneshot_chan_cfg_t cfg = {
+       .bitwidth = bitwidth,
+       .atten = atten
+    };
+    err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
+
+   LADC* adc = (LADC*)lNewUdata(L,sizeof(LADC),BAADC,adcObjLib);
+   adc->u.oneShot.handle=oneShotHandle;
+   adc->pin=pin;
+   adc->type=1; //PATCH
+   adc->channel=channel;
+   if(calibrate)
+   {
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+      adc_cali_curve_fitting_config_t caCfg1 = {
+         .unit_id = unitId,
+         .atten = atten,
+         .bitwidth = ADC_BITWIDTH_DEFAULT,
+      };
+      err = adc_cali_create_scheme_curve_fitting(&caCfg1, &adc->caliHandle);
+#endif
+#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+      adc_cali_line_fitting_config_t caCfg2 = {
+         .unit_id = unitId,
+         .atten = atten,
+         .bitwidth = ADC_BITWIDTH_DEFAULT,
+      };
+      err = adc_cali_create_scheme_line_fitting(&caCfg2, &adc->caliHandle);
+#endif
+      if(ESP_OK != err)
+         return pushEspRetVal(L, err, "calibrate");
+   }
+
+
+   activeGPOI[pin]=(struct LGPIO*)adc; /* signal pin in use */
+   lua_pushinteger(L,pin);
+   return 2;
+}
+
+
+
 
 
 
@@ -194,7 +390,7 @@ static void eventBrokerTask(void *params)
 
 #define GPIO_QUEUE_SIZE 10
 
-typedef struct
+typedef struct LGPIO
 {
    int callbackRef;
    gpio_num_t pin;
@@ -202,9 +398,6 @@ typedef struct
    gpio_mode_t mode;
    U8 queue[GPIO_QUEUE_SIZE]; /* holds GPIO level(s) high/low */
 } LGPIO;
-
-static LGPIO** activeGPOI; /* Array of LGPIO pointers with len GPIO_NUM_MAX */
-
 
 typedef struct
 {
@@ -484,7 +677,7 @@ static void LLEDC_close(lua_State* L, LLEDC* o)
    if(o->running)
    {
       activeGPOI[o->pin]=0;
-      ESP_ERROR_CHECK(ledc_stop(o->mode,o->channel,0));
+      ECHK(ledc_stop(o->mode,o->channel,0));
       if(0 == --ledsRunning)
          ledc_fade_func_uninstall();
       gpio_reset_pin(o->pin);
@@ -610,7 +803,7 @@ static int lLedChannel(lua_State* L)
    {
       led->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 2);
       ledc_cbs_t cb = { .fade_cb = ledInterruptHandler };
-      ESP_ERROR_CHECK(ledc_cb_register(mode,channel,&cb,(void*)pin));
+      ECHK(ledc_cb_register(mode,channel,&cb,(void*)pin));
    }
    return 1;
 }
@@ -943,7 +1136,7 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          if(0 == len)
          {
             size_t size;
-            ESP_ERROR_CHECK(uart_get_buffered_data_len(lu->port, &size));
+            ECHK(uart_get_buffered_data_len(lu->port, &size));
             len=(int)size;
          }
          if(len > 0)
@@ -1030,7 +1223,7 @@ static int Uart_read(lua_State* L)
    size_t size;
    LUart* o = Uart_checkUD(L);
    lua_Integer msSec = luaL_optinteger(L, 2, 0);
-   ESP_ERROR_CHECK(uart_get_buffered_data_len(o->port,&size));
+   ECHK(uart_get_buffered_data_len(o->port,&size));
    if(size || msSec)
    {
       luaL_Buffer lb;
@@ -1248,6 +1441,7 @@ static int lrestart(lua_State* L)
 
 
 static const luaL_Reg esp32Lib[] = {
+   {"adc", ladc},
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
    {"pwmtimer", lLedTimer},
