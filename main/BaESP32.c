@@ -58,15 +58,16 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 */ 
 
 #include <esp_adc/adc_oneshot.h>
+#include <esp_adc/adc_continuous.h>
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
-
 #include <driver/i2c.h>
 #include <driver/uart.h>
 #include <driver/ledc.h>
 #include <esp_wifi.h>
 #include <esp_mac.h>
 #include <esp_log.h>
+#include <esp_vfs_fat.h>
 #include "BaESP32.h"
 
 #define ECHK ESP_ERROR_CHECK
@@ -84,9 +85,33 @@ ThreadMutex* soDispMutex;
 */
 static ThreadMutex rMutex;
 
+#define GPIO_QUEUE_SIZE 10 /* See executeLuaGpioCB() */
+
+typedef struct
+{
+   int callbackRef;
+   gpio_num_t pin;
+   int queueLen;
+   gpio_mode_t mode;
+   U8 queue[GPIO_QUEUE_SIZE]; /* holds GPIO level(s) high/low */
+} LGPIO;
+
+typedef struct
+{
+   ThreadJob super;
+   gpio_num_t pin;
+} GpioThreadJob;
+
+
 /* Array of pointers with len GPIO_NUM_MAX */
-struct LGPIO;
-static struct LGPIO** activeGPOI;
+static LGPIO* activeGPOI[GPIO_NUM_MAX];
+
+
+
+static 
+IRAM_ATTR
+uint8_t eventBrokerQueueBuf[20*sizeof(EventBrokerQueueNode)];
+
 
 
 
@@ -96,10 +121,19 @@ static struct LGPIO** activeGPOI;
  *********************************************************************
  *********************************************************************/
 
+static void dispatchThreadJob(gpio_num_t pin, ThreadJob_LRun lrun);
+
 static int throwInvArg(lua_State* L, const char* type)
 {
    return luaL_error(L,"Invalidarg %s", type); /* does not return; throws */
 }
+
+static void pushErr(lua_State* L, const char* msg)
+{
+   lua_pushnil(L);
+   lua_pushstring(L,msg);
+}
+
 
 static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
 {
@@ -206,18 +240,37 @@ static void eventBrokerTask(void *params)
 
 #define BAADC "ADC"
 
+#if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2
+#define ADC_OUTPUT_TYPE             ADC_DIGI_OUTPUT_FORMAT_TYPE1
+#define ADC_GET_CHANNEL(p_data)     ((p_data)->type1.channel)
+#define ADC_GET_DATA(p_data)        ((p_data)->type1.data)
+#else
+#define ADC_OUTPUT_TYPE             ADC_DIGI_OUTPUT_FORMAT_TYPE2
+#define ADC_GET_CHANNEL(p_data)     ((p_data)->type2.channel)
+#define ADC_GET_DATA(p_data)        ((p_data)->type2.data)
+#endif
+
+
 typedef struct
 {
-   union {
-      struct {
-         adc_oneshot_unit_handle_t handle;
-      } oneShot;
-   } u;
    int type; /* 0: closed, 1: one shot, 2: continuous */
    int pin; /* gpio */
    int callbackRef;
    adc_channel_t channel;
    adc_cali_handle_t caliHandle;
+   union { /* Must be last, see buf below */
+      struct {
+         adc_oneshot_unit_handle_t handle;
+      } oneShot;
+      struct {
+         adc_continuous_handle_t handle;
+         int callbackRef;
+         size_t bufSize;
+         uint8_t running;
+         uint8_t overflow;
+         uint8_t buf[1]; /* must be last, see lNewUdata i.e. malloc */
+      } contin;
+   } u;
 } LADC;
 
 
@@ -225,24 +278,25 @@ static void ADC_close(lua_State* L, LADC* o)
 {
    if(o && o->type)
    {
+      activeGPOI[o->pin]=0;
       if(1 == o->type)
       {
          ECHK(adc_oneshot_del_unit(o->u.oneShot.handle));
-         if(o->caliHandle)
-         {
-#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-            ECHK(adc_cali_delete_scheme_curve_fitting(o->caliHandle));
-#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-            ECHK(adc_cali_delete_scheme_line_fitting(o->caliHandle));
-#endif
-         }
       }
       else
       {
-         //PATCH
+         adc_continuous_stop(o->u.contin.handle);
+         adc_continuous_deinit(o->u.contin.handle);
       }
-      activeGPOI[o->pin]=0;
-
+      if(o->caliHandle)
+      {
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+         ECHK(adc_cali_delete_scheme_curve_fitting(o->caliHandle));
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+         ECHK(adc_cali_delete_scheme_line_fitting(o->caliHandle));
+#endif
+      }
+      o->type=0;
    }
 }
 
@@ -273,6 +327,8 @@ static int ADC_lread(lua_State* L)
    esp_err_t err;
    int val;
    LADC* o = ADC_checkUD(L);
+   if(1 != o->type)
+      luaL_error(L,"Continuous mode");
    err = adc_oneshot_read(o->u.oneShot.handle, o->channel, &val);
    if(ESP_OK != err)
       return pushEspRetVal(L, err, "read");
@@ -287,6 +343,137 @@ static int ADC_lread(lua_State* L)
       return 2;
    }
    return 1;
+}
+
+/* Stage 3: This CB runs in the context of a thread in the LThreadMgr.
+ */
+static void executeLuaAdcEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   LADC* adc = (LADC*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   if(adc)
+   {
+      lua_State* L = jb->Lt;
+      for(;;)
+      {
+         uint32_t rLen;
+         esp_err_t err =
+            adc_continuous_read(adc->u.contin.handle, adc->u.contin.buf,
+                                adc->u.contin.bufSize, &rLen, 0);
+         if(ESP_OK == err)
+         {
+            /* Calculate mean using Kahan summation */
+            double sum = 0.0f;
+            double c = 0.0f;
+            int stepSZ = rLen/SOC_ADC_DIGI_RESULT_BYTES/20; /* Max 20 samples */
+            if(stepSZ == 0) stepSZ=1;
+            int n=0;
+            for(int i = 0; i < rLen; i += (SOC_ADC_DIGI_RESULT_BYTES*stepSZ))
+            {
+               adc_digi_output_data_t *p = (void*)&adc->u.contin.buf[i];
+               uint32_t data = ADC_GET_DATA(p);
+               double t = sum;
+               double y = data - c;
+               sum = t + y;
+               c = (t - sum) + y;
+               n++;
+            }
+            uint32_t val = (uint32_t)(sum/n);
+            balua_wkPush(L, adc->callbackRef);
+            lua_pushinteger(L,val);
+            if(adc->caliHandle)
+            {
+               int volt;
+               err = adc_cali_raw_to_voltage(adc->caliHandle, val, &volt);
+               if(ESP_OK == err)
+                  lua_pushinteger(L,volt);
+               else
+               {
+                  lua_pop(L,1);
+                  pushErr(L,esp_err_to_name(err));
+               }
+            }
+            if(LUA_OK != lua_pcall(L, adc->caliHandle ? 2 : 1, 0, msgh))
+            {
+               ADC_close(L,adc);
+               break;
+            }
+            adc->u.contin.running=FALSE;
+            if(adc->u.contin.overflow)
+               goto L_err;
+         }
+         else if(ESP_ERR_TIMEOUT == err)
+         {
+            break;
+         }
+         else
+         {
+           L_err:
+            /* Empty */
+            while(ESP_OK == adc_continuous_read(
+                     adc->u.contin.handle, adc->u.contin.buf,
+                     adc->u.contin.bufSize, &rLen, 0));
+            balua_wkPush(L, adc->callbackRef);
+            pushErr(L,adc->u.contin.overflow ?
+                    "overflow" : esp_err_to_name(err));
+            adc->u.contin.overflow=FALSE;
+            if(LUA_OK != lua_pcall(L, 2, 0, msgh))
+            {
+               ADC_close(L,adc);
+               break;
+            }
+            break;
+         }
+         lua_settop(L,0);
+      }
+      adc->u.contin.running=FALSE;
+   }
+}
+
+
+/* Stage 2: This CB runs in the context of the eventBrokerTask.
+ */
+static void adcEventCB(EventBrokerCallbackArg arg)
+{
+   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   if(adc && ! adc->u.contin.running)
+   {
+      adc->u.contin.running = TRUE;
+      dispatchThreadJob(arg.pin, executeLuaAdcEventCB);
+   }
+}
+
+
+/* Stage 2: This CB runs in the context of the eventBrokerTask.
+ */
+static void adcOverflowCB(EventBrokerCallbackArg arg)
+{
+   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   if(adc)
+      adc->u.contin.overflow=TRUE;
+}
+
+
+/* Stage 1 : overflow
+ */
+static IRAM_ATTR bool adcOvfInterruptHandler(
+   adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
+   void* pin)
+{
+   EventBrokerQueueNode n = {.callback=adcOverflowCB,.arg.pin=(gpio_num_t)pin};
+   xQueueSendFromISR(eventBrokerQueue, &n, 0); /* Trigger adcEventCB() */
+   return true;
+}
+
+
+/* Stage 1 : conversion result
+ */
+static IRAM_ATTR bool adcConvDoneInterruptHandler(
+   adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
+   void* pin)
+{
+   EventBrokerQueueNode n = {.callback=adcEventCB,.arg.pin=(gpio_num_t)pin};
+   xQueueSendFromISR(eventBrokerQueue, &n, 0); /* Trigger adcEventCB() */
+   return true;
 }
 
 
@@ -311,6 +498,8 @@ static int ladc(lua_State* L)
    esp_err_t err;
    int pin;
    adc_oneshot_unit_handle_t oneShotHandle;
+   adc_continuous_handle_t contHandle;
+   uint32_t bufSize=0; /* continuous mode */
    if(lua_gettop(L) == 0)
    {
       lua_pushinteger(L,SOC_ADC_SAMPLE_FREQ_THRES_LOW);
@@ -329,25 +518,94 @@ static int ladc(lua_State* L)
        ('6' == *aStr ? ADC_ATTEN_DB_6 : ADC_ATTEN_DB_11));
    int calibrate = balua_getBoolField(L, 3, "calibrate", FALSE);
    adc_bitwidth_t bitwidth = (adc_bitwidth_t)balua_getIntField(
-      L, 1, "bitwidth", ADC_BITWIDTH_DEFAULT);
-   
+      L, 3, "bitwidth", ADC_BITWIDTH_DEFAULT);
+   if(SOC_ADC_DIGI_MIN_BITWIDTH > bitwidth)
+      bitwidth=SOC_ADC_DIGI_MIN_BITWIDTH;
+   else if(SOC_ADC_DIGI_MAX_BITWIDTH < bitwidth)
+      bitwidth=SOC_ADC_DIGI_MAX_BITWIDTH;
    err = adc_oneshot_channel_to_io(unitId, channel, &pin);
    if(ESP_OK != err)
       return pushEspRetVal(L, err, "channel_to_io");
    if(activeGPOI[pin])
       luaL_error(L,"INUSE");
-    adc_oneshot_unit_init_cfg_t oneShotCfg = { .unit_id = unitId };
-    err=adc_oneshot_new_unit(&oneShotCfg, &oneShotHandle);
-    adc_oneshot_chan_cfg_t cfg = {
-       .bitwidth = bitwidth,
-       .atten = atten
-    };
-    err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
-
-   LADC* adc = (LADC*)lNewUdata(L,sizeof(LADC),BAADC,adcObjLib);
-   adc->u.oneShot.handle=oneShotHandle;
+   if(hasCB)
+   {
+      /* frequency sample */
+      uint32_t fs=balua_getIntField(L,3,"fs",SOC_ADC_SAMPLE_FREQ_THRES_LOW);
+      if(SOC_ADC_SAMPLE_FREQ_THRES_LOW > fs) fs=SOC_ADC_SAMPLE_FREQ_THRES_LOW;
+      else if(fs > 48000) fs=48000;
+      uint32_t minbl = fs / 200; /* max 200 Lua callbacks per second */
+      /* block length i.e. number of samples, the conversion frame len */
+      uint32_t bl=balua_checkIntField(L,3,"bl");
+      if(bl < minbl) bl=minbl;
+      bufSize = bl * SOC_ADC_DIGI_RESULT_BYTES;
+      /* Add 400 millisecond of extra samples */
+      uint32_t safetyBuf = (fs / 25) * SOC_ADC_DIGI_RESULT_BYTES;
+      adc_continuous_handle_cfg_t adcHandleConfig = {
+         .max_store_buf_size = bufSize + safetyBuf,
+         .conv_frame_size = bufSize,
+      };
+      err=adc_continuous_new_handle(&adcHandleConfig, &contHandle);
+      if(ESP_OK != err) return pushEspRetVal(L, err, "new_handle");
+      adc_digi_pattern_config_t adcPattern[1]={
+         {
+            .atten = atten,
+            .channel = channel,
+            .unit = unitId,
+            .bit_width = bitwidth
+         }
+      };
+      adc_continuous_config_t adcConfig = {
+         .sample_freq_hz = fs,
+         .conv_mode = ADC_CONV_SINGLE_UNIT_1, /* Other options ? */
+         .format = ADC_OUTPUT_TYPE,
+         .pattern_num = 1,
+         .adc_pattern = adcPattern
+      };
+      err=adc_continuous_config(contHandle, &adcConfig);
+      if(ESP_OK != err) 
+      {
+         adc_continuous_deinit(contHandle);
+         return pushEspRetVal(L, err, "continuous_config");
+      }
+      adc_continuous_evt_cbs_t cbs = {
+         .on_conv_done = adcConvDoneInterruptHandler,
+         .on_pool_ovf = adcOvfInterruptHandler
+      };
+      err=adc_continuous_register_event_callbacks(contHandle,&cbs,(void*)pin);
+      if(ESP_OK == err)
+         err=adc_continuous_start(contHandle);
+      if(ESP_OK != err)
+      {
+         adc_continuous_deinit(contHandle);
+         return pushEspRetVal(L, err, "event_callbacks");
+      }
+   }
+   else
+   {
+      adc_oneshot_unit_init_cfg_t oneShotCfg = { .unit_id = unitId };
+      err=adc_oneshot_new_unit(&oneShotCfg, &oneShotHandle);
+      adc_oneshot_chan_cfg_t cfg = {
+         .bitwidth = bitwidth,
+         .atten = atten
+      };
+      err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
+   }
+   LADC* adc = (LADC*)lNewUdata(L,sizeof(LADC)+bufSize,BAADC,adcObjLib);
+   if(hasCB)
+   {
+      adc->type=2;
+      adc->u.contin.handle=contHandle;
+      adc->u.contin.bufSize=bufSize;
+      /* Userdata at -1 and callback ix is 4 */
+      adc->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
+   }
+   else
+   {
+      adc->type=1;
+      adc->u.oneShot.handle=oneShotHandle;
+   }
    adc->pin=pin;
-   adc->type=1; //PATCH
    adc->channel=channel;
    if(calibrate)
    {
@@ -355,7 +613,7 @@ static int ladc(lua_State* L)
       adc_cali_curve_fitting_config_t caCfg1 = {
          .unit_id = unitId,
          .atten = atten,
-         .bitwidth = ADC_BITWIDTH_DEFAULT,
+         .bitwidth = bitwidth,
       };
       err = adc_cali_create_scheme_curve_fitting(&caCfg1, &adc->caliHandle);
 #endif
@@ -363,16 +621,14 @@ static int ladc(lua_State* L)
       adc_cali_line_fitting_config_t caCfg2 = {
          .unit_id = unitId,
          .atten = atten,
-         .bitwidth = ADC_BITWIDTH_DEFAULT,
+         .bitwidth = bitwidth,
       };
       err = adc_cali_create_scheme_line_fitting(&caCfg2, &adc->caliHandle);
 #endif
       if(ESP_OK != err)
          return pushEspRetVal(L, err, "calibrate");
    }
-
-
-   activeGPOI[pin]=(struct LGPIO*)adc; /* signal pin in use */
+   activeGPOI[pin]=(LGPIO*)adc; /* mark pin in use */
    lua_pushinteger(L,pin);
    return 2;
 }
@@ -387,24 +643,6 @@ static int ladc(lua_State* L)
                                  GPIO
  *********************************************************************
  *********************************************************************/
-
-#define GPIO_QUEUE_SIZE 10
-
-typedef struct LGPIO
-{
-   int callbackRef;
-   gpio_num_t pin;
-   int queueLen;
-   gpio_mode_t mode;
-   U8 queue[GPIO_QUEUE_SIZE]; /* holds GPIO level(s) high/low */
-} LGPIO;
-
-typedef struct
-{
-   ThreadJob super;
-   gpio_num_t pin;
-} GpioThreadJob;
-
 
 static void GPIO_close(lua_State* L, LGPIO* o)
 {
@@ -453,7 +691,7 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 
 /* Create a GpioThreadJob and send job to the LThreadMgr instance.
  */
-static void dispatchGpioThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
+static void dispatchThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
 {
    GpioThreadJob* job;
    job = (GpioThreadJob*)ThreadJob_lcreate(sizeof(GpioThreadJob),lrun);
@@ -488,7 +726,7 @@ static void gpioEventCB(EventBrokerCallbackArg arg)
 
    /* If transitioning from empty to one element in the queue */
    if(1 == queueLen)
-      dispatchGpioThreadJob(arg.pin,executeLuaGpioCB);
+      dispatchThreadJob(arg.pin,executeLuaGpioCB);
 }
 
 
@@ -724,7 +962,7 @@ static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 static void ledEventCB(EventBrokerCallbackArg arg)
 {
    if(activeGPOI[arg.pin])
-      dispatchGpioThreadJob(arg.pin, executeLuaLedEventCB);
+      dispatchThreadJob(arg.pin, executeLuaLedEventCB);
 }
 
 
@@ -1425,6 +1663,27 @@ static int lmac(lua_State* L)
 }
 
 
+static int lerase(lua_State* L)
+{
+   const esp_partition_t *fat_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, NULL);
+   if (fat_partition == NULL)
+   {
+      printf("FAT partition not found.\n");
+   }
+   else
+   {
+      esp_err_t err = esp_partition_erase_range(fat_partition, 0, fat_partition->size);
+      if (err == ESP_OK)
+      {
+         printf("FAT partition erased.\n");
+         esp_restart();
+      }
+      else
+         printf("Failed to erase FAT partition. Error code: %d\n", err);
+   }
+   return 0;
+}
+
 static int lrestart(lua_State* L)
 {
    esp_restart();
@@ -1451,6 +1710,7 @@ static const luaL_Reg esp32Lib[] = {
    {"wconnect", lwconnect},
    {"mac", lmac},
    {"restart", lrestart},
+   {"erase", lerase},
    {NULL, NULL}
 };
 
@@ -1464,11 +1724,17 @@ void installESP32Libs(lua_State* L)
 {
    ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
-   eventBrokerQueue = xQueueCreate(20, sizeof(EventBrokerQueueNode));
+
+   static StaticQueue_t xStaticQueue;
+   eventBrokerQueue=xQueueCreateStatic(20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
+
    xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
    gpio_install_isr_service(0);
-   activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
+
+//   activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
+
    memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
+
    luaL_newlib(L, esp32Lib);
    lua_setglobal(L,"esp32");
    lua_getglobal(L, "ba");
