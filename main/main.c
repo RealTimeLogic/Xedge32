@@ -227,6 +227,7 @@ myErrHandler(BaFatalErrorCodes ecode1,
   abort();
 }
 
+
 /* Send data from the server's trace to ESP console */
 static void
 writeHttpTrace(char* buf, int bufLen)
@@ -235,7 +236,8 @@ writeHttpTrace(char* buf, int bufLen)
   printf("%s",buf);
 }
 
-/* Configures DISK IO for examples/xedge/src/xedge.c
+
+/* Configures DISK IO for the C file: examples/xedge/src/xedge.c
  */
 static int initDiskIo(DiskIo* io)
 {
@@ -612,15 +614,6 @@ app_main(void)
                     " \\/ _` |/ _` |/ _ \\\n  / . \\  __/ (_| | (_| |  __/\n"
                     " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
                     "__/ |     \n                  |___/      \n\n");
-#if 0
-   if(gotIP)
-   {
-      HttpTrace_printf(5,"%s",
-         "Since you have a network connection, there's no need to start LuaShell32.\n"
-         "Please use the Web-based REPL instead.");
-      return;
-   }
-#endif
    HttpTrace_printf(5,"LuaShell32 ready.\n");
    for(;;)
    {
@@ -680,7 +673,8 @@ static void dbgThreads()
       else if(b == f->exit) bIx++;
    }
    if(bIx > aIx) a=b;
-   /* Print all thread stacks. This can be decoded using xtensa-esp32-elf-addr2line
+   /* Print all thread stacks. This can be decoded using
+    * xtensa-esp32-elf-addr2line
     */
    for(UBaseType_t i = 0 ; i < snaps ; i++)
    {

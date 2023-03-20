@@ -247,7 +247,8 @@ static void eventBrokerTask(void *params)
 
 
 struct LADC;
-typedef int (*AdcLuaFilter)(ThreadJob* jb, int msgh, struct LADC* adc, uint32_t rLen);
+typedef int (*AdcLuaFilter)(
+   ThreadJob* jb, int msgh, struct LADC* adc, uint32_t rLen);
 
 typedef struct LADC
 {
@@ -263,6 +264,7 @@ typedef struct LADC
       struct {
          AdcLuaFilter filter;
          adc_continuous_handle_t handle;
+         SemaphoreHandle_t stopSem;
          int callbackRef;
          size_t bufSize;
          uint8_t running;
@@ -273,20 +275,49 @@ typedef struct LADC
 } LADC;
 
 
+/* It is an ESP-IDF requirement that the adc_continuous_start/stop
+   functions run from the same task. We, therefore, use two callbacks
+   for starting (adcStartContinuousCB) and stopping continuous
+   mode. These two callbacks run in the context of the
+   eventBrokerTask. This callback is triggered by ADC_close().
+ */
+static void adcStopContinuousCB(EventBrokerCallbackArg arg)
+{
+   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   baAssert(adc);
+   if(adc)
+   {
+      activeGPOI[arg.pin]=0;
+      adc_continuous_stop(adc->u.contin.handle);
+      adc_continuous_deinit(adc->u.contin.handle);
+      xSemaphoreGive(adc->u.contin.stopSem); /* Continue with ADC_close() */
+   }
+}
+
+
 static void ADC_close(lua_State* L, LADC* o)
 {
    if(o && o->type)
    {
-      activeGPOI[o->pin]=0;
-      if(1 == o->type)
+      int type = o->type;
+      o->type=0;
+      if(1 == type)
       {
          ECHK(adc_oneshot_del_unit(o->u.oneShot.handle));
       }
       else
       {
-         adc_continuous_stop(o->u.contin.handle);
-         adc_continuous_deinit(o->u.contin.handle);
+         o->u.contin.stopSem = xSemaphoreCreateBinary();
+         if( ! o->u.contin.stopSem ) baFatalE(FE_MALLOC,0);
+         EventBrokerQueueNode n = {
+            .callback=adcStopContinuousCB,.arg.pin=(gpio_num_t)o->pin};
+         ThreadMutex_release(soDispMutex);
+         xQueueSend(eventBrokerQueue, &n, portMAX_DELAY);
+         xSemaphoreTake(o->u.contin.stopSem, portMAX_DELAY);
+         ThreadMutex_set(soDispMutex);
+         vSemaphoreDelete(o->u.contin.stopSem);
       }
+      activeGPOI[o->pin]=0;
       if(o->caliHandle)
       {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
@@ -295,7 +326,6 @@ static void ADC_close(lua_State* L, LADC* o)
          ECHK(adc_cali_delete_scheme_line_fitting(o->caliHandle));
 #endif
       }
-      o->type=0;
    }
 }
 
@@ -418,13 +448,13 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          if(ESP_OK == err)
          {
             adc->u.contin.running=FALSE;
-            if(adc->u.contin.overflow)
-               goto L_err;
             if(adc->u.contin.filter(jb, msgh, adc, rLen))
             {
                ADC_close(L,adc);
                break;
             }
+            if(adc->u.contin.overflow)
+               goto L_err;
          }
          else if(ESP_ERR_TIMEOUT == err)
          {
@@ -502,6 +532,25 @@ static IRAM_ATTR bool adcConvDoneInterruptHandler(
 }
 
 
+/* This CB runs in the context of the eventBrokerTask.
+   See the comment in adcStopContinuousCB() for details on this construction.
+ */
+static void adcStartContinuousCB(EventBrokerCallbackArg arg)
+{
+   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   baAssert(adc);
+   if(adc)
+   {
+      esp_err_t err=adc_continuous_start(adc->u.contin.handle);
+      if(ESP_OK != err)
+      { /* We use the 'overflow' event to signal that we could not start */
+         adc->u.contin.overflow=TRUE;
+         dispatchThreadJob(arg.pin, adcExecuteLuaEventCB);
+      }
+   }
+}
+
+
 static const luaL_Reg adcObjLib[] = {
    {"read", ADC_lread},
    {"close", ADC_lclose},
@@ -552,7 +601,9 @@ static int ladc(lua_State* L)
    if(hasCB) /* continuous mode */
    {
       const char* f = balua_checkStringField(L, 3, "filter");
-      filter = 'd' == *f ? adcDataFilter : ('m' == *f ? adcMeanFilter : (void*)throwInvArg(L, "filter"));
+      filter = 'd' == *f ? adcDataFilter :
+         ('m' == *f ? adcMeanFilter :
+          (void*)throwInvArg(L, "filter"));
 
       /* frequency sample */
       uint32_t fs=balua_getIntField(L,3,"fs",SOC_ADC_SAMPLE_FREQ_THRES_LOW);
@@ -587,25 +638,22 @@ static int ladc(lua_State* L)
          .adc_pattern = adcPattern
       };
       err=adc_continuous_config(contHandle, &adcConfig);
+      if(ESP_OK == err)
+      {
+         adc_continuous_evt_cbs_t cbs = {
+            .on_conv_done = adcConvDoneInterruptHandler,
+            .on_pool_ovf = adcOvfInterruptHandler
+         };
+         err=adc_continuous_register_event_callbacks(
+            contHandle,&cbs,(void*)pin);
+      }
       if(ESP_OK != err) 
       {
          adc_continuous_deinit(contHandle);
          return pushEspRetVal(L, err, "continuous_config");
       }
-      adc_continuous_evt_cbs_t cbs = {
-         .on_conv_done = adcConvDoneInterruptHandler,
-         .on_pool_ovf = adcOvfInterruptHandler
-      };
-      err=adc_continuous_register_event_callbacks(contHandle,&cbs,(void*)pin);
-      if(ESP_OK == err)
-         err=adc_continuous_start(contHandle);
-      if(ESP_OK != err)
-      {
-         adc_continuous_deinit(contHandle);
-         return pushEspRetVal(L, err, "event_callbacks");
-      }
    }
-   else
+   else /* Oneshot mode */
    {
       adc_oneshot_unit_init_cfg_t oneShotCfg = { .unit_id = unitId };
       err=adc_oneshot_new_unit(&oneShotCfg, &oneShotHandle);
@@ -613,9 +661,16 @@ static int ladc(lua_State* L)
          .bitwidth = bitwidth,
          .atten = atten
       };
-      err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
+      if(ESP_OK == err)
+         err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
+      if(ESP_OK != err)
+      {
+         adc_oneshot_del_unit(oneShotHandle);
+         return pushEspRetVal(L, err, "oneshot");
+      }
    }
    LADC* adc = (LADC*)lNewUdata(L,sizeof(LADC)+bufSize,BAADC,adcObjLib);
+   activeGPOI[pin]=(LGPIO*)adc; /* mark pin in use */
    if(hasCB)
    {
       adc->u.contin.filter=filter;
@@ -624,6 +679,11 @@ static int ladc(lua_State* L)
       adc->u.contin.bufSize=bufSize;
       /* Userdata at -1 and callback ix is 4 */
       adc->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
+      EventBrokerQueueNode n = {
+         .callback=adcStartContinuousCB,.arg.pin=(gpio_num_t)pin};
+      ThreadMutex_release(soDispMutex);
+      xQueueSend(eventBrokerQueue, &n, portMAX_DELAY);
+      ThreadMutex_set(soDispMutex);
    }
    else
    {
@@ -653,7 +713,6 @@ static int ladc(lua_State* L)
       if(ESP_OK != err)
          return pushEspRetVal(L, err, "calibrate");
    }
-   activeGPOI[pin]=(LGPIO*)adc; /* mark pin in use */
    lua_pushinteger(L,pin);
    return 2;
 }
