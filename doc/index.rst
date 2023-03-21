@@ -39,6 +39,7 @@ Xedge ESP32
    source/GettingStarted
    source/LuaShell32
    source/xedge
+   source/ADC
    source/GPIO
    source/I2C
    source/PWM
