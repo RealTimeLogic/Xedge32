@@ -290,7 +290,6 @@ static void adcStopContinuousCB(EventBrokerCallbackArg arg)
    if(adc)
    {
       activeGPOI[arg.pin]=0;
-      printf(">>>>>> STOP ADC\n");
       adc_continuous_stop(adc->u.contin.handle);
       adc_continuous_deinit(adc->u.contin.handle);
       xSemaphoreGive(adc->u.contin.stopSem); /* Continue with ADC_close() */
@@ -1760,14 +1759,16 @@ static int lmac(lua_State* L)
 
 static int lerase(lua_State* L)
 {
-   const esp_partition_t *fat_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, NULL);
+   const esp_partition_t *fat_partition = esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, NULL);
    if (fat_partition == NULL)
    {
       printf("FAT partition not found.\n");
    }
    else
    {
-      esp_err_t err = esp_partition_erase_range(fat_partition, 0, fat_partition->size);
+      esp_err_t err = esp_partition_erase_range(
+         fat_partition, 0, fat_partition->size);
       if (err == ESP_OK)
       {
          printf("FAT partition erased.\n");
@@ -1819,17 +1820,12 @@ void installESP32Libs(lua_State* L)
 {
    ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
-
    static StaticQueue_t xStaticQueue;
-   eventBrokerQueue=xQueueCreateStatic(20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
-
+   eventBrokerQueue=xQueueCreateStatic(
+      20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
    xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
    gpio_install_isr_service(0);
-
-//   activeGPOI = (LGPIO**)baMalloc(sizeof(void*)*GPIO_NUM_MAX);
-
    memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
-
    luaL_newlib(L, esp32Lib);
    lua_setglobal(L,"esp32");
    lua_getglobal(L, "ba");

@@ -114,7 +114,7 @@ This example shows how to use the continuous mode with the 'mean' filter. We set
 
 **Example: Continuous Mode with 'data' filter**
 
-This example shows how to use the continuous mode with the 'data' filter. We set fs to the highest possible value and let bl be auto-adjusted. The callback prints the length of the binary data, which in this case is 960. If you do the math, you will find that bl will be auto-adjusted to 480. The data is twice this size since the data contains 16-bit PCM-encoded data.
+This example shows how to use the continuous mode with the 'data' filter. We set fs to the highest possible value and let bl be auto-adjusted. The callback prints the length of the binary data, which in this case is 960. If you do the math, you will find that bl will be auto-adjusted to 480. The data is twice this size since the data contains 16-bit PCM-encoded values.
 
 ::
 
@@ -127,7 +127,7 @@ This example shows how to use the continuous mode with the 'data' filter. We set
             end
             cnt = cnt + 1
         else
-            print(err)
+            trace(err)
         end
     end
 
