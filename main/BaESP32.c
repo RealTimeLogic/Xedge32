@@ -247,8 +247,7 @@ static void eventBrokerTask(void *params)
 
 
 struct LADC;
-typedef int (*AdcLuaFilter)(
-   ThreadJob* jb, int msgh, struct LADC* adc, uint32_t rLen);
+typedef int (*AdcLuaFilter)(lua_State* L, int msgh, struct LADC* adc);
 
 typedef struct LADC
 {
@@ -265,6 +264,9 @@ typedef struct LADC
          AdcLuaFilter filter;
          adc_continuous_handle_t handle;
          SemaphoreHandle_t stopSem;
+         uint16_t* blBuf;
+         int blLen;
+         int blBufIx;
          int callbackRef;
          size_t bufSize;
          uint8_t running;
@@ -288,6 +290,7 @@ static void adcStopContinuousCB(EventBrokerCallbackArg arg)
    if(adc)
    {
       activeGPOI[arg.pin]=0;
+      printf(">>>>>> STOP ADC\n");
       adc_continuous_stop(adc->u.contin.handle);
       adc_continuous_deinit(adc->u.contin.handle);
       xSemaphoreGive(adc->u.contin.stopSem); /* Continue with ADC_close() */
@@ -375,39 +378,27 @@ static int ADC_lread(lua_State* L)
 }
 
 
-static int adcDataFilter(ThreadJob* jb, int msgh, LADC* adc, uint32_t rLen)
+static int adcDataFilter(lua_State* L, int msgh, LADC* adc)
 {
-   luaL_Buffer lb;
-   lua_State* L = jb->Lt;
    balua_wkPush(L, adc->callbackRef);
-   luaL_buffinit(L, &lb);
-   uint16_t* buf = (uint16_t*)luaL_prepbuffsize(&lb, rLen*sizeof(uint16_t));
-   for(int i = 0; i < rLen; i += SOC_ADC_DIGI_RESULT_BYTES)
-   {
-      adc_digi_output_data_t *p = (void*)&adc->u.contin.buf[i];
-      uint16_t data = (uint16_t)ADC_GET_DATA(p);
-      *buf++=data;
-   }
-   luaL_pushresultsize(&lb, rLen*sizeof(uint16_t));
+   size_t size=adc->u.contin.blLen*sizeof(uint16_t);
+   lua_pushlstring(L, (char*)adc->u.contin.blBuf, size);
    return LUA_OK == lua_pcall(L, 1, 0, msgh) ? 0 : -1;
 }
 
 
-static int adcMeanFilter(ThreadJob* jb, int msgh, LADC* adc, uint32_t rLen)
+static int adcMeanFilter(lua_State* L, int msgh, LADC* adc)
 {
-   lua_State* L = jb->Lt;
    /* Calculate mean using Kahan summation */
    double sum = 0.0f;
    double c = 0.0f;
-   int stepSZ = rLen/SOC_ADC_DIGI_RESULT_BYTES/20; /* Max 20 samples */
-   if(stepSZ == 0) stepSZ=1;
    int n=0;
-   for(int i = 0; i < rLen; i += (SOC_ADC_DIGI_RESULT_BYTES*stepSZ))
+   int stepSZ = adc->u.contin.blLen/20; /* Max 20 samples */
+   if(stepSZ == 0) stepSZ=1;
+   for(int i = 0; i < adc->u.contin.blLen; i+=stepSZ)
    {
-      adc_digi_output_data_t *p = (void*)&adc->u.contin.buf[i];
-      uint32_t data = ADC_GET_DATA(p);
       double t = sum;
-      double y = data - c;
+      double y = adc->u.contin.blBuf[i] - c;
       sum = t + y;
       c = (t - sum) + y;
       n++;
@@ -439,7 +430,7 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    if(adc)
    {
       lua_State* L = jb->Lt;
-      for(;;)
+      while(adc->type)
       {
          uint32_t rLen;
          esp_err_t err =
@@ -447,14 +438,20 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
                                 adc->u.contin.bufSize, &rLen, 0);
          if(ESP_OK == err)
          {
-            adc->u.contin.running=FALSE;
-            if(adc->u.contin.filter(jb, msgh, adc, rLen))
+            for(int i = 0; i < rLen; i += SOC_ADC_DIGI_RESULT_BYTES)
             {
-               ADC_close(L,adc);
-               break;
+               adc_digi_output_data_t *p = (void*)&adc->u.contin.buf[i];
+               adc->u.contin.blBuf[adc->u.contin.blBufIx++]=ADC_GET_DATA(p);
+               if(adc->u.contin.blBufIx == adc->u.contin.blLen)
+               {
+                  adc->u.contin.blBufIx=0;
+                  if(adc->u.contin.filter(L, msgh, adc))
+                  {
+                     ADC_close(L,adc);
+                     return;
+                  }
+               }
             }
-            if(adc->u.contin.overflow)
-               goto L_err;
          }
          else if(ESP_ERR_TIMEOUT == err)
          {
@@ -470,15 +467,25 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
             balua_wkPush(L, adc->callbackRef);
             pushErr(L,adc->u.contin.overflow ?
                     "overflow" : esp_err_to_name(err));
-            adc->u.contin.overflow=FALSE;
             if(LUA_OK != lua_pcall(L, 2, 0, msgh))
             {
                ADC_close(L,adc);
-               break;
+               return;
             }
-            break;
+            if(adc->u.contin.overflow)
+            {
+               while(ESP_OK == adc_continuous_read(
+                        adc->u.contin.handle, adc->u.contin.buf,
+                        adc->u.contin.bufSize, &rLen, 0));
+               adc->u.contin.overflow=FALSE;
+            }
+            else
+               break;
          }
          lua_settop(L,0);
+         if(adc->u.contin.overflow)
+            goto L_err;
+         adc->u.contin.running=FALSE;
       }
       adc->u.contin.running=FALSE;
    }
@@ -570,10 +577,13 @@ static int ladc(lua_State* L)
    adc_continuous_handle_t contHandle;
    uint32_t bufSize=0; /* continuous mode */
    AdcLuaFilter filter=0;
+   int blLen=0;
+   int thresHigh = SOC_ADC_SAMPLE_FREQ_THRES_HIGH < 48000 ?
+      SOC_ADC_SAMPLE_FREQ_THRES_HIGH : 48000;
    if(lua_gettop(L) == 0)
    {
-      lua_pushinteger(L,SOC_ADC_SAMPLE_FREQ_THRES_LOW);
-      lua_pushinteger(L,SOC_ADC_SAMPLE_FREQ_THRES_HIGH);
+      lua_pushinteger(L, SOC_ADC_SAMPLE_FREQ_THRES_LOW);
+      lua_pushinteger(L, thresHigh);
       return 2;
    }
    adc_unit_t unitId = 1 == luaL_checkinteger(L, 1) ? ADC_UNIT_1 : ADC_UNIT_2;
@@ -608,14 +618,18 @@ static int ladc(lua_State* L)
       /* frequency sample */
       uint32_t fs=balua_getIntField(L,3,"fs",SOC_ADC_SAMPLE_FREQ_THRES_LOW);
       if(SOC_ADC_SAMPLE_FREQ_THRES_LOW > fs) fs=SOC_ADC_SAMPLE_FREQ_THRES_LOW;
-      else if(fs > 48000) fs=48000;
-      uint32_t minbl = fs / 200; /* max 200 Lua callbacks per second */
+      else if(fs > thresHigh) fs=thresHigh;
+      uint32_t minbl = fs / 100; /* max 100 Lua callbacks per second */
       /* block length i.e. number of samples, the conversion frame len */
-      uint32_t bl=balua_checkIntField(L,3,"bl");
-      if(bl < minbl) bl=minbl;
-      bufSize = bl * SOC_ADC_DIGI_RESULT_BYTES;
-      /* Add 400 millisecond of extra samples */
-      uint32_t safetyBuf = (fs / 25) * SOC_ADC_DIGI_RESULT_BYTES;
+      blLen=balua_checkIntField(L,3,"bl");
+      if(blLen < minbl) blLen=minbl;
+
+      /* The following calculations are based max 48K sampling.
+         This should generate a max of 48K/480 = 100 messages second */
+      bufSize = 480 * SOC_ADC_DIGI_RESULT_BYTES;
+      /* Add 800 milliseconds of extra samples */
+      uint32_t safetyBuf = (fs / 12) * SOC_ADC_DIGI_RESULT_BYTES;
+      if(safetyBuf < 2*bufSize) safetyBuf=2*bufSize;
       adc_continuous_handle_cfg_t adcHandleConfig = {
          .max_store_buf_size = bufSize + safetyBuf,
          .conv_frame_size = bufSize,
@@ -669,7 +683,8 @@ static int ladc(lua_State* L)
          return pushEspRetVal(L, err, "oneshot");
       }
    }
-   LADC* adc = (LADC*)lNewUdata(L,sizeof(LADC)+bufSize,BAADC,adcObjLib);
+   LADC* adc = (LADC*)lNewUdata(L, sizeof(LADC)+bufSize+blLen*sizeof(uint16_t),
+                                BAADC, adcObjLib);
    activeGPOI[pin]=(LGPIO*)adc; /* mark pin in use */
    if(hasCB)
    {
@@ -677,6 +692,8 @@ static int ladc(lua_State* L)
       adc->type=2;
       adc->u.contin.handle=contHandle;
       adc->u.contin.bufSize=bufSize;
+      adc->u.contin.blLen = blLen;
+      adc->u.contin.blBuf = (uint16_t*)(((char*)(adc+1)) + bufSize);
       /* Userdata at -1 and callback ix is 4 */
       adc->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
       EventBrokerQueueNode n = {
@@ -850,22 +867,16 @@ static LGPIO* GPIO_checkUD(lua_State* L)
 
 static int GPIO_value(lua_State* L)
 {
+
    LGPIO* o = GPIO_checkUD(L);
-   if(GPIO_MODE_OUTPUT == o->mode || GPIO_MODE_OUTPUT_OD == o->mode)
+   if( GPIO_MODE_OUTPUT == o->mode || GPIO_MODE_OUTPUT_OD == o->mode ||
+       lua_isboolean(L, 2))
    {
-     L_write:
       return pushEspRetVal(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)),0);
    }
    else
    {
-      if(lua_isboolean(L, 2))
-      {
-         goto L_write;
-      }
-      else
-      {
-         lua_pushboolean(L,gpio_get_level(o->pin));
-      }
+      lua_pushboolean(L,gpio_get_level(o->pin));
    }
    return 1;
 }
