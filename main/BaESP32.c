@@ -1780,9 +1780,17 @@ static int lerase(lua_State* L)
    return 0;
 }
 
-static int lrestart(lua_State* L)
+static int lexecute(lua_State* L)
 {
-   esp_restart();
+   const char* cmd = luaL_checkstring(L,1);
+   if(cmd[0] == 'e')
+      lerase(L);
+   else if(cmd[0] == 'r')
+      esp_restart();
+   else if(cmd[0] == 'k')
+      manageConsole(false);
+   else
+      luaL_argerror(L, 1, cmd);
    return 0;
 }
 
@@ -1805,8 +1813,7 @@ static const luaL_Reg esp32Lib[] = {
    {"wscan", lwscan},
    {"wconnect", lwconnect},
    {"mac", lmac},
-   {"restart", lrestart},
-   {"erase", lerase},
+   {"execute", lexecute},
    {NULL, NULL}
 };
 

@@ -11,7 +11,7 @@ OneShot Mode
 
 To use the OneShot Mode, you can call the following function:
 
-::
+.. code-block:: lua
 
     esp32.adc(unit, channel [, cfg])
 
@@ -31,7 +31,7 @@ The ``esp32.adc()`` function returns an ADC object (``adc``) and the GPIO pin nu
 
 This example demonstrates how to open ADC unit 1, channel 0, and poll for data every second using a timer. The ADC object is configured to return both raw data and millivolts.
 
-::
+.. code-block:: lua
 
     local adc, pin = esp32.adc(1, 0, {volt = true})
     if adc then
@@ -56,7 +56,7 @@ The Continuous Mode uses interrupts to sample the ADC at a high frequency. This 
 
 To use the Continuous Mode, call the following function:
 
-::
+.. code-block:: lua
 
     esp32.adc(unit, channel, cfg)
 
@@ -73,7 +73,7 @@ The 'mean' filter provides a mean value of the sampled values.
 
 **Callback with 'data' filter**
 
-::
+.. code-block:: lua
 
     function mycallback(data, err)
     
@@ -82,7 +82,7 @@ The 'mean' filter provides a mean value of the sampled values.
 
 **Callback with 'mean' filter**
 
-::
+.. code-block:: lua
 
     function mycallback(raw, volt)
     
@@ -93,7 +93,7 @@ The 'mean' filter provides a mean value of the sampled values.
 
 This example shows how to use the continuous mode with the 'mean' filter. We set fs and bl to zero, letting them be auto-adjusted. On an ESP32, fs will be set to 20000, and bl will be set to 200, which causes the callback to be called at the highest rate. We only print every 100th value in the callback to limit the amount of data being printed. You should see a printout every second.
 
-::
+.. code-block:: lua
 
     local cnt = 0
 
@@ -116,7 +116,7 @@ This example shows how to use the continuous mode with the 'mean' filter. We set
 
 This example shows how to use the continuous mode with the 'data' filter. We set fs to the highest possible value and let bl be auto-adjusted. The callback prints the length of the binary data, which in this case is 960. If you do the math, you will find that bl will be auto-adjusted to 480. The data is twice this size since the data contains 16-bit PCM-encoded values.
 
-::
+.. code-block:: lua
 
     local cnt = 0
 

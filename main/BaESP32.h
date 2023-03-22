@@ -18,7 +18,7 @@ extern QueueHandle_t eventBrokerQueue;
 void init_dlmalloc(char* heapstart, char* heapend); /* BAS.c */
 void barracuda(void); /* xedge.c */
 void installESP32Libs(lua_State* L); /* BaESP32.c */
-void consoleInit(void); /* console.c */
+void manageConsole(bool start); /* console.c */
 esp_err_t wconnect(const char* ssid, const char* pwd);
 void wifiScan(int print, lua_State* L, /* main.c */
               void (*cb)(lua_State* L, const uint8_t* ssid, int rssi,

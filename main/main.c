@@ -601,7 +601,7 @@ void
 app_main(void)
 {
    initComponents();
-   consoleInit();
+   manageConsole(true);
    for(int i = 0; i < 50 ; i++)
    {
       if(gotIP) break;
@@ -620,7 +620,6 @@ app_main(void)
       char* line = linenoise("> ");
       if(line == NULL || !line[0])
          continue;
-
 #ifdef ADD_THREAD_DBG
       if( ! strcmp(line, "threads") )
       { 
@@ -628,7 +627,6 @@ app_main(void)
          continue;
       }
 #endif
-
       size_t left = luaLineBuffer.size - luaLineBuffer.ix;
       size_t len = strlen(line);
       if (left < len)
