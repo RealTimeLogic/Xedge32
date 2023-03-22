@@ -24,6 +24,7 @@ void wifiScan(int print, lua_State* L, /* main.c */
               void (*cb)(lua_State* L, const uint8_t* ssid, int rssi,
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel));
+void eventBrokerTask(void *params);
 
 /*
   The LThreadMgr created and configured in xedge.c

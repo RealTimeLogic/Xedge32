@@ -48,7 +48,7 @@ if page.smq then
    end
 else
    collectgarbage()
-   local ok,err=esp32.ledtimer{
+   local ok,err=esp32.pwmtimer{
       mode="LOW", -- speed_mode
       bits=bits, -- duty_resolution (bits)
       timer=0, -- timer_num
@@ -57,7 +57,7 @@ else
    trace(ok,err)
    if ok then
       local duty = 2000 / 20000 * 100
-      local led,err=esp32.ledchannel{
+      local pwm,err=esp32.pwmchannel{
          mode="LOW",
          channel=1,
          timer=0, -- timer_sel
@@ -76,7 +76,7 @@ else
          local function servo(d)
             angle=d.angle
             trace("Angle", angle)
-            led:duty(calculatePwmDutyCycle(angle))
+            pwm:duty(calculatePwmDutyCycle(angle))
          end
          smq:subscribe("servo",{json=true,onmsg=servo})
          page.smq=smq

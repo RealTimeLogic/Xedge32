@@ -48,6 +48,21 @@ struct {
 
 static const char TAG[]={"X"};
 
+/* This buffer is used as the memory for the eventBrokerQueue, which
+ * serves various messaging purposes, including sending messages from
+ * interrupts. On an ESP32, this buffer requires the IRAM_ATTR
+ * attribute. However, for the ESP32-S3, this attribute appears
+ * unnecessary and must be disabled as enabling it results in a
+ * rst:0x8 (TG1WDT_SYS_RST) error when Wi-Fi connects and
+ * execXedgeEvent() is invoked from the onWifiEvent() function.
+ */
+static
+#if CONFIG_IDF_TARGET_ESP32S3
+#else
+IRAM_ATTR
+#endif
+uint8_t eventBrokerQueueBuf[20*sizeof(EventBrokerQueueNode)];
+
 static U8 gotIP=FALSE; /* if IP set */
 static U8 gotSdCard=FALSE;
 static const char mountPoint[]={"/sdcard"};
@@ -188,6 +203,24 @@ void luaopen_AUX(lua_State* L)
    Lg=L;
 #endif
    installESP32Libs(L);
+
+   /* Delay execution until this point to avoid generating any events
+    * that might use the soDispMutex before it is initialized. The
+    * semaphore is initialized within the installESP32Libs function.
+    */
+   char ssid[sizeof(((wifi_config_t*)0)->sta.ssid)];
+   char password[sizeof(((wifi_config_t*)0)->sta.password)];
+   size_t size=sizeof(ssid);
+   if(ESP_OK == nvs_get_str(nvsh,"ssid",ssid, &size))
+   {
+      size=sizeof(password);
+      if(ESP_OK == nvs_get_str(nvsh,"password",password,&size) && *ssid)
+      {
+         printf("Connecting to: %s\n",ssid);
+         wconnect(ssid,password);
+      }
+   }
+
    if(gotSdCard)
    {
       /* Will not GC before VM terminates */
@@ -553,7 +586,7 @@ static void initComponents()
    ESP_ERROR_CHECK(err);
    ESP_ERROR_CHECK(esp_netif_init());
    ESP_ERROR_CHECK(esp_event_loop_create_default());
-   ESP_ERROR_CHECK(nvs_open("WiFi", NVS_READWRITE, &nvsh));
+   ESP_ERROR_CHECK(nvs_open("xedge", NVS_READWRITE, &nvsh));
 
    /* Fixme rewrite to not use EXAMPLE_xxxx */
 
@@ -578,18 +611,11 @@ static void initComponents()
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
 
-   char ssid[sizeof(((wifi_config_t*)0)->sta.ssid)];
-   char password[sizeof(((wifi_config_t*)0)->sta.password)];
-   size_t size=sizeof(ssid);
-   if(ESP_OK == nvs_get_str(nvsh,"ssid",ssid, &size))
-   {
-      size=sizeof(password);
-      if(ESP_OK == nvs_get_str(nvsh,"password",password,&size) && *ssid)
-      {
-         printf("Connecting to: %s\n",ssid);
-         wconnect(ssid,password);
-      }
-   }
+   static StaticQueue_t xStaticQueue;
+   eventBrokerQueue=xQueueCreateStatic(
+      20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
+   xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
+   gpio_install_isr_service(0);
 
    /* Using BAS thread porting API */
    Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);

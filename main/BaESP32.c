@@ -84,7 +84,6 @@ ThreadMutex* soDispMutex;
   A mutex used for protecting small regions
 */
 static ThreadMutex rMutex;
-
 #define GPIO_QUEUE_SIZE 10 /* See executeLuaGpioCB() */
 
 typedef struct
@@ -102,12 +101,8 @@ typedef struct
    gpio_num_t pin;
 } GpioThreadJob;
 
-
 /* Array of pointers with len GPIO_NUM_MAX */
 static LGPIO* activeGPOI[GPIO_NUM_MAX];
-static IRAM_ATTR uint8_t eventBrokerQueueBuf[20*sizeof(EventBrokerQueueNode)];
-
-
 
 
 /*********************************************************************
@@ -134,6 +129,11 @@ static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
 {
    if(ESP_ERR_INVALID_ARG == err)
       throwInvArg(L, msg ? msg : "");
+   if(ESP_OK == err)
+   {
+      lua_pushboolean(L, TRUE);
+      return 1;
+   }
    const char* emsg=esp_err_to_name(err);
    lua_pushnil(L);
    if(msg)
@@ -212,7 +212,7 @@ QueueHandle_t eventBrokerQueue;
  * dispatches them to a callback function running in the context of an
  * LThreadMgr thread.
  */
-static void eventBrokerTask(void *params)
+void eventBrokerTask(void *params)
 {
    (void)params;
    for(;;)
@@ -1825,14 +1825,9 @@ static const luaL_Reg basLib[] = {
 
 void installESP32Libs(lua_State* L)
 {
+   memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
    ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
-   static StaticQueue_t xStaticQueue;
-   eventBrokerQueue=xQueueCreateStatic(
-      20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
-   xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
-   gpio_install_isr_service(0);
-   memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
    luaL_newlib(L, esp32Lib);
    lua_setglobal(L,"esp32");
    lua_getglobal(L, "ba");
