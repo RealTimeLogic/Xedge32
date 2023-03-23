@@ -125,7 +125,7 @@ static void pushErr(lua_State* L, const char* msg)
 }
 
 
-static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
+int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
 {
    if(ESP_ERR_INVALID_ARG == err)
       throwInvArg(L, msg ? msg : "");
@@ -1795,6 +1795,7 @@ static int lexecute(lua_State* L)
 
 
 
+
 /*********************************************************************
  *********************************************************************
                              Install ESP32
@@ -1814,6 +1815,7 @@ static const luaL_Reg esp32Lib[] = {
    {"wconnect", lwconnect},
    {"mac", lmac},
    {"execute", lexecute},
+   {"sdcard", lsdcard},
    {NULL, NULL}
 };
 

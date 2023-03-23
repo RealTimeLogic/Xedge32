@@ -40,6 +40,20 @@ Connect to a Wi-Fi network by providing the SSID and password. This function sta
 
 You can also call this function to disconnect from a network by calling it without arguments, or to connect to a new network.
 
+esp32.sdcard(clk, cmd, d0)
+---------------------------
+
+You can register a new disk named 'sd' if your ESP32 board includes an SDMMC interface. The `IO interface <https://realtimelogic.com/ba/doc/?url=lua.html#ba_ioinfo>`_ can then be opened by calling ``ba.openio("sd")``.
+
+This function returns ``nil, error`` if it is unable to detect the SD card. Upon successfully configuring the settings, the function saves the values in the NVRAM and reboots the system. To remove existing settings, call this function without any arguments.
+
+The example below shows how to set the GPIO pins CLK, CMD, and D0 for the Freenove ESP32-S3-WROOM CAM Board.
+
+.. code-block:: lua
+
+   esp32.sdcard(39, 38, 40)
+
+
 
 esp32.execute(command)
 -------------------------

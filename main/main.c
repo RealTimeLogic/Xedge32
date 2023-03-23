@@ -524,8 +524,7 @@ void wifiScan(int print, lua_State* L,
 }
 
 
-
-static void openSdCard()
+static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
 {
    esp_err_t ret;
    esp_vfs_fat_sdmmc_mount_config_t mountCfg = {
@@ -534,7 +533,6 @@ static void openSdCard()
       .allocation_unit_size = 16 * 1024
    };
    sdmmc_card_t *card;
-   ESP_LOGD(TAG, "Initializing SD card");
    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
    sdmmc_slot_config_t slotCfg = SDMMC_SLOT_CONFIG_DEFAULT();
 #ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
@@ -542,19 +540,18 @@ static void openSdCard()
 #else
    slotCfg.width = 1;
 #endif
-#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
-   slotCfg.clk = CONFIG_EXAMPLE_PIN_CLK;
-   slotCfg.cmd = CONFIG_EXAMPLE_PIN_CMD;
-   slotCfg.d0 = CONFIG_EXAMPLE_PIN_D0;
+   slotCfg.clk = cfg->clk;
+   slotCfg.cmd = cfg->cmd;
+   slotCfg.d0 = cfg->d0;
 #ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+#error not implemented
    slotCfg.d1 = CONFIG_EXAMPLE_PIN_D1;
    slotCfg.d2 = CONFIG_EXAMPLE_PIN_D2;
    slotCfg.d3 = CONFIG_EXAMPLE_PIN_D3;
 #endif
-#endif
    slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
    ret = esp_vfs_fat_sdmmc_mount(mountPoint,&host,&slotCfg,&mountCfg,&card);
-   if (ret != ESP_OK) 
+   if(ESP_OK != ret)
    {
       if(ret == ESP_ERR_TIMEOUT)
          ESP_LOGI(TAG, "SD card not detected");
@@ -562,20 +559,57 @@ static void openSdCard()
          ESP_LOGE(TAG, "Mounting SD card failed");
       else
          ESP_LOGE(TAG, "Cannot initialize SD card (%s)",esp_err_to_name(ret));
-      return;
+      return ret;
    }
    ESP_LOGI(TAG, "SD card mounted");
    sdmmc_card_print_info(stdout, card);
    gotSdCard=true;
+   return ESP_OK;
 }
+
+/* esp32.sdcard() */
+int lsdcard(lua_State* L)
+{
+   if(lua_gettop(L))
+   {
+      sdmmc_slot_config_t cfg = {
+         .clk = luaL_checkinteger(L, 1),
+         .cmd = luaL_checkinteger(L, 2),
+         .d0 = luaL_checkinteger(L, 3)
+      };
+      if(cfg.clk < GPIO_NUM_0 || cfg.clk >= GPIO_NUM_MAX ||
+         cfg.cmd < GPIO_NUM_0 || cfg.cmd >= GPIO_NUM_MAX ||
+         cfg.d0 < GPIO_NUM_0 || cfg.d0 >= GPIO_NUM_MAX)
+      {
+         luaL_argerror(L, 1, "Invalid GPIO");
+      }
+      esp_err_t err = openSdCard(&cfg);
+      if(ESP_OK == err)
+      {
+         char buf[3];
+         baConvBin2Hex(buf, cfg.clk); buf[2]=0;
+         nvs_set_str(nvsh,"SdClk", buf);
+         baConvBin2Hex(buf, cfg.cmd); buf[2]=0;
+         nvs_set_str(nvsh,"SdCmd", buf);
+         baConvBin2Hex(buf, cfg.d0); buf[2]=0;
+         nvs_set_str(nvsh,"SdD0", buf);
+         esp_restart();
+      }
+      return pushEspRetVal(L, err, 0);
+   }
+   lua_pushboolean(L,
+                   ESP_OK == nvs_erase_key(nvsh,"SdClk") &&
+                   ESP_OK == nvs_erase_key(nvsh,"SdCmd") &&
+                   ESP_OK == nvs_erase_key(nvsh,"SdD0"));
+   return 1;
+}
+
 
 
 
 static void initComponents()
 {
    static Thread t;
-   openSdCard();
-
    esp_err_t err = nvs_flash_init();
    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
    {
@@ -584,9 +618,25 @@ static void initComponents()
       err = nvs_flash_init();
    }
    ESP_ERROR_CHECK(err);
+
    ESP_ERROR_CHECK(esp_netif_init());
    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
    ESP_ERROR_CHECK(nvs_open("xedge", NVS_READWRITE, &nvsh));
+   char cmd[3]; char clk[3]; char d0[3];
+   size_t clkZ, cmdZ, d0Z;
+   clkZ = cmdZ = d0Z = 3;
+   if(ESP_OK == nvs_get_str(nvsh,"SdClk", clk, &clkZ) && 
+      ESP_OK == nvs_get_str(nvsh,"SdCmd", cmd, &cmdZ) && 
+      ESP_OK == nvs_get_str(nvsh,"SdD0", d0, &d0Z))
+   {
+      sdmmc_slot_config_t cfg = {
+         .clk = U32_hextoi(clk),
+         .cmd = U32_hextoi(cmd),
+         .d0 = U32_hextoi(d0)
+      };
+      openSdCard(&cfg);
+   }
 
    /* Fixme rewrite to not use EXAMPLE_xxxx */
 
