@@ -36,7 +36,7 @@ Note that this function takes some time to return.
 esp32.wconnect([ssid, password])
 --------------------------------
 
-Connect to a Wi-Fi network by providing the SSID and password. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`.
+Connect to a Wi-Fi network by providing the SSID and password. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The credentials are stored persistently in the NVRAM if the ESP32 successfully connects to the network.
 
 You can also call this function to disconnect from a network by calling it without arguments, or to connect to a new network.
 

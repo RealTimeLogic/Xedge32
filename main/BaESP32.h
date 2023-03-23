@@ -1,3 +1,4 @@
+#include "driver/gpio.h"
 #include <barracuda.h>
 
 typedef union {
@@ -25,9 +26,14 @@ void wifiScan(int print, lua_State* L, /* main.c */
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel));
 void eventBrokerTask(void *params);
+int lcam(lua_State* L);  /* BaCam.c */
+void lInitConfigTable(lua_State* L, int ix);
+void* lNewUdata(lua_State *L,size_t size,const char *tname,const luaL_Reg *l);
+
 
 /*
   The LThreadMgr created and configured in xedge.c
 */
 extern LThreadMgr ltMgr;
 extern ThreadMutex* soDispMutex; /* BaESP32.c */
+

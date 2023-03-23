@@ -154,8 +154,7 @@ static int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
      l: Registers all functions listed in l in metatable, if created.
  */
 
-static void* lNewUdata(
-   lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
+void* lNewUdata(lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
 {
    void* o = lua_newuserdatauv(L, size, 1);
    memset(o,0,size);
@@ -195,7 +194,7 @@ lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
 
 /* Checks if index 'ix' is a table and if not, creates a table at 'ix'.
  */
-static void lInitConfigTable(lua_State* L, int ix)
+void lInitConfigTable(lua_State* L, int ix)
 {
    if( ! lua_istable(L, ix) )
    {
@@ -1805,6 +1804,7 @@ static int lexecute(lua_State* L)
 
 static const luaL_Reg esp32Lib[] = {
    {"adc", ladc},
+   {"cam", lcam},
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
    {"pwmtimer", lLedTimer},
