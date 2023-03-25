@@ -8,14 +8,14 @@ The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor commu
 Usage
 -----
 
-To use this module, you first need to create a BME280 object by calling the ``bme280`` function and passing the following parameters:
+To use this module, you first need to create a BME280 object by calling the ``create`` function and passing the following parameters:
 
-module.bme280()
+module.create()
 ---------------
 
 .. code-block:: lua
 
-   bme=require"bme280".bme280(port, address, sda, scl, settings)
+   bme=require"bme280".create(port, address, sda, scl, settings)
 
 Create a BME280 object.
 
@@ -63,7 +63,7 @@ Here's an example of how to use the ``bme280`` module:
     local address = 0x76
     local sda = 5
     local scl = 6
-    local bme = bmeModule.bme280(port, address, sda, scl)
+    local bme = bmeModule.create(port, address, sda, scl)
     local temp, hum, pres = bme:read()
 
 This example creates a new BME280 object, reads the temperature, humidity, and pressure from the sensor, and stores the values in the ``temp``, ``hum``, and ``pres`` variables. Note that we've assumed that the I2C port, address, SDA, and SCL pins are specified as local variables. You may need to adjust these variables to fit your specific use case.

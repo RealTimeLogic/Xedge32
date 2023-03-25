@@ -540,14 +540,15 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
 #else
    slotCfg.width = 1;
 #endif
+#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
    slotCfg.clk = cfg->clk;
    slotCfg.cmd = cfg->cmd;
    slotCfg.d0 = cfg->d0;
 #ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-#error not implemented
-   slotCfg.d1 = CONFIG_EXAMPLE_PIN_D1;
-   slotCfg.d2 = CONFIG_EXAMPLE_PIN_D2;
-   slotCfg.d3 = CONFIG_EXAMPLE_PIN_D3;
+   slotCfg.d1 = cfg.d1;
+   slotCfg.d2 = cfg.d2;
+   slotCfg.d3 = cfg.d3;
+#endif
 #endif
    slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
    ret = esp_vfs_fat_sdmmc_mount(mountPoint,&host,&slotCfg,&mountCfg,&card);
@@ -570,16 +571,29 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
 /* esp32.sdcard() */
 int lsdcard(lua_State* L)
 {
+#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
    if(lua_gettop(L))
    {
       sdmmc_slot_config_t cfg = {
          .clk = luaL_checkinteger(L, 1),
          .cmd = luaL_checkinteger(L, 2),
          .d0 = luaL_checkinteger(L, 3)
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+         ,
+         .d1 = luaL_checkinteger(L, 4),
+         .d2 = luaL_checkinteger(L, 5),
+         .d3 = luaL_checkinteger(L, 6)
+#endif
       };
       if(cfg.clk < GPIO_NUM_0 || cfg.clk >= GPIO_NUM_MAX ||
          cfg.cmd < GPIO_NUM_0 || cfg.cmd >= GPIO_NUM_MAX ||
-         cfg.d0 < GPIO_NUM_0 || cfg.d0 >= GPIO_NUM_MAX)
+         cfg.d0 < GPIO_NUM_0 || cfg.d0 >= GPIO_NUM_MAX
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+         || cfg.d1 < GPIO_NUM_0 || cfg.d1 >= GPIO_NUM_MAX ||
+         cfg.d2 < GPIO_NUM_0 || cfg.d2 >= GPIO_NUM_MAX ||
+         cfg.d3 < GPIO_NUM_0 || cfg.d3 >= GPIO_NUM_MAX
+#endif
+         )
       {
          luaL_argerror(L, 1, "Invalid GPIO");
       }
@@ -593,6 +607,14 @@ int lsdcard(lua_State* L)
          nvs_set_str(nvsh,"SdCmd", buf);
          baConvBin2Hex(buf, cfg.d0); buf[2]=0;
          nvs_set_str(nvsh,"SdD0", buf);
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+         baConvBin2Hex(buf, cfg.d1); buf[2]=0;
+         nvs_set_str(nvsh,"SdD1", buf);
+         baConvBin2Hex(buf, cfg.d2); buf[2]=0;
+         nvs_set_str(nvsh,"SdD2", buf);
+         baConvBin2Hex(buf, cfg.d3); buf[2]=0;
+         nvs_set_str(nvsh,"SdD3", buf);
+#endif
          esp_restart();
       }
       return pushEspRetVal(L, err, 0);
@@ -600,10 +622,19 @@ int lsdcard(lua_State* L)
    lua_pushboolean(L,
                    ESP_OK == nvs_erase_key(nvsh,"SdClk") &&
                    ESP_OK == nvs_erase_key(nvsh,"SdCmd") &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdD0"));
+                   ESP_OK == nvs_erase_key(nvsh,"SdD0")
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+                   &&
+                   ESP_OK == nvs_erase_key(nvsh,"SdD1") &&
+                   ESP_OK == nvs_erase_key(nvsh,"SdD2") &&
+                   ESP_OK == nvs_erase_key(nvsh,"SdD3")
+#endif
+      );
    return 1;
+#else
+   return 0;
+#endif
 }
-
 
 
 
@@ -623,20 +654,42 @@ static void initComponents()
    ESP_ERROR_CHECK(esp_event_loop_create_default());
 
    ESP_ERROR_CHECK(nvs_open("xedge", NVS_READWRITE, &nvsh));
+#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
    char cmd[3]; char clk[3]; char d0[3];
    size_t clkZ, cmdZ, d0Z;
    clkZ = cmdZ = d0Z = 3;
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+   char d1[3]; char d2[3]; char d3[3];
+   size_t d1Z; size_t d2Z; size_t d3Z;
+#endif
    if(ESP_OK == nvs_get_str(nvsh,"SdClk", clk, &clkZ) && 
       ESP_OK == nvs_get_str(nvsh,"SdCmd", cmd, &cmdZ) && 
-      ESP_OK == nvs_get_str(nvsh,"SdD0", d0, &d0Z))
+      ESP_OK == nvs_get_str(nvsh,"SdD0", d0, &d0Z)
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+      &&
+      ESP_OK == nvs_get_str(nvsh,"SdD1", d1, &d1Z) &&
+      ESP_OK == nvs_get_str(nvsh,"SdD2", d2, &d2Z) &&
+      ESP_OK == nvs_get_str(nvsh,"SdD3", d3, &d3Z)
+#endif
+      )
    {
       sdmmc_slot_config_t cfg = {
          .clk = U32_hextoi(clk),
          .cmd = U32_hextoi(cmd),
          .d0 = U32_hextoi(d0)
+#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
+         ,
+         .d1 = U32_hextoi(d1)
+         .d2 = U32_hextoi(d2)
+         .d3 = U32_hextoi(d3)
+#endif
       };
       openSdCard(&cfg);
    }
+#else
+   sdmmc_slot_config_t cfgNotUsed = {0};
+   openSdCard(&cfgNotUsed);
+#endif
 
    /* Fixme rewrite to not use EXAMPLE_xxxx */
 
