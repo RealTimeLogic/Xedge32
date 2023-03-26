@@ -48,3 +48,189 @@ menu "SD/MMC Example Configuration"
     endif  # SOC_SDMMC_USE_GPIO_MATRIX
 
 endmenu
+
+menu "CAM Object Configuration"
+      
+config CAM_XCLK_FREQ
+    int "XCLK Frequency"
+    default "20000000"
+    help
+        The XCLK Frequency in Herz.
+      
+menu "Pin Configuration"
+    config CAM_D0
+        int "D0"
+        default "34"
+    config CAM_D1
+        int "D1"
+        default "13"
+    config CAM_D2
+        int "D2"
+        default "14"
+    config CAM_D3
+        int "D3"
+        default "35"
+    config CAM_D4
+        int "D4"
+        default "39"
+    config CAM_D5
+        int "D5"
+        default "38"
+    config CAM_D6
+        int "D6"
+        default "37"
+    config CAM_D7
+        int "D7"
+        default "36"
+    config CAM_XCLK
+        int "XCLK"
+        default "4"
+    config CAM_PCLK
+        int "PCLK"
+        default "25"
+    config CAM_VSYNC
+        int "VSYNC"
+        default "5"
+    config CAM_HREF
+        int "HREF"
+        default "27"
+    config CAM_SDA
+        int "SDA"
+        default "18"
+    config CAM_SCL
+        int "SCL"
+        default "23"
+    config CAM_RESET
+        int "RESET"
+        default "-1"
+endmenu
+
+choice CAM_PIXEL_FORMAT
+    prompt "Select the pixel format"
+    default PIXFORMAT_JPEG
+    help
+        Select the sensor output pixel format.
+
+    config PIXFORMAT_RGB565
+        bool "RGB565"
+        help
+            The RGB565 color format is the same as the RGB555 color format, 
+            except that 6 bits are used for the green value instead of 5. 
+            Therefore, all 16 bits are in use.
+
+    config PIXFORMAT_YUV422
+        bool "YUV422"
+        help
+            4 bytes per 2 pixels.
+
+    config PIXFORMAT_GRAYSCALE
+        bool "GRAYSCALE"
+        help
+            The value of each pixel is a single sample representing only an amount of light, 
+            that is, it carries only intensity information.
+
+    config PIXFORMAT_JPEG
+        bool "JPEG"
+        help
+            JPEG compression.
+
+    config PIXFORMAT_RGB888
+        bool "RGB888"
+        help
+            uncompressed, 3 bytes for pixel.
+
+    config PIXFORMAT_RAW
+        bool "RAW"
+        help
+            raw.
+
+    config PIXFORMAT_RGB444
+        bool "RGB444"
+        help
+            2 bytes por pixel.
+
+    config PIXFORMAT_RGB555
+        bool "RGB555"
+        help
+            2 bytes por pixel.
+endchoice
+
+choice CAM_FRAME_SIZE
+    prompt "Select the frame size"
+    default FRAMESIZE_QVGA
+    help
+        Select the sensor output frame size.
+
+    config FRAMESIZE_96X96
+        bool "96x96"
+        help
+            96 x 96 pixeles.
+
+    config FRAMESIZE_QQVGA
+        bool "QQVGA"
+        help
+            160 x 120 pixeles.
+
+    config FRAMESIZE_QCIF     
+        bool "QCIF"
+        help
+            176 x 144 pixeles.
+
+    config FRAMESIZE_HQVGA
+        bool "HQVGA"
+        help
+            240 x 176.
+
+    config FRAMESIZE_240X240
+        bool "240x240"
+        help
+            240 x 240 pixeles.
+
+    config FRAMESIZE_QVGA
+        bool "QVGA"
+        help
+            320 x 240 pixeles.
+
+    config FRAMESIZE_CIF
+        bool "CIF"
+        help
+            400 x 296 pixeles.
+
+    config FRAMESIZE_HVGA     
+        bool "HVGA"
+        help
+            480 x 320 pixeles.
+    
+    config FRAMESIZE_VGA     
+        bool "VGA"
+        help
+            640 x 480 pixeles.
+
+    config FRAMESIZE_SVGA     
+        bool "SVGA"
+        help
+            800 x 600 pixeles.
+
+    config FRAMESIZE_XGA     
+        bool "XGA"
+        help
+            1024 x 768 pixeles.
+
+    config FRAMESIZE_HD     
+        bool "HD"
+        help
+            1280 x 720 pixeles.
+endchoice
+
+config CAM_ENABLE_VERTICAL_FLIP
+	bool "Enable vertical flip on camera output"
+	default n
+	help
+		Flip the frame of the the camera module.
+
+config CAM_ENABLE_HORIZONTAL_MIRROR
+    bool "Enable horizontal mirror on camera output"
+	default n
+	help
+		Mirror the frame of the the camera module.
+endmenu
