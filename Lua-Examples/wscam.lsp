@@ -44,28 +44,22 @@ if request:header"Sec-WebSocket-Key" then
       if not page.cam then
          trace"Creating cam object"
          local function sendMessage(data,txtFrame)
+            page.messages = page.messages + page.clients
             for s in pairs(sockets) do
-               if not s:write(#data <= 0xFFFF and data or "", txtFrame) then
-                  s:close()
-                  sockets[s]=nil
-               end
-               page.messages = page.messages + 1
+               s:write(#data <= 0xFFFF and data or "", txtFrame)
             end
          end
          function page.sendImage()
-            if page.pending > 1 then return end
-            while 0 ~= page.pending do
-               if not page.cam then return end
-               local img,err = page.cam:read()
-               if not img then
-                  local msg = "Reading failed: "..(err or "")
-                  trace(msg)
-                  sendMessage(msg,true)
-                  break
-               end
+            if not page.cam then return end
+            local img,err = page.cam:read()
+            if img then
                sendMessage(img,false)
-               page.pending = page.pending - 1
+            else
+               local msg = "Reading failed: "..(err or "")
+               trace(msg)
+               sendMessage(msg,true)
             end
+            page.processing=false
          end
          local err
          page.cam,err=esp32.cam(cfg)
@@ -77,24 +71,27 @@ if request:header"Sec-WebSocket-Key" then
             ba.sleep(100) esp32.execute"restart" -- PATCH temporary test
             return
          end
-         page.pending=1
          page.clients=0
          page.messages=0
+         page.processing=true
          page.sendImage()
       end
       page.clients=page.clients+1
+      local function decMessages()
+         if page.messages > 0 then page.messages = page.messages - 1 end
+      end
       s:event(function(s)
                  while s:read() do
-                    page.messages = page.messages - 1
-                    if page.messages < page.clients and page.pending < 2 then
-                       page.pending = page.pending + 1
+                    decMessages()
+                    if 0 == page.messages and not page.processing then
+                       page.processing=true
                        ba.thread.run(page.sendImage)
                     end
                  end
                  sockets[s]=nil
                  trace"Closing client"
                  page.clients=page.clients-1
-                 page.messages = page.messages - 1
+                 decMessages()
                  if 0 == page.clients then
                     trace"Closing cam"
                     page.cam:close()
@@ -173,10 +170,7 @@ function connect() {
         }
         else { // Text, error message
             msg.textContent = "Server error "+event.data;
-            ws.close()
-            if(intvTimer) clearInterval(intvTimer);
-            intvTimer=null;
-            setTimeout(connect, 5000);
+            ws.close();
         }
     };
     ws.onclose = function() {
