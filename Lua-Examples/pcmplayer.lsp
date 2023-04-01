@@ -51,19 +51,14 @@ end
    var player = new PCMPlayer({
         encoding: 'Int16',
         channels: 1,
-        sampleRate: 20000,
-        flushingTime: 1000,
+        sampleRate: 17000,
+        flushingTime: 0,
         volume: 1
    });
 
      var ws = new WebSocket(socketURL);
      ws.binaryType = 'arraybuffer';
-     var start=true
      ws.addEventListener('message',function(event) {
-         if(start) {
-             alert("Wait a few seconds and then click OK");
-             start=false;
-         }
          var data = new Uint8Array(event.data);
          player.feed(data);
      });
