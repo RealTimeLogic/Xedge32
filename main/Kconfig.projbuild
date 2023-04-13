@@ -229,8 +229,43 @@ config CAM_ENABLE_VERTICAL_FLIP
 		Flip the frame of the the camera module.
 
 config CAM_ENABLE_HORIZONTAL_MIRROR
-    bool "Enable horizontal mirror on camera output"
+   bool "Enable horizontal mirror on camera output"
 	default n
 	help
 		Mirror the frame of the the camera module.
+
+choice CAM_GRAB
+    prompt "Mode of grabbing images"
+    default GRAB_WHEN_EMPTY
+    help
+        Select the camera capturing images mode.
+
+    config GRAB_WHEN_EMPTY
+        bool "EMPTY"
+        help
+            Fills buffers when they are empty. Less resources but first 'fb_count' frames might be old.
+
+    config GRAB_LATEST
+        bool "LATEST"
+        help
+            Except when 1 frame buffer is used, queue will always contain the last 'fb_count' frames.
+endchoice
+
+choice CAM_FB_COUNT
+    prompt "Number of frame buffers"
+    default FB_ONE
+    help
+        Select number of frame buffers.
+
+    config FB_ONE
+        bool "ONE"
+        help
+            Normal speed.
+
+    config FB_TWO
+        bool "TWO"
+        help
+            Two double speed.
+endchoice
+
 endmenu

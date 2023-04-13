@@ -1747,6 +1747,20 @@ static int lwconnect(lua_State* L)
    return pushEspRetVal(L,wconnect(ssid, pwd),0);
 }
 
+static int lwrssi(lua_State* L)
+{
+   wifi_ap_record_t ap_info;
+   
+   if(esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK)
+   {
+      ap_info.rssi = -127;
+   }
+
+   lua_pushinteger(L, ap_info.rssi);
+   
+   return 1;
+}
+
 static int lmac(lua_State* L)
 {
    uint8_t base[6];
@@ -1813,6 +1827,7 @@ static const luaL_Reg esp32Lib[] = {
    {"uart", luart},
    {"wscan", lwscan},
    {"wconnect", lwconnect},
+   {"wrssi", lwrssi},
    {"mac", lmac},
    {"execute", lexecute},
    {"sdcard", lsdcard},

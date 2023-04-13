@@ -9,11 +9,9 @@
 #include "esp_console.h"
 #include "esp_vfs_dev.h"
 #include "driver/uart.h"
+#include "driver/usb_serial_jtag.h"
 #include "linenoise/linenoise.h"
-
-#ifdef CONFIG_ESP_CONSOLE_USB_CDC
-#error This example is incompatible with USB CDC console.
-#endif // CONFIG_ESP_CONSOLE_USB_CDC
+#include "esp_vfs_usb_serial_jtag.h"
 
 void manageConsole(bool start)
 {
@@ -33,6 +31,8 @@ void manageConsole(bool start)
    fsync(fileno(stdout));
    /* Disable buffering on stdin */
    setvbuf(stdin, NULL, _IONBF, 0);
+
+#if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
    esp_vfs_dev_uart_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CR);
    /* Move the caret to the beginning of the next line on '\n' */
@@ -57,12 +57,31 @@ void manageConsole(bool start)
    ESP_ERROR_CHECK( uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config) );
    /* Tell VFS to use UART driver */
    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
+
+#elif defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
+   /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
+   esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+   /* Move the caret to the beginning of the next line on '\n' */
+   esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+   usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+
+   /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
+   ESP_ERROR_CHECK( usb_serial_jtag_driver_install(&usb_serial_jtag_config) );
+   
+   /* Tell vfs to use usb-serial-jtag driver */
+   esp_vfs_usb_serial_jtag_use_driver();
+#else
+#error Unsupported console type
+#endif
+  
    /* Initialize the console */
    esp_console_config_t console_config = {
       .max_cmdline_args = 8,
       .max_cmdline_length = 256
    };
    ESP_ERROR_CHECK( esp_console_init(&console_config) );
+   
    /* Configure linenoise line completion library */
    /* Enable multiline editing. If not set, long commands will scroll within
     * single line.
@@ -71,7 +90,7 @@ void manageConsole(bool start)
    /* Set command history size */
    linenoiseHistorySetMaxLen(10);
    /* Set command maximum length */
-   linenoiseSetMaxLineLen(console_config.max_cmdline_length);
+   linenoiseSetMaxLineLen(console_config.max_cmdline_length); //console_config.max_cmdline_length);
    /* Don't return empty lines */
    linenoiseAllowEmpty(false);
 }

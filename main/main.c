@@ -61,6 +61,7 @@ static
 #else
 IRAM_ATTR
 #endif
+
 uint8_t eventBrokerQueueBuf[20*sizeof(EventBrokerQueueNode)];
 
 static U8 gotIP=FALSE; /* if IP set */
@@ -545,9 +546,9 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
    slotCfg.cmd = cfg->cmd;
    slotCfg.d0 = cfg->d0;
 #ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-   slotCfg.d1 = cfg.d1;
-   slotCfg.d2 = cfg.d2;
-   slotCfg.d3 = cfg.d3;
+   slotCfg.d1 = cfg->d1; //cfg.d1;
+   slotCfg.d2 = cfg->d2; //cfg.d2;
+   slotCfg.d3 = cfg->d3; //cfg.d3;
 #endif
 #endif
    slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
@@ -679,8 +680,8 @@ static void initComponents()
          .d0 = U32_hextoi(d0)
 #ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
          ,
-         .d1 = U32_hextoi(d1)
-         .d2 = U32_hextoi(d2)
+         .d1 = U32_hextoi(d1),
+         .d2 = U32_hextoi(d2),
          .d3 = U32_hextoi(d3)
 #endif
       };
