@@ -1701,12 +1701,11 @@ static int luart(lua_State* L)
  *********************************************************************
  *********************************************************************/
 
-static void
-wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
+static int
+pushApInfo(lua_State* L, const uint8_t* ssid, int rssi,
          const char* authmode,const char*  pchiper,
          const char* gcipher, int channel)
 {
-   ThreadMutex_set(soDispMutex);
    lua_createtable(L, 0, 6);
    lua_pushstring(L,(const char*)ssid);
    lua_setfield(L,-2,"ssid");
@@ -1720,6 +1719,16 @@ wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
    lua_setfield(L,-2,"gcipher");
    lua_pushinteger(L,channel);
    lua_setfield(L,-2,"channel");
+   return 1;
+}
+
+static void
+wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
+         const char* authmode,const char*  pchiper,
+         const char* gcipher, int channel)
+{
+   ThreadMutex_set(soDispMutex);
+   pushApInfo(L,ssid,rssi,authmode,pchiper,gcipher,channel);
    lua_rawseti(L, -2, (int)lua_rawlen(L, -2) + 1); 
    ThreadMutex_release(soDispMutex);
 }
@@ -1747,19 +1756,22 @@ static int lwconnect(lua_State* L)
    return pushEspRetVal(L,wconnect(ssid, pwd),0);
 }
 
-static int lwrssi(lua_State* L)
-{
-   wifi_ap_record_t ap_info;
-   
-   if(esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK)
-   {
-      ap_info.rssi = -127;
-   }
 
-   lua_pushinteger(L, ap_info.rssi);
-   
-   return 1;
+static int lapinfo(lua_State* L)
+{
+   wifi_ap_record_t ap;
+   esp_err_t err = esp_wifi_sta_get_ap_info(&ap);
+   if(err == ESP_OK)
+   {
+      const char* pciphers;
+      const char* gcipher=wifiCipherType(
+         ap.pairwise_cipher, ap.group_cipher, false, &pciphers);
+      return pushApInfo(L,ap.ssid,ap.rssi,wifiAuthMode(ap.authmode, FALSE),
+                        pciphers,gcipher,ap.primary);
+   }
+   return pushEspRetVal(L,err,0);
 }
+
 
 static int lmac(lua_State* L)
 {
@@ -1827,7 +1839,7 @@ static const luaL_Reg esp32Lib[] = {
    {"uart", luart},
    {"wscan", lwscan},
    {"wconnect", lwconnect},
-   {"wrssi", lwrssi},
+   {"apinfo", lapinfo},
    {"mac", lmac},
    {"execute", lexecute},
    {"sdcard", lsdcard},

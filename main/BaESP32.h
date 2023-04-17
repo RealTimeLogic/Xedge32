@@ -32,6 +32,11 @@ void* lNewUdata(lua_State *L,size_t size,const char *tname,const luaL_Reg *l);
 int lsdcard(lua_State* L);
 int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg);
 
+const char* wifiCipherType(
+   int pcipher, int gcipher, int print, const char** pciphers);
+const char* wifiAuthMode(int authmode, int print);
+
+
 
 /*
   The LThreadMgr created and configured in xedge.c

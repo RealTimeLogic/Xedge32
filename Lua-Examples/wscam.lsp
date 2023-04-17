@@ -44,20 +44,33 @@ if request:header"Sec-WebSocket-Key" then
       if not page.cam then
          trace"Creating cam object"
          local function sendMessage(data,txtFrame)
-            page.messages = page.messages + page.clients
             for s in pairs(sockets) do
                s:write(#data <= 0xFFFF and data or "", txtFrame)
             end
          end
+         local function sendJson(data)
+            sendMessage(ba.json.encode(data),true)
+         end
+         local function sendImage(data)
+            page.messages = page.messages + page.clients
+            sendMessage(data)
+         end
+         
+         local cnt=0
          function page.sendImage()
             if not page.cam then return end
             local img,err = page.cam:read()
             if img then
+               if 0 == cnt % 10 then
+                  local ap=esp32.apinfo()
+                  sendJson{type="rssi",rssi=ap and ap.rssi or -100}
+               end
+               cnt=cnt+1
                sendMessage(img,false)
             else
                local msg = "Reading failed: "..(err or "")
                trace(msg)
-               sendMessage(msg,true)
+               sendJson{type="error",emsg=msg}
             end
             page.processing=false
          end
@@ -68,7 +81,8 @@ if request:header"Sec-WebSocket-Key" then
             trace(msg)
             s:write(msg,true)
             page.sockets=nil
-            ba.sleep(100) esp32.execute"restart" -- PATCH temporary test
+            ba.sleep(100)
+            esp32.execute"restart"
             return
          end
          page.clients=0
@@ -137,8 +151,9 @@ end
 <script>
 
 function connect() {
-    var socketURL = 'ws://<?lsp=request:url():match".-//(.+)"?>';
-    var ws = new WebSocket(socketURL);
+    let rssi=-127;
+    let socketURL = 'ws://<?lsp=request:url():match".-//(.+)"?>';
+    let ws = new WebSocket(socketURL);
     ws.binaryType = 'arraybuffer';
     let img = document.getElementById("image");
     let msg = document.getElementById("msg");
@@ -161,7 +176,7 @@ function connect() {
                 const blob = new Blob([event.data], { type: 'image/jpeg' });
                 img.src = URL.createObjectURL(blob);
                 frameCounter++;
-                msg.textContent = `Frames: ${frameCounter}`;
+                msg.textContent = `Frames: ${frameCounter}, RSSI: ${rssi}`;
             }
             else {
                 msg.textContent = "Image too big";
@@ -169,8 +184,18 @@ function connect() {
             ws.send("ok");
         }
         else { // Text, error message
-            msg.textContent = "Server error "+event.data;
-            ws.close();
+            let msg=JSON.parse(event.data);
+            if(!msg || "error" == msg.type) {
+                msg.textContent = `Server error: ${msg ? msg.emsg : "invalid JSON"}`;
+                ws.close();
+            }
+            switch(msg.type) {
+            case "rssi":
+                rssi=msg.rssi;
+                break;
+            default:
+                console.log("Unknown message type",msg.type);
+            }
         }
     };
     ws.onclose = function() {

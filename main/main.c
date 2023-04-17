@@ -429,7 +429,7 @@ esp_err_t wconnect(const char* ssid, const char* pwd)
 }
 
 
-static const char* wifiAuthMode(int authmode, int print)
+const char* wifiAuthMode(int authmode, int print)
 {
    const char* msg;
    const char pre[]={"Authmode \t"};
@@ -451,7 +451,7 @@ static const char* wifiAuthMode(int authmode, int print)
    return msg;
 }
 
-static const char*
+const char*
 wifiCipherType(int pcipher, int gcipher, int print, const char** pciphers)
 {
    const char* msg;

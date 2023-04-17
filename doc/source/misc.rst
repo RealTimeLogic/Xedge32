@@ -95,21 +95,15 @@ The specified ``callback`` function will be called when the network changes stat
 
 - ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
 
-  - ``"up"``: Wi-Fi has transitioned from not connected to connected.
-
-- ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
-
-  - ``"down"``: Wi-Fi has transitioned from connected to not connected.
-
-- ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
-
-  - ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
+  - Arg1: ``"up"``: Wi-Fi has transitioned from not connected to connected.
+  - Arg1: ``"down"``: Wi-Fi has transitioned from connected to not connected.
+  - Arg1: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
 
 - ``"wip"``: Indicates that the device has received its IP address, netmask, and gateway from the DHCP server.
 
-  - ``ip-address``: The assigned IP address.
-  - ``netmask``: The assigned network mask.
-  - ``gateway``: The assigned gateway.
+  - Arg1: ``ip-address``: The assigned IP address.
+  - Arg2: ``netmask``: The assigned network mask.
+  - Arg3: ``gateway``: The assigned gateway.
 
 - ``"sntp"``: Indicates that the ESP32 has synchronized its system time with the time provided by pool.ntp.org.
 
@@ -120,17 +114,17 @@ To subscribe to network events, simply pass a callback function to ``xedge.netev
 
 .. code-block:: lua
 
-   xedge.netevent(function(event, valA, valB, valC)
+   xedge.netevent(function(event, arg1, arg2, arg3)
       if event == "wifi" then
-         if valA == "up" then
+         if arg1 == "up" then
             trace("Wi-Fi connected")
-         elseif valA == "down" then
+         elseif arg1 == "down" then
             trace("Wi-Fi disconnected")
          else
-            trace("Wi-Fi error:", valA)
+            trace("Wi-Fi error:", arg1)
          end
       elseif event == "wip" then
-         trace("IP address:", valA, "network mask", valB, "gateway", valC)
+         trace("IP address:", arg1, "network mask", arg2, "gateway", arg3)
          -- We do not need LuaShell32 when we have a network connection
          esp32.execute"killmain"
       elseif event == "sntp" then
