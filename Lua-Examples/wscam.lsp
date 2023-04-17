@@ -152,7 +152,8 @@ end
 
 function connect() {
     let rssi=-127;
-    let socketURL = 'ws://<?lsp=request:url():match".-//(.+)"?>';
+    let socketURL = '<?lsp=string.format("ws%s://%s",request:issecure() and 's' or '',
+                     request:url():match".-//(.+)")?>';
     let ws = new WebSocket(socketURL);
     ws.binaryType = 'arraybuffer';
     let img = document.getElementById("image");
