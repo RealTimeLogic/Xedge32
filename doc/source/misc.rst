@@ -66,21 +66,21 @@ Commands:
 
 - ``"restart"``: Restarts the ESP32.
 
-- ``"killmain"``: Terminates the main process powering LuaShell32, and reclaims memory. You may choose to terminate the main process and stop LuaShell32 when a network connection is established. Refer to the ``xedge.netevent()`` function for example code.
+- ``"killmain"``: Terminates the main process powering LuaShell32, and reclaims memory. You may choose to terminate the main process and stop LuaShell32 when a network connection is established. Refer to the ``xedge.event()`` function for example code.
 
 
 
-xedge.netevent()
+xedge.event()
 -----------------
 
-The ``xedge.netevent()`` function allows you to subscribe and unsubscribe from network events, enabling you to monitor changes to the network status.
+Xedge32 extends the `xedge.event() <https://realtimelogic.com/ba/doc/?url=Xedge.html#event>`_ mechanism, allowing you to subscribe and unsubscribe from network events, thus enabling the monitoring of network status changes.
 
 Syntax
 ~~~~~~~
 
 .. code-block:: lua
 
-   xedge.netevent(callback [,unsubscribe])
+   xedge.event(callback [,unsubscribe])
 
 Parameters
 ~~~~~~~~~~~
@@ -107,14 +107,14 @@ The specified ``callback`` function will be called when the network changes stat
 
 - ``"sntp"``: Indicates that the ESP32 has synchronized its system time with the time provided by pool.ntp.org.
 
-xedge.netevent usage
+xedge.event usage
 ~~~~~~~~~~~~~~~~~~~~~
 
-To subscribe to network events, simply pass a callback function to ``xedge.netevent()``
+To subscribe to network events, simply pass a callback function to ``xedge.event()``
 
 .. code-block:: lua
 
-   xedge.netevent(function(event, arg1, arg2, arg3)
+   xedge.event(function(event, arg1, arg2, arg3)
       if event == "wifi" then
          if arg1 == "up" then
             trace("Wi-Fi connected")
@@ -135,7 +135,7 @@ To subscribe to network events, simply pass a callback function to ``xedge.netev
 
 To unsubscribe from network events, pass the same callback function along with the ``unsubscribe`` parameter set to ``true``::
 
-  xedge.netevent(myCallbackFunction, true)
+  xedge.event(myCallbackFunction, true)
 
 Note
 ~~~~

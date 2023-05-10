@@ -12,7 +12,12 @@ The binaries can be installed using Windows, Mac, and Linux using the command li
 Windows
 ~~~~~~~~
 
-To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and `Xedge32-Firmware.zip <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_. Unzip both archives.
+To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and one of:
+
+- `ESP32  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
+- `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
+
+Unzip both archives.
 
 
 1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
@@ -58,6 +63,12 @@ The following example shows how to use Linux. The commands are similar for Mac a
    unzip Xedge32-Firmware.zip
    ~/.local/bin/esptool.py -p /dev/ttyUSB0 --before default_reset --after hard_reset --chip esp32  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
 
+**Note:** use the following command for downloading the Xedge32 ESP32-S3 firmware:
+
+.. code-block:: shell
+
+   wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
+   unzip Xedge32-S3-Firmware.zip
 
 
 
@@ -85,4 +96,4 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 
 The next time you power on the ESP32 device, it should automatically connect to your Wi-Fi network.
 
-.. 1. Navigate to the web file manager at ``http://esp-32-ip-address/fs/`` using your browser. 2. Drag and drop the ``.boot`` file onto the web file manager to upload it. 3. Verify that the ESP32 automatically connects to your Wi-Fi by rebooting it.
+.. 1. Navigate to the web file manager at ``http://esp-32-ip-address/rtl/apps/`` using your browser. 2. Drag and drop the ``.boot`` file onto the web file manager to upload it. 3. Verify that the ESP32 automatically connects to your Wi-Fi by rebooting it.

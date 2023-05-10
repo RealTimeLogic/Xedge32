@@ -39,7 +39,7 @@ local groupId = "BME280" -- Keep the Sparkplug group ID
 local nodeName = "PacificCoastHighway" -- Change to your address
 -- Wire up a BME280 via I2C:
 -- https://learn.sparkfun.com/tutorials/sparkfun-bme280-breakout-hookup-guide/all
---  2: Create an app using the LSP App Manager and add this .preload file to the app
+--  2: Create an app using Xedge and add this file to the app
 --  3: Set your I2C GPIO settings below
 --  4: Restart the Lua app
 local SDA_GPIO <const> = 21 -- I2C SDA pin
@@ -91,7 +91,7 @@ local pMetric=nbirth:metric("Pressure",DataTypes.Double, pressure/100)
 -- Timer function sending the sensor metrics defined in NBIRTH.
 local function publishMetrics()
    local toint=math.tointeger
-   local temperature, humidity, pressure = 0,0,0
+   local temperature,humidity,pressure = 1,1,1
    while true do -- forever, but thread stops when timer is stopped
       local t, h, p = bme:read()
       if t then
@@ -99,7 +99,7 @@ local function publishMetrics()
          t, h, p = toint(t*10), toint(h*10), toint(p)
          -- Only publish if there is a reasonable amount of change.
          -- Divide // in Lua yields integer
-         if temperature ~= t or humidity//10 ~= h//10 or pressure//100 ~= p//100 then
+         if temperature//2 ~= t//2 or humidity//15 ~= h//15 or pressure//100 ~= p//100 then
             temperature, humidity, pressure = t, h, p
             local pl = SP.payload()
             pl:metric("Temperature", DataTypes.Double, temperature/10)
@@ -116,6 +116,7 @@ local function publishMetrics()
       else
          -- h is now error code
          trace("BME280 reading failed", h)
+         bme:close()
          bme,err = require"bme280".create(0,BME280_I2C_ADDR,SDA_GPIO,SCL_GPIO,settings)
          if not bme then return end -- give up
       end
@@ -200,7 +201,7 @@ local function ondata(cmd,data,topic)
 end
 
 
--- Function runs if app is closed using the LSP App Manager
+-- Function runs if app is closed using Xedge
 function onunload()
    trace"Closing EoN MQTT connection"
    if metricsTimer then metricsTimer:cancel() end -- Stop sending data
