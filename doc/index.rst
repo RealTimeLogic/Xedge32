@@ -53,6 +53,7 @@ Xedge ESP32
    source/PWM
    source/UART
    source/BME280
+   source/cam
    source/misc
 
 
