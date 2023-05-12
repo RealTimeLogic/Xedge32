@@ -3,6 +3,25 @@ Miscellaneous API
 
 The `esp32` module provides some miscellaneous functions.
 
+esp32.apinfo()
+--------------------
+
+Returns a Lua table with WiFi information for the connected WiFi. The table includes several fields with WiFi information, where the most important one is the 'rssi' field, which stands for Received Signal Strength Indicator. The 'rssi' field indicates the strength of the WiFi signal that the ESP32 is receiving.  RSSI is typically expressed in decibels relative to a milliwatt (dBm). The value of 'rssi' is usually negative, as it represents power loss. Here is a general guideline for interpreting 'rssi' values:
+
+- **-30 dBm**: Amazing. You're practically standing next to the router.
+- **-50 dBm**: Excellent. Signal strength is really strong.
+- **-60 dBm**: Good. Most online activities should work well.
+- **-70 dBm**: Fair. You might start experiencing noticeable dips in speed.
+- **-80 dBm or worse**: Poor. Connection might be spotty and unstable.
+
+Example using the `serpent <https://github.com/pkulchenko/serpent>`_ module for formatting.
+
+.. code-block:: lua
+
+   local serpent = require("serpent")
+   print(serpent.block(esp32.apinfo()))
+
+
 esp32.mac()
 --------------------
 This function returns the ESP32's 6 byte base MAC address.
@@ -105,7 +124,8 @@ The specified ``callback`` function will be called when the network changes stat
   - Arg2: ``netmask``: The assigned network mask.
   - Arg3: ``gateway``: The assigned gateway.
 
-- ``"sntp"``: Indicates that the ESP32 has synchronized its system time with the time provided by pool.ntp.org.
+- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
+
 
 xedge.event usage
 ~~~~~~~~~~~~~~~~~~~~~

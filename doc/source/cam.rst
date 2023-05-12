@@ -3,6 +3,8 @@ ESP32 Camera Driver Interface
 
 Xedge32 features the ESP32 Camera Driver and a Lua interface to this driver. To use the camera API, follow these steps:
 
+**Note that the cam documentation is not yet complete!!!**
+
 1. Create a camera object by invoking ``esp32.cam``, passing a configuration table as an argument.
 2. Call the ``cam:read`` method as many times as needed to fetch new images.
 3. Once done, call the ``cam:close`` method to close the camera object and free up resources.
