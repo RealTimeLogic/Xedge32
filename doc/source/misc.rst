@@ -114,15 +114,23 @@ The specified ``callback`` function will be called when the network changes stat
 
 - ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
 
-  - Arg1: ``"up"``: Wi-Fi has transitioned from not connected to connected.
-  - Arg1: ``"down"``: Wi-Fi has transitioned from connected to not connected.
-  - Arg1: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
+  - **Arg1**: ``"up"``: Wi-Fi has transitioned from not connected to connected.
+  - **Arg1**: ``"down"``: Wi-Fi has transitioned from connected to not connected.
+  - **Arg1**: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
 
-- ``"wip"``: Indicates that the device has received its IP address, netmask, and gateway from the DHCP server.
 
-  - Arg1: ``ip-address``: The assigned IP address.
-  - Arg2: ``netmask``: The assigned network mask.
-  - Arg3: ``gateway``: The assigned gateway.
+
+- ``wip`` (WiFi IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the WiFi connection.
+
+  - **Arg1**: ``ip-address``: The assigned IP address.
+  - **Arg2**: ``netmask``: The assigned network mask.
+  - **Arg3**: ``gateway``: The assigned gateway.
+
+- ``eth`` (Ethernet IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the Ethernet connection. This event is distributed on devices that has a connected Ethernet port.
+
+  - **Arg1**: ``ip-address``: The assigned IP address.
+  - **Arg2**: ``netmask``: The assigned network mask.
+  - **Arg3**: ``gateway``: The assigned gateway.
 
 - ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
 
@@ -147,6 +155,9 @@ To subscribe to network events, simply pass a callback function to ``xedge.event
          trace("IP address:", arg1, "network mask", arg2, "gateway", arg3)
          -- We do not need LuaShell32 when we have a network connection
          esp32.execute"killmain"
+      elseif event == "eth" then
+         -- Received if this device has Ethernet.
+         trace("IP address:", arg1, "network mask", arg2, "gateway", arg3)
       elseif event == "sntp" then
          trace("Time synchronized")
       end
