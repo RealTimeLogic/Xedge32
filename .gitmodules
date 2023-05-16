@@ -2,5 +2,5 @@
 	path = main/BAS
 	url = https://github.com/RealTimeLogic/BAS.git
 [submodule "main/protobuf"]
-	path = main/protobuf
+	path = main/lua-protobuf
 	url = https://github.com/surfskidude/lua-protobuf
