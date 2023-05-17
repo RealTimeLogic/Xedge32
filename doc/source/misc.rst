@@ -55,7 +55,7 @@ Note that this function takes some time to return.
 esp32.netconnect(network, cfg)
 --------------------------------
 
-Connect to a WiFi or wired network by providing the required configuration parameters. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The ``cfg`` parameters are stored persistently in NVRAM if the ESP32 successfully connects to the network.
+Connect to a WiFi or wired network by providing the required configuration parameters. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The ``cfg`` parameters are stored persistently in NVRAM if the ESP32 successfully connects to the network and the configuration parameters will be used to automatically connect to the network when the ESP32 restarts.
 
 - ``network``: a string that can be one of:
     * ``wifi``: Connect to a Wi-Fi network by providing the SSID and password
@@ -73,7 +73,7 @@ Connect to a WiFi or wired network by providing the required configuration param
         * ``irq``: The GPIO pin number for the interrupt request signal of the W5500 chip.
         * ``freq``: The clock frequency (in Hz) of the SPI bus.
 
-You can also call this function to disconnect from a network by calling it without arguments, or to connect to a new network.
+You can also call this function to disconnect from a network by not providing the ``cfg`` configuration table argument. For WiFi, you may call this function with new configuration options to switch to another network.
 
 esp32.sdcard(clk, cmd, d0)
 ---------------------------
