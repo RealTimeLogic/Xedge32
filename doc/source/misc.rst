@@ -52,10 +52,26 @@ Example:
 
 Note that this function takes some time to return.
 
-esp32.wconnect([ssid, password])
+esp32.netconnect(network, cfg)
 --------------------------------
 
-Connect to a Wi-Fi network by providing the SSID and password. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The credentials are stored persistently in NVRAM if the ESP32 successfully connects to the network.
+Connect to a WiFi or wired network by providing the required configuration parameters. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The ``cfg`` parameters are stored persistently in NVRAM if the ESP32 successfully connects to the network.
+
+- ``network``: a string that can be one of:
+    * ``wifi``: Connect to a Wi-Fi network by providing the SSID and password
+    * ``W5500``:  Connect to an Ethernet network via a W5500 chip.
+- ``cfg``: a required configuration table that must include:
+    * For WiFi networks:
+        * ``ssid``: the WiFi network's SSID
+        * ``pwd``: the WiFi network's password
+    * For wired networks via W5500:
+        * ``spi``: The SPI bus number to which the W5500 chip is connected.
+        * ``clk``: The GPIO pin number for the clock signal of the SPI bus.
+        * ``mosi``: The GPIO pin number for the Master Out Slave In (MOSI) signal of the SPI bus.
+        * ``miso``: The GPIO pin number for the Master In Slave Out (MISO) signal of the SPI bus.
+        * ``cs``: The GPIO pin number for the chip select signal of the W5500 chip.
+        * ``irq``: The GPIO pin number for the interrupt request signal of the W5500 chip.
+        * ``freq``: The clock frequency (in Hz) of the SPI bus.
 
 You can also call this function to disconnect from a network by calling it without arguments, or to connect to a new network.
 

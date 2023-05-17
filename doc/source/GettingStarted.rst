@@ -89,7 +89,7 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 
 .. code-block:: lua
 
-   esp32.wconnect("your-Wi-Fi-SSID","password")
+   esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
 
 2. After a second or two, the ESP32 should connect to your network.
 3. Using your web browser, navigate to the IP address printed in the :ref:`LuaShell32` to access the ESP32.

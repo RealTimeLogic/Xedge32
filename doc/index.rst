@@ -10,7 +10,7 @@ Xedge32 Introduction
 .. image:: https://realtimelogic.com/GZ/images/BAS-ESP32.svg
    :alt: Xedge32
 
-**Visualize Xedge32 as a Xedge south bridge for ESP32.**
+**Visualize Xedge32 as an Xedge south bridge for ESP32.**
 
 Xedge32 enables developers to quickly test and prototype code without the need for a full compile and deploy cycle, enabling faster iteration and development. Additionally, Xedge32's Lua peripheral API simplifies the interaction with the device's sensors, motors, and other hardware components, making it easier to develop and test code that interacts with the device's peripherals. The immediate feedback provided by the REPL also makes it easier to debug and troubleshoot code, reducing development time and improving the overall quality of the code. The use of the Xedge32 LUA REPL can help to reduce development costs by allowing for faster development and testing cycles and by making it easier to reuse and share code across different projects.
 
