@@ -4,3 +4,6 @@
 [submodule "main/protobuf"]
 	path = main/lua-protobuf
 	url = https://github.com/surfskidude/lua-protobuf
+[submodule "main/BAS-Resources"]
+	path = main/BAS-Resources
+	url = https://github.com/RealTimeLogic/BAS-Resources.git
