@@ -59,18 +59,17 @@ Optional parameters:
 - **hmirror**: If set to true, this setting mirrors the image horizontally. This can be useful if the camera image needs to be mirrored for some reason.
 
 
+Configuration Table Examples:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 .. code-block:: lua
 
+   -- Settings for Aideepen ESP32-CAM
    local cfg={
       d0=5, d1=18, d2=19, d3=21, d4=36, d5=39, d6=34, d7=35,
-      xclk=0,
-      pclk=22,
-      vsync=25,
-      href=23,
-      sda=26,
-      scl=27,
-      pwdn=32,
-      frame="HD"
+      xclk=0, pclk=22, vsync=25, href=23, sda=26, scl=27, pwdn=32,
+      reset=-1, freq="20000000", frame="HD"
    }
+
 
 
