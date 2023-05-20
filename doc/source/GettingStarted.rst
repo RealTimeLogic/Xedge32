@@ -53,8 +53,16 @@ In the screenshot above, the firmware tool is shown on the left and a Putty term
 How To Install The Binaries Using `esptool`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following example shows how to use Linux. The commands are similar for Mac and Windows.
+The following examples show how to use Linux. The commands are similar for Mac and Windows.
 
+Install the required tool:
+.. code-block:: shell
+
+   sudo apt install python3-pip
+   pip install esptool
+
+
+Download and flash the ESP32 firmware:
 .. code-block:: shell
 
    sudo apt install python3-pip
@@ -63,13 +71,13 @@ The following example shows how to use Linux. The commands are similar for Mac a
    unzip Xedge32-Firmware.zip
    ~/.local/bin/esptool.py -p /dev/ttyUSB0 --before default_reset --after hard_reset --chip esp32  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
 
-**Note:** use the following command for downloading the Xedge32 ESP32-S3 firmware:
 
+Download and flash the ESP32-S3 firmware:
 .. code-block:: shell
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
    unzip Xedge32-S3-Firmware.zip
-
+   ~/.local/bin/esptool.py  -p /dev/ttyS10 --before default_reset --after hard_reset --chip esp32-s3  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
 
 
 Option 2: Compile The Code
