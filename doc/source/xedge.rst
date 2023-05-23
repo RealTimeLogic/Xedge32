@@ -6,12 +6,12 @@ Xedge32 is a development tool for embedded edge devices. Its web-based user inte
 .. image:: https://realtimelogic.com/images/xedge/v1/Xedge.png
    :alt: Xedge32 UI
 
-Xedge is a versatile tool that runs on various platforms, including ESP32. This documentation focuses on getting started with Xedge on ESP32. For more details on using Xedge, please refer to the `Xedge Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+Xedge is a versatile tool that runs on various platforms, including ESP32. This documentation focuses on getting started with Xedge on ESP32. For more details on using Xedge, please refer to the `Xedge Main Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
 
 How To Use Xedge32
 ---------------------------------------
 
-Xedge32's GitHub repository includes a number of Lua examples that we will use in the instructions below. First, download these files to your computer and then upload them to the ESP32 using the built-in Web File Manager. You can use the combined WebDAV and Web File Manager URL at ``http://ip-address/rtl/apps/`` to upload files to the ESP32. You can refer to the :download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>` for more information on how to mount a WebDAV drive.
+The LSP-Example's GitHub repository includes `ESP32 specific examples <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ that we will use in the instructions below. First, download these files to your computer and then upload them to the ESP32 using the built-in Web File Manager. You can use the combined WebDAV and Web File Manager URL at ``http://ip-address/rtl/apps/`` to upload files to the ESP32. You can refer to the :download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>` for more information on how to mount a WebDAV drive.
 
 Upload this directory to the ESP32 by using WebDAV or If using the Web File Manager as shown below, use a browser and navigate to ``http://ip-address/rtl/apps/``
 
@@ -32,7 +32,7 @@ While the internal web-based Lua IDE is easy to use since it is an integral part
 
 You can use any external IDE or editor to edit files directly on the ESP32 by mounting the device as a WebDAV drive. For instructions on how to mount the WebDAV drive using various client operating systems, visit the `How to Mount a WebDAV Drive <https://fuguhub.com/FileServer.lsp>`__ page on the FuguHub site.
 
-To mount the ESP32's WebDAV server, use the URL https://ip-address/rtl/apps/. Note that the WebDAV server does not require authentication or user credentials.
+To mount the ESP32's WebDAV server, use the URL https://ip-address/rtl/apps/.
 
 .. _LuaDebug:
 
@@ -106,10 +106,11 @@ The following short video shows how to remotely debug Lua code on a Raspberry Pi
 Further Reading
 ---------------
 
-   Prior to reading any of the following tutorials, check out the
-   `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and
-   read the `Xedge32
-   Documentation <https://realtimelogic.com/ba/doc/?url=examples/xedge/readme.html#ide>`__.
+   Prior to reading any of the following tutorials, check out the `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and read the `Xedge Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+
+**Lua examples designed for ESP32:**
+
+See the `ESP32 section <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ in the LSP-Example's GitHub repository.
 
 **Lua examples and tutorials compatible with ESP32:**
 
