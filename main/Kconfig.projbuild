@@ -269,3 +269,27 @@ choice CAM_FB_COUNT
 endchoice
 
 endmenu
+
+menu "Connection Configuration"
+   
+   config WIFI_SCAN_RSSI_THRESHOLD
+       int "WiFi minimum rssi"
+       range -127 0
+       default -127
+       help
+           The minimum rssi to accept in the scan mode.
+   
+   config ETHERNET_EMAC_TASK_STACK_SIZE
+      int "emac_rx task stack size"
+      default 2048
+      help
+         This set stack size for emac_rx task
+   
+   config ETHERNET_PHY_ADDR
+      int "PHY Address"
+      range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
+      default 1
+      help
+          Set PHY address according your board schematic.
+  
+endmenu

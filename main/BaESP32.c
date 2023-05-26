@@ -69,6 +69,7 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
 #include "BaESP32.h"
+#include "NetESP32.h"
 
 #define ECHK ESP_ERROR_CHECK
 
@@ -1701,12 +1702,11 @@ static int luart(lua_State* L)
  *********************************************************************
  *********************************************************************/
 
-static void
-wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
+static int
+pushApInfo(lua_State* L, const uint8_t* ssid, int rssi,
          const char* authmode,const char*  pchiper,
          const char* gcipher, int channel)
 {
-   ThreadMutex_set(soDispMutex);
    lua_createtable(L, 0, 6);
    lua_pushstring(L,(const char*)ssid);
    lua_setfield(L,-2,"ssid");
@@ -1720,6 +1720,16 @@ wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
    lua_setfield(L,-2,"gcipher");
    lua_pushinteger(L,channel);
    lua_setfield(L,-2,"channel");
+   return 1;
+}
+
+static void
+wifiScanCB(lua_State* L, const uint8_t* ssid, int rssi,
+         const char* authmode,const char*  pchiper,
+         const char* gcipher, int channel)
+{
+   ThreadMutex_set(soDispMutex);
+   pushApInfo(L,ssid,rssi,authmode,pchiper,gcipher,channel);
    lua_rawseti(L, -2, (int)lua_rawlen(L, -2) + 1); 
    ThreadMutex_release(soDispMutex);
 }
@@ -1736,30 +1746,82 @@ static int lwscan(lua_State* L)
    return 1;
 }
 
-static int lwconnect(lua_State* L)
+/**
+ * @brief Connect to a WiFi or wired network by providing the required configuration parameters.
+ *
+ * @param network A string representing the network adapter type. Valid options are "wifi", "W5500", and "DP83848".
+ * @param cfg     A required configuration table with specific parameters for each adapter. 
+ *                Omit the cfg table argument to disconnect from a network.
+ *
+ * @return Number of return values pushed to the Lua stack.
+ *
+ * @note The configuration parameters provided in the cfg table are stored persistently in NVRAM 
+ *       if the ESP32 successfully connects to the network. These parameters will be used 
+ *       to automatically connect to the network when the ESP32 restarts.
+ */
+static int lnetconnect(lua_State* L)
 {
-   if(lua_gettop(L) == 0)
+netConfig_t cfg = {0};
+   
+   // Set the network adapter from Lua string argument.
+   strcpy(cfg.adapter, (char*)luaL_checkstring(L, 1));
+   
+   // Disconnects the network when the configuration table argument is not provided. 
+   if(lua_gettop(L) == 1)
    {
-      return pushEspRetVal(L,wconnect(0,0),0);
+      strcpy(cfg.adapter, "close");   
    }
-   const char* ssid = luaL_checkstring(L,1);
-   const char* pwd = luaL_checkstring(L,2);
-   return pushEspRetVal(L,wconnect(ssid, pwd),0);
+   // Load the parameters for wifi.
+   else if(!strcmp("wifi", cfg.adapter))
+   {
+      luaL_checktype(L, 2, LUA_TTABLE);
+      strcpy(cfg.ssid, balua_checkStringField(L, 2, "ssid"));
+      strcpy(cfg.password, "jEoam34RwqD5bq7nbgrU"); //balua_checkStringField(L, 2, "pwd"));
+   }
+   // Load the parameters for Ethernet by SPI.
+   else if(netIsAdapterSpi(cfg.adapter))
+   {
+      cfg.spi.hostId = (int)balua_checkIntField(L, 2, "spi");
+      cfg.spi.clk = (int)balua_checkIntField(L, 2, "clk");
+      cfg.spi.mosi = (int)balua_checkIntField(L, 2, "mosi");
+      cfg.spi.miso = (int)balua_checkIntField(L, 2,"miso");
+      cfg.spi.cs = (int)balua_checkIntField(L, 2, "cs");
+      cfg.spi.irq = (int)balua_checkIntField(L, 2, "irq");
+      cfg.spi.freq = (int)balua_checkIntField(L, 2, "freq");
+      cfg.phyRstPin = balua_getIntField(L, 2, "rst", -1);
+   }
+   // Load the parameters for Ethernet by RMII (only ESP32 legacy devices).
+   else if(netIsAdapterRmii(cfg.adapter))
+   {
+      cfg.phyRstPin = (int)balua_checkIntField(L, 2, "rst");
+      cfg.phyMdioPin = (int)balua_checkIntField(L, 2, "mdio");
+      cfg.phyMdcPin = (int)balua_checkIntField(L, 2, "mdc");
+   }
+   else 
+   {
+      luaL_error(L,"Unknown adapter '%s'", cfg.adapter);
+   }
+ 
+   // Call the netConnect function and push the return value to the Lua stack.
+   return pushEspRetVal(L, netConnect(&cfg), 0);
 }
 
-static int lwrssi(lua_State* L)
-{
-   wifi_ap_record_t ap_info;
-   
-   if(esp_wifi_sta_get_ap_info(&ap_info) != ESP_OK)
-   {
-      ap_info.rssi = -127;
-   }
 
-   lua_pushinteger(L, ap_info.rssi);
-   
-   return 1;
+static int lapinfo(lua_State* L)
+{
+   wifi_ap_record_t ap;
+   esp_err_t err = esp_wifi_sta_get_ap_info(&ap);
+   if(err == ESP_OK)
+   {
+      const char* pciphers;
+      const char* gcipher=wifiCipherType(
+         ap.pairwise_cipher, ap.group_cipher, false, &pciphers);
+      return pushApInfo(L,ap.ssid,ap.rssi,wifiAuthMode(ap.authmode, FALSE),
+                        pciphers,gcipher,ap.primary);
+   }
+   return pushEspRetVal(L,err,0);
 }
+
 
 static int lmac(lua_State* L)
 {
@@ -1774,7 +1836,7 @@ static int lerase(lua_State* L)
 {
    const esp_partition_t *fat_partition = esp_partition_find_first(
       ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, NULL);
-   if (fat_partition == NULL)
+   if(fat_partition == NULL)
    {
       printf("FAT partition not found.\n");
    }
@@ -1782,7 +1844,7 @@ static int lerase(lua_State* L)
    {
       esp_err_t err = esp_partition_erase_range(
          fat_partition, 0, fat_partition->size);
-      if (err == ESP_OK)
+      if(err == ESP_OK)
       {
          printf("FAT partition erased.\n");
          esp_restart();
@@ -1826,8 +1888,8 @@ static const luaL_Reg esp32Lib[] = {
    {"pwmchannel", lLedChannel},
    {"uart", luart},
    {"wscan", lwscan},
-   {"wconnect", lwconnect},
-   {"wrssi", lwrssi},
+   {"netconnect", lnetconnect},
+   {"apinfo", lapinfo},
    {"mac", lmac},
    {"execute", lexecute},
    {"sdcard", lsdcard},
@@ -1837,8 +1899,6 @@ static const luaL_Reg esp32Lib[] = {
 static const luaL_Reg basLib[] = {
    {"mac", lmac}
 };
-
-
 
 void installESP32Libs(lua_State* L)
 {

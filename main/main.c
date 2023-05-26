@@ -25,20 +25,19 @@
 #include <esp_netif.h>
 #include <esp_console.h>
 #include <linenoise/linenoise.h>
-#include <protocol_examples_common.h>
 #include <barracuda.h>
 #include "BaESP32.h"
+#include "NetESP32.h"
+#include "CfgESP32.h"
 
 #define ADD_THREAD_DBG
 
 #ifdef ADD_THREAD_DBG
-#include <task_snapshot.h>
+#include <freertos/task_snapshot.h>
 #include <esp_debug_helpers.h>
 static lua_State* Lg; /* Global state */
 static void dbgThreads();
 #endif
-
-#define WIFI_SCAN_LIST_SIZE 10
 
 struct {
    char* buf;
@@ -48,103 +47,10 @@ struct {
 
 static const char TAG[]={"X"};
 
-/* This buffer is used as the memory for the eventBrokerQueue, which
- * serves various messaging purposes, including sending messages from
- * interrupts. On an ESP32, this buffer requires the IRAM_ATTR
- * attribute. However, for the ESP32-S3, this attribute appears
- * unnecessary and must be disabled as enabling it results in a
- * rst:0x8 (TG1WDT_SYS_RST) error when Wi-Fi connects and
- * execXedgeEvent() is invoked from the onWifiEvent() function.
- */
-static
-#if CONFIG_IDF_TARGET_ESP32S3
-#else
-IRAM_ATTR
-#endif
-
-uint8_t eventBrokerQueueBuf[20*sizeof(EventBrokerQueueNode)];
-
-static U8 gotIP=FALSE; /* if IP set */
 static U8 gotSdCard=FALSE;
 static const char mountPoint[]={"/sdcard"};
 
-static nvs_handle_t nvsh;
-static SemaphoreHandle_t semGotIp = 0;
 extern int (*platformInitDiskIo)(DiskIo*);  /* xedge.c */
-
-typedef struct
-{
-   ThreadJob super;
-   const char* cmd;
-   char* param1;
-   char* param2;
-   char* param3;
-} ExecXedgeEventJob;
-
-static void* checkAlloc(void* mem)
-{
-   if( ! mem )
-      baFatalE(FE_MALLOC,0);
-   return mem;
-}
-
-
-/* This function runs in the context of a thread in the LThreadMgr, and
-   is triggered by the dispatchExecXedgeEvent.
- */
-static void execXedgeEventCB2(ThreadJob* jb, int msgh, LThreadMgr* mgr)
-{
-   static const char XedgeEvent[]={"_XedgeEvent"};
-   lua_State* L = jb->Lt;
-   ExecXedgeEventJob* job = (ExecXedgeEventJob*)jb;
-   lua_pushglobaltable(L);
-   lua_getfield(L, -1, XedgeEvent);
-   if(lua_isfunction(L, -1))
-   {
-      int params=1;
-      lua_pushstring(L, job->cmd);
-      if(job->param1) { lua_pushstring(L, job->param1); params++; }
-      if(job->param2) { lua_pushstring(L, job->param2); params++; }
-      if(job->param3) { lua_pushstring(L, job->param3); params++; }
-      lua_pcall(L, params, 0, msgh);
-   }
-   else
-   {
-      ESP_LOGE(TAG, "Lua function '%s' missing\n", XedgeEvent);
-   }
-   if(job->param1) baFree(job->param1);
-   if(job->param2) baFree(job->param2);
-   if(job->param3) baFree(job->param3);
-}
-
-
-/* This CB runs in the context of the eventBrokerTask.
- */
-static void execXedgeEventCB1(EventBrokerCallbackArg arg)
-{
-   ThreadMutex_set(soDispMutex);
-   LThreadMgr_run(&ltMgr, (ThreadJob*)arg.ptr);
-   ThreadMutex_release(soDispMutex);
-}
-
-
-/* Function execXedgeEvent is used by callbacks that run in the
- * context of the lwIP thread. We do not want to lock the soDispMutex
- * here since this could lead to a deadlock.
- */
-static void execXedgeEvent(
-   const char* cmd, char* param1, char* param2, char* param3)
-{
-   ExecXedgeEventJob* job=(ExecXedgeEventJob*)checkAlloc(
-      ThreadJob_lcreate(sizeof(ExecXedgeEventJob),execXedgeEventCB2));
-   job->cmd=cmd;
-   job->param1=param1;
-   job->param2=param2;
-   job->param3=param3;
-   EventBrokerQueueNode n = { .callback=execXedgeEventCB1, .arg.ptr=job };
-   xQueueSend(eventBrokerQueue, &n, 0);
-}
-
 
 /* mark in error messages for incomplete statements */
 #define EOFMARK		"<eof>"
@@ -205,22 +111,22 @@ void luaopen_AUX(lua_State* L)
 #endif
    installESP32Libs(L);
 
+netConfig_t cfg;
+
    /* Delay execution until this point to avoid generating any events
     * that might use the soDispMutex before it is initialized. The
     * semaphore is initialized within the installESP32Libs function.
     */
-   char ssid[sizeof(((wifi_config_t*)0)->sta.ssid)];
-   char password[sizeof(((wifi_config_t*)0)->sta.password)];
-   size_t size=sizeof(ssid);
-   if(ESP_OK == nvs_get_str(nvsh,"ssid",ssid, &size))
+   cfgGetNet(&cfg);
+
+   if(!strcmp("wifi", cfg.adapter))
    {
-      size=sizeof(password);
-      if(ESP_OK == nvs_get_str(nvsh,"password",password,&size) && *ssid)
-      {
-         printf("Connecting to: %s\n",ssid);
-         wconnect(ssid,password);
-      }
+      netWifiConnect(cfg.ssid, cfg.password);
    }
+   else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
+   {
+      netEthConnect();
+   }  
 
    if(gotSdCard)
    {
@@ -236,16 +142,7 @@ void luaopen_AUX(lua_State* L)
    /* We return when we get an IP address, thus preventing the
     * Barracuda App Server from starting until the network is ready.
     */
-   if( ! gotIP )
-   {
-      semGotIp = xSemaphoreCreateBinary();
-      baAssert(ThreadMutex_isOwner(soDispMutex));
-      ThreadMutex_release(soDispMutex);
-      xSemaphoreTake(semGotIp, portMAX_DELAY);
-      ThreadMutex_set(soDispMutex);
-      vSemaphoreDelete(semGotIp);
-      semGotIp=0;
-   }
+   netWaitIP();
 }
 
 
@@ -263,8 +160,7 @@ myErrHandler(BaFatalErrorCodes ecode1,
 
 
 /* Send data from the server's trace to ESP console */
-static void
-writeHttpTrace(char* buf, int bufLen)
+static void writeHttpTrace(char* buf, int bufLen)
 {
   buf[bufLen]=0; /* Zero terminate. Bufsize is at least bufLen+1. */
   printf("%s",buf);
@@ -301,8 +197,7 @@ static int initDiskIo(DiskIo* io)
 
 /* FreeRTOS task calling function barracuda() found in xedge.c
  */
-static void
-mainServerTask(Thread *t)
+static void mainServerTask(Thread *t)
 {
   (void)t;
 #ifdef USE_DLMALLOC
@@ -321,209 +216,6 @@ mainServerTask(Thread *t)
   HttpServer_setErrHnd(myErrHandler); 
   barracuda(); /* Does not return */
 }
-
-static void eraseWifiCred()
-{
-   nvs_erase_key(nvsh,"ssid");
-   nvs_erase_key(nvsh,"password");
-}
-
-
-static void onWifiEvent(void *arg, esp_event_base_t eventBase,
-                        int32_t eventId, void *eventData)
-{
-   if(eventBase == WIFI_EVENT)
-   {
-      if(  WIFI_EVENT_STA_CONNECTED == eventId)
-      {
-         execXedgeEvent("wifi", baStrdup("up"), 0, 0);
-      }
-      else if (WIFI_EVENT_STA_DISCONNECTED == eventId) 
-      {
-         wifi_event_sta_disconnected_t* d =
-            (wifi_event_sta_disconnected_t*)eventData;
-         HttpTrace_printf(9,"WiFi disconnect ev. %d\n",d->reason);
-         if(gotIP)
-         {
-            execXedgeEvent("wifi", baStrdup("down"), 0, 0);
-         }
-         char* param = (char*)baMalloc(20);
-         if(param)
-         {
-            basnprintf(param,20,"%d",d->reason);
-            execXedgeEvent("wifi", param, 0, 0);
-         }
-         gotIP=FALSE;
-         esp_wifi_connect();
-      }
-      else
-         ESP_LOGD(TAG, "Non managed WiFi event %ld\n",eventId);
-   }
-   else if(IP_EVENT == eventBase && IP_EVENT_STA_GOT_IP == eventId)
-   {
-      ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
-      char* param1 = (char*)checkAlloc(baMalloc(16));
-      char* param2 = (char*)checkAlloc(baMalloc(16));
-      char* param3 = (char*)checkAlloc(baMalloc(16));
-      gotIP=TRUE;
-      basprintf(param1,IPSTR,IP2STR(&event->ip_info.ip));
-      basprintf(param2,IPSTR,IP2STR(&event->ip_info.netmask));
-      basprintf(param3,IPSTR,IP2STR(&event->ip_info.gw));
-      execXedgeEvent("wip", param1, param2, param3);
-      HttpTrace_printf(9,"Interface \"%s\" up\n",
-                       esp_netif_get_desc(event->esp_netif));
-      if(semGotIp)
-         xSemaphoreGive(semGotIp);
-   }
-}
-
-
-static void onSntpSync(struct timeval *tv)
-{
-   execXedgeEvent("sntp", 0, 0, 0);
-}
-
-
-esp_err_t wconnect(const char* ssid, const char* pwd)
-{
-   esp_wifi_disconnect();
-   if(ssid)
-   {
-      // FIXME esp_wifi_set_country_code
-
-      wifi_config_t cfg = {
-         .sta = {
-            .scan_method = WIFI_FAST_SCAN,
-            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
-            .threshold.rssi = CONFIG_EXAMPLE_WIFI_SCAN_RSSI_THRESHOLD,
-            .threshold.authmode = WIFI_AUTH_OPEN
-         }
-      };
-      if(strlen(ssid) < sizeof(cfg.sta.ssid) &&
-         strlen(pwd) < sizeof(cfg.sta.password))
-      {
-         strcpy((char*)cfg.sta.ssid, ssid);
-         strcpy((char*)cfg.sta.password, pwd);
-
-         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
-         esp_err_t ret = esp_wifi_connect();
-         if(ESP_ERR_WIFI_NOT_STARTED == ret)
-         {
-            esp_wifi_start();
-            ret = esp_wifi_connect();
-         }
-         if(ESP_OK == ret)
-         {
-            ESP_ERROR_CHECK(nvs_set_str(nvsh,"ssid",ssid));
-            ESP_ERROR_CHECK(nvs_set_str(nvsh,"password",pwd));
-            return ESP_OK;
-         }
-         ESP_LOGD(TAG, "WiFi connect failed: %x\n", ret);
-         return ESP_ERR_WIFI_SSID;
-      }
-      esp_wifi_stop();
-      return ESP_ERR_INVALID_ARG;
-   }
-   eraseWifiCred();
-   return ESP_OK;
-}
-
-
-static const char* wifiAuthMode(int authmode, int print)
-{
-   const char* msg;
-   const char pre[]={"Authmode \t"};
-   switch (authmode)
-   {
-      case WIFI_AUTH_OPEN: msg="OPEN"; break;
-      case WIFI_AUTH_OWE: msg="OWE"; break;
-      case WIFI_AUTH_WEP: msg="WEP"; break;
-      case WIFI_AUTH_WPA_PSK: msg="WPA_PSK"; break;
-      case WIFI_AUTH_WPA2_PSK: msg="WPA2_PSK"; break;
-      case WIFI_AUTH_WPA_WPA2_PSK: msg="WPA_WPA2_PSK"; break;
-      case WIFI_AUTH_WPA2_ENTERPRISE: msg="WPA2_ENTERPRISE"; break;
-      case WIFI_AUTH_WPA3_PSK: msg="WPA3_PSK"; break;
-      case WIFI_AUTH_WPA2_WPA3_PSK: msg="WPA2_WPA3_PSK"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   return msg;
-}
-
-static const char*
-wifiCipherType(int pcipher, int gcipher, int print, const char** pciphers)
-{
-   const char* msg;
-   const char* pre="Pairwise Cipher\t";
-   switch(pcipher)
-   {
-      case WIFI_CIPHER_TYPE_NONE: msg="NONE"; break;
-      case WIFI_CIPHER_TYPE_WEP40: msg="WEP40"; break;
-      case WIFI_CIPHER_TYPE_WEP104: msg="WEP104"; break;
-      case WIFI_CIPHER_TYPE_TKIP: msg="TKIP"; break;
-      case WIFI_CIPHER_TYPE_CCMP: msg="CCMP"; break;
-      case WIFI_CIPHER_TYPE_TKIP_CCMP: msg="TKIP_CCMP"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   *pciphers=msg;
-   pre="Group Cipher \t";
-   switch(gcipher)
-   {
-      case WIFI_CIPHER_TYPE_NONE: msg="NONE"; break;
-      case WIFI_CIPHER_TYPE_WEP40: msg="WEP40"; break;
-      case WIFI_CIPHER_TYPE_WEP104: msg="WEP104"; break;
-      case WIFI_CIPHER_TYPE_TKIP: msg="TKIP"; break;
-      case WIFI_CIPHER_TYPE_CCMP: msg="CCMP"; break;
-      case WIFI_CIPHER_TYPE_TKIP_CCMP: msg="TKIP_CCMP"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   return msg;
-}
-
-
-void wifiScan(int print, lua_State* L,
-              void (*cb)(lua_State* L, const uint8_t* ssid, int rssi,
-                        const char* authmode,const char*  pchiper,
-                        const char* gcipher, int channel))
-{
-   uint16_t number = WIFI_SCAN_LIST_SIZE;
-   wifi_ap_record_t apInfo[WIFI_SCAN_LIST_SIZE];
-   uint16_t apCount = 0;
-   memset(apInfo, 0, sizeof(apInfo));
-
-   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-   ESP_ERROR_CHECK(esp_wifi_start());
-   esp_wifi_scan_start(NULL, true);
-   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, apInfo));
-   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&apCount));
-   if(print)
-      HttpTrace_printf(0,"Total APs scanned = %u\n", apCount);
-   for(int i = 0; (i < WIFI_SCAN_LIST_SIZE) && (i < apCount); i++)
-   {
-      if(print)
-      {
-         HttpTrace_printf(0,"SSID \t\t%s\n", apInfo[i].ssid);
-         HttpTrace_printf(0,"RSSI \t\t%d\n", apInfo[i].rssi);
-      }
-      const char* authmode=wifiAuthMode(apInfo[i].authmode,print);
-      const char* pcipher=0;
-      const char* gcipher=0;
-      if(apInfo[i].authmode != WIFI_AUTH_WEP) {
-         gcipher=wifiCipherType(
-            apInfo[i].pairwise_cipher,apInfo[i].group_cipher,print,&pcipher);
-      }
-      if(print)
-         HttpTrace_printf(0,"Channel \t\t%d\n\n", apInfo[i].primary);
-      cb(L,apInfo[i].ssid,apInfo[i].rssi,authmode,pcipher,gcipher,
-         apInfo[i].primary);
-   }
-}
-
 
 static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
 {
@@ -601,125 +293,38 @@ int lsdcard(lua_State* L)
       esp_err_t err = openSdCard(&cfg);
       if(ESP_OK == err)
       {
-         char buf[3];
-         baConvBin2Hex(buf, cfg.clk); buf[2]=0;
-         nvs_set_str(nvsh,"SdClk", buf);
-         baConvBin2Hex(buf, cfg.cmd); buf[2]=0;
-         nvs_set_str(nvsh,"SdCmd", buf);
-         baConvBin2Hex(buf, cfg.d0); buf[2]=0;
-         nvs_set_str(nvsh,"SdD0", buf);
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-         baConvBin2Hex(buf, cfg.d1); buf[2]=0;
-         nvs_set_str(nvsh,"SdD1", buf);
-         baConvBin2Hex(buf, cfg.d2); buf[2]=0;
-         nvs_set_str(nvsh,"SdD2", buf);
-         baConvBin2Hex(buf, cfg.d3); buf[2]=0;
-         nvs_set_str(nvsh,"SdD3", buf);
-#endif
+         cfgSetSdCard(&cfg);
          esp_restart();
       }
       return pushEspRetVal(L, err, 0);
    }
-   lua_pushboolean(L,
-                   ESP_OK == nvs_erase_key(nvsh,"SdClk") &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdCmd") &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdD0")
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-                   &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdD1") &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdD2") &&
-                   ESP_OK == nvs_erase_key(nvsh,"SdD3")
-#endif
-      );
+   
+   lua_pushboolean(L, (cfgEraseSdCard() == ESP_OK));
    return 1;
 #else
    return 0;
 #endif
 }
 
-
-
 static void initComponents()
 {
-   static Thread t;
-   esp_err_t err = nvs_flash_init();
-   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-   {
-      ESP_LOGE(TAG, "NVS init failed! Erasing memory.");
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      err = nvs_flash_init();
-   }
-   ESP_ERROR_CHECK(err);
+esp_err_t ret = ESP_FAIL;
+static Thread t;
+   
+   cfgInit();
 
-   ESP_ERROR_CHECK(esp_netif_init());
-   ESP_ERROR_CHECK(esp_event_loop_create_default());
+   sdmmc_slot_config_t cfg = {0};
 
-   ESP_ERROR_CHECK(nvs_open("xedge", NVS_READWRITE, &nvsh));
-#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
-   char cmd[3]; char clk[3]; char d0[3];
-   size_t clkZ, cmdZ, d0Z;
-   clkZ = cmdZ = d0Z = 3;
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-   char d1[3]; char d2[3]; char d3[3];
-   size_t d1Z; size_t d2Z; size_t d3Z;
-#endif
-   if(ESP_OK == nvs_get_str(nvsh,"SdClk", clk, &clkZ) && 
-      ESP_OK == nvs_get_str(nvsh,"SdCmd", cmd, &cmdZ) && 
-      ESP_OK == nvs_get_str(nvsh,"SdD0", d0, &d0Z)
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-      &&
-      ESP_OK == nvs_get_str(nvsh,"SdD1", d1, &d1Z) &&
-      ESP_OK == nvs_get_str(nvsh,"SdD2", d2, &d2Z) &&
-      ESP_OK == nvs_get_str(nvsh,"SdD3", d3, &d3Z)
-#endif
-      )
+#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX      
+   ret = cfgGetSdCard(&cfg);
+#endif      
+   
+   if(ret == ESP_OK)
    {
-      sdmmc_slot_config_t cfg = {
-         .clk = U32_hextoi(clk),
-         .cmd = U32_hextoi(cmd),
-         .d0 = U32_hextoi(d0)
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-         ,
-         .d1 = U32_hextoi(d1),
-         .d2 = U32_hextoi(d2),
-         .d3 = U32_hextoi(d3)
-#endif
-      };
       openSdCard(&cfg);
    }
-#else
-   sdmmc_slot_config_t cfgNotUsed = {0};
-   openSdCard(&cfgNotUsed);
-#endif
-
-   /* Fixme rewrite to not use EXAMPLE_xxxx */
-
-   esp_netif_t *netif;
-   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-   esp_netif_inherent_config_t esp_netif_config =
-      ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
-   esp_netif_config.if_desc = EXAMPLE_NETIF_DESC_STA;
-   esp_netif_config.route_prio = 128;
-   netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
-   esp_wifi_set_default_wifi_sta_handlers();
-   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-   ESP_ERROR_CHECK(esp_wifi_start());
-   ESP_ERROR_CHECK(esp_event_handler_register(
-                      WIFI_EVENT, ESP_EVENT_ANY_ID, &onWifiEvent, NULL) );
-   ESP_ERROR_CHECK(esp_event_handler_register(
-      IP_EVENT, IP_EVENT_STA_GOT_IP, &onWifiEvent, netif));
-   esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-   esp_sntp_setservername(0, "pool.ntp.org");
-   esp_sntp_init();
-   sntp_set_time_sync_notification_cb(onSntpSync);
-
-   static StaticQueue_t xStaticQueue;
-   eventBrokerQueue=xQueueCreateStatic(
-      20,sizeof(EventBrokerQueueNode), eventBrokerQueueBuf,&xStaticQueue);
-   xTaskCreate(eventBrokerTask,"eventBroker",2048,0,configMAX_PRIORITIES-1,0);
-   gpio_install_isr_service(0);
+   
+   netInit();
 
    /* Using BAS thread porting API */
    Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
@@ -734,7 +339,7 @@ app_main(void)
    manageConsole(true);
    for(int i = 0; i < 50 ; i++)
    {
-      if(gotIP) break;
+      if(netGotIP()) break;
       Thread_sleep(100);
    }
 
@@ -762,8 +367,8 @@ app_main(void)
       if (left < len)
       {
          luaLineBuffer.size += len + 100;
-         luaLineBuffer.buf = checkAlloc(
-            baRealloc(luaLineBuffer.buf, luaLineBuffer.size+1));
+         luaLineBuffer.buf = netCheckAlloc(
+                             baRealloc(luaLineBuffer.buf, luaLineBuffer.size+1));
       }
       memcpy(luaLineBuffer.buf + luaLineBuffer.ix, line, len);
       luaLineBuffer.ix += len;
@@ -857,3 +462,4 @@ static void dbgThreads()
    esp_wifi_stop();
 }
 #endif
+
