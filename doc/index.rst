@@ -4,16 +4,24 @@
 Xedge32 Introduction
 =======================
 
-:ref:`Xedge32` is `Xedge <https://realtimelogic.com/ba/doc/?url=examples/xedge/readme.html>`_ with a peripheral Lua API designed for the ESP32. Xedge is a Lua REPL designed for edge devices and powered by the `Barracuda App Server library <https://github.com/RealTimeLogic/BAS>`_. Xedge32 enables developers to quickly test and prototype code without the need for a full compile and deploy cycle, enabling faster iteration and development. Additionally, Xedge32's Lua peripheral API simplifies the interaction with the device's sensors, motors, and other hardware components, making it easier to develop and test code that interacts with the device's peripherals. The immediate feedback provided by the REPL also makes it easier to debug and troubleshoot code, reducing development time and improving the overall quality of the code. The use of the Xedge32 LUA REPL can help to reduce development costs by allowing for faster development and testing cycles and by making it easier to reuse and share code across different projects.
+:ref:`Xedge32` is `Xedge <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_ with a peripheral Lua API designed for the ESP32. Xedge is a Lua REPL designed for edge devices and powered by the `Barracuda App Server library <https://github.com/RealTimeLogic/BAS>`_.
+
+
+.. image:: https://realtimelogic.com/GZ/images/BAS-ESP32.svg
+   :alt: Xedge32
+
+**Visualize Xedge32 as an Xedge south bridge for ESP32.**
+
+Xedge32 enables developers to quickly test and prototype code without the need for a full compile and deploy cycle, enabling faster iteration and development. Additionally, Xedge32's Lua peripheral API simplifies the interaction with the device's sensors, motors, and other hardware components, making it easier to develop and test code that interacts with the device's peripherals. The immediate feedback provided by the REPL also makes it easier to debug and troubleshoot code, reducing development time and improving the overall quality of the code. The use of the Xedge32 LUA REPL can help to reduce development costs by allowing for faster development and testing cycles and by making it easier to reuse and share code across different projects.
 
 .. epigraph::
 
    If you're new to Lua, be sure to check out the `Online Interactive Lua Tutorials <https://tutorial.realtimelogic.com/Lua-Types.lsp>`_ for an easy and accessible way to learn the language.
 
 
-Note that the LUA API, provided by the `C function BaESP32.c <https://github.com/RealTimeLogic/xedge-ESP32/blob/master/main/BaESP32.c>`_, currently exports a subset of the ESP-IDF C peripheral API to Lua.
+Note that the ESP32 LUA API, provided by Xedge32, currently exports a subset of the ESP-IDF C peripheral API to Lua.
 
-This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_.
+This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_ and the generic `Xedge documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
 
 Interrupts
 -----------
@@ -45,6 +53,7 @@ Xedge ESP32
    source/PWM
    source/UART
    source/BME280
+   source/cam
    source/misc
 
 

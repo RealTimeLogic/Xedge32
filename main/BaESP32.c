@@ -1776,7 +1776,7 @@ netConfig_t cfg = {0};
    {
       luaL_checktype(L, 2, LUA_TTABLE);
       strcpy(cfg.ssid, balua_checkStringField(L, 2, "ssid"));
-      strcpy(cfg.password, "jEoam34RwqD5bq7nbgrU"); //balua_checkStringField(L, 2, "pwd"));
+      strcpy(cfg.password, balua_checkStringField(L, 2, "pwd"));
    }
    // Load the parameters for Ethernet by SPI.
    else if(netIsAdapterSpi(cfg.adapter))

@@ -42,12 +42,12 @@ The following Linux commands show all steps required for installing the developm
    source esp-idf/export.sh
 
    # Download Xedge32
-   git clone --recursive https://github.com/RealTimeLogic/xedge-ESP32.git xedge
+   git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
 
-   # Add additional ESP32 resources to the Xedge ZIP file
-   chmod +x AddESP32Resources.sh
-   ./AddESP32Resources.sh
+   # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
+   chmod +x Xedge.sh
+   ./Xedge.sh
 
    # Build the code
    idf.py build

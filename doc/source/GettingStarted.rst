@@ -3,16 +3,25 @@ Getting Started
 
 To get started, you must upload the firmware to an ESP32 with PSRAM, such as the `ESP32 WROVER <https://www.google.com/search?q=esp32+wrover>`_ board, using a flashing tool or programming software. You can either use our ready-to-use firmware binary files or compile the C source code using the Espressif ESP-IDF.
 
+.. contents:: Get started as follows:
+   :depth: 2
+   :local:
 
-Option 1: Use Binaries
-------------------------
 
-The binaries can be installed using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
+Firmware Option 1: Use Pre-Compiled Firmware
+---------------------------------------------
 
-Windows
-~~~~~~~~
+The firmware binaries can be uploaded using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
 
-To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and `Xedge32-Firmware.zip <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_. Unzip both archives.
+Windows Graphical Installer
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and one of:
+
+- `ESP32  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
+- `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
+
+Unzip both archives.
 
 
 1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
@@ -45,24 +54,39 @@ To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ES
 
 In the screenshot above, the firmware tool is shown on the left and a Putty terminal connected to the device is shown on the right.
 
-How To Install The Binaries Using `esptool`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Linux, Mac, and Windows using the command line tool `esptool`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following example shows how to use Linux. The commands are similar for Mac and Windows.
+The following examples show how to use Linux. The commands are similar for Mac and Windows.
 
-.. code-block:: shell
+Install the required tool:
+
+.. code-block:: sh
 
    sudo apt install python3-pip
    pip install esptool
+
+
+Upload the **ESP32** firmware:
+
+.. code-block:: sh
+
    wget https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip
    unzip Xedge32-Firmware.zip
    ~/.local/bin/esptool.py -p /dev/ttyUSB0 --before default_reset --after hard_reset --chip esp32  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
 
 
+Upload the **ESP32-S3** firmware:
+
+.. code-block:: sh
+
+   wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
+   unzip Xedge32-S3-Firmware.zip
+   ~/.local/bin/esptool.py  -p /dev/ttyS10 --before default_reset --after hard_reset --chip esp32-s3  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
 
 
-Option 2: Compile The Code
---------------------------
+Firmware Option 2: Compile The Code
+-------------------------------------
 
 See the `GitHub Repository <https://github.com/RealTimeLogic/Xedge-ESP32>`_ for details.
 
@@ -78,11 +102,15 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 
 .. code-block:: lua
 
-   esp32.wconnect("your-Wi-Fi-SSID","password")
+   esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
 
 2. After a second or two, the ESP32 should connect to your network.
 3. Using your web browser, navigate to the IP address printed in the :ref:`LuaShell32` to access the ESP32.
 
 The next time you power on the ESP32 device, it should automatically connect to your Wi-Fi network.
 
-.. 1. Navigate to the web file manager at ``http://esp-32-ip-address/fs/`` using your browser. 2. Drag and drop the ``.boot`` file onto the web file manager to upload it. 3. Verify that the ESP32 automatically connects to your Wi-Fi by rebooting it.
+
+Next Step
+------------
+
+Once Xedge has successfully connected to your network, continue your journey by exploring our guide on how to use :ref:`Xedge32` .
