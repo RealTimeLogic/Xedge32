@@ -75,6 +75,13 @@ Connect to a WiFi or wired network by providing the required configuration param
 
 You can also call this function to disconnect from a network by not providing the ``cfg`` configuration table argument. For WiFi, you may call this function with new configuration options to switch to another network.
 
+.. code-block:: lua
+
+   -- Example 1: connecting to Wi-Fi
+   esp32.netconnect("wifi",{ssid="My-Wi-Fi", pwd="My-Password"})
+   -- Example 2: Configuring Ethernet for EdgeBox-ESP-100
+   esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
+
 esp32.sdcard(clk, cmd, d0)
 ---------------------------
 

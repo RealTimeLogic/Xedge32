@@ -47,9 +47,13 @@ The following Linux commands show all steps required for installing the developm
    git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
 
+   #set target to one of:
+   #idf.py set-target esp32
+   #idf.py set-target esp32s3
+
    # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
-   chmod +x Xedge.sh
-   ./Xedge.sh
+   chmod +x BuildESP32ResourceFile.sh
+   ./BuildESP32ResourceFile.sh
 
    # Build the code
    idf.py build
