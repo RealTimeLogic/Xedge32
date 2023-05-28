@@ -82,19 +82,59 @@ You can also call this function to disconnect from a network by not providing th
    -- Example 2: Configuring Ethernet for EdgeBox-ESP-100
    esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
 
-esp32.sdcard(clk, cmd, d0)
+esp32.sdcard(width)
 ---------------------------
 
 You can register a new disk named 'sd' if your ESP32 board includes an SDMMC interface. The `IO interface <https://realtimelogic.com/ba/doc/?url=lua.html#ba_ioinfo>`_ can then be opened by calling ``ba.openio("sd")``.
 
-This function returns ``nil, error`` if it is unable to detect the SD card. Upon successfully configuring the settings, the function saves the values in the NVRAM and reboots the system. To remove existing settings, call this function without any arguments.
+The function takes the following hardware dependent arguments:
 
-The example below shows how to set the GPIO pins CLK, CMD, and D0 for the Freenove ESP32-S3-WROOM CAM Board.
+.. code-block:: lua
+
+   esp32.sdcard(width)
+   esp32.sdcard(width, clk, cmd, d0)
+   esp32.sdcard(width, clk, cmd, d0, d1, d2, d3)
+   esp32.sdcard(width, clk, cmd, d0, d1, d2, d3, d4, d5, d6, d7)
+
+Parameters:
+~~~~~~~~~~~~~
+- **width**: "bus width", can be 1, 4, or 8.
+- **clk, cmd, d0-d7:**  Pin configuration parameters use the defaults for the CPU if not set.
+
+Default pins:
+~~~~~~~~~~~~~~~~~~~~
+
+On ESP32, SDMMC peripheral is connected to specific GPIO pins using the IO MUX. GPIO pins cannot be customized. The following list shows the default settings:
+
+- clk = GPIO14, cmd = GPIO15, d0 = GPIO2, 
+- d1 = GPIO4, d2 = GPIO12, d3 = GPIO13, 
+- d4 = GPIO33, d5 = GPIO34, d5 = GPIO35, d5 = GPIO36.
+
+On ESP32-S3, SDMMC peripheral is connected to GPIO pins using a GPIO matrix, which enables arbitrary GPIOs to be used to connect an SD card. The following list shows the default settings:
+
+- clk = GPIO34, cmd = GPIO33, d0 = GPIO37, 
+- d1 = GPIO38, d2 = GPIO39, d3 = GPIO36,  
+- d4 = GPIO35, d5 = GPIO40, d6 = GPIO42, d7 = 41.
+
+Returns:
+~~~~~~~~~
+
+The function returns ``nil, error`` if it is unable to detect the SD card. Upon successfully configuring the settings, the function saves the values in the NVRAM and reboots the system. To remove existing settings, call this function without any arguments.
+
+Examples:
+~~~~~~~~~
+
+Initialize the SD-CARD driver of a 1-bit wide bus that has clock pin connected to GPIO14, command to GPI15, and data to GPIO2.
+
+.. code-block:: lua
+
+   esp32.sdcard(1)
+
+The following example shows how to set the GPIO pins CLK, CMD, and D0 for the Freenove ESP32-S3-WROOM CAM Board.
 
 .. code-block:: lua
 
    esp32.sdcard(39, 38, 40)
-
 
 
 esp32.execute(command)
