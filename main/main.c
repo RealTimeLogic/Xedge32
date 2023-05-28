@@ -217,7 +217,24 @@ static void mainServerTask(Thread *t)
   barracuda(); /* Does not return */
 }
 
-static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
+/**
+ * @brief Low-level function to open the SD card.
+ *
+ * @param slotCfg Pointer to the SD card slot configuration structure.
+ *                The `slotCfg` structure should be initialized with the following fields:
+ *                - `clk`: GPIO number for the SD card clock pin.
+ *                - `cmd`: GPIO number for the SD card command pin.
+ *                - `d0`: GPIO number for the SD card data pin 0.
+ *                - `d1`: GPIO number for the SD card data pin 1 (applicable only for 4-bit wide bus).
+ *                - `d2`: GPIO number for the SD card data pin 2 (applicable only for 4-bit wide bus).
+ *                - `d3`: GPIO number for the SD card data pin 3 (applicable only for 4-bit wide bus).
+ *                - `width`: Bus width of the SD card. Set to 1 for 1-bit wide bus or 4 for 4-bit wide bus.
+ *
+ * @note: The CONFIG_SOC_SDMMC_USE_GPIO_MATRIX must be enabled.
+ *
+ * @return esp_err_t Returns ESP_OK if the connection was successful.
+ */
+static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
 {
    esp_err_t ret;
    esp_vfs_fat_sdmmc_mount_config_t mountCfg = {
@@ -227,99 +244,152 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* cfg)
    };
    sdmmc_card_t *card;
    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-   sdmmc_slot_config_t slotCfg = SDMMC_SLOT_CONFIG_DEFAULT();
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-   slotCfg.width = 4;
-#else
-   slotCfg.width = 1;
-#endif
-#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
-   slotCfg.clk = cfg->clk;
-   slotCfg.cmd = cfg->cmd;
-   slotCfg.d0 = cfg->d0;
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-   slotCfg.d1 = cfg->d1; //cfg.d1;
-   slotCfg.d2 = cfg->d2; //cfg.d2;
-   slotCfg.d3 = cfg->d3; //cfg.d3;
-#endif
-#endif
-   slotCfg.flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
-   ret = esp_vfs_fat_sdmmc_mount(mountPoint,&host,&slotCfg,&mountCfg,&card);
-   if(ESP_OK != ret)
+  
+   slotCfg->flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+   ret = esp_vfs_fat_sdmmc_mount(mountPoint, &host, &slotCfg, &mountCfg, &card);
+   
+   gotSdCard = (ret == ESP_OK) ? true : false;
+   
+   if(ret == ESP_OK)
    {
-      if(ret == ESP_ERR_TIMEOUT)
-         ESP_LOGI(TAG, "SD card not detected");
-      else if(ret == ESP_FAIL)
-         ESP_LOGE(TAG, "Mounting SD card failed");
-      else
-         ESP_LOGE(TAG, "Cannot initialize SD card (%s)",esp_err_to_name(ret));
-      return ret;
+      ESP_LOGI(TAG, "SD card mounted");
+      sdmmc_card_print_info(stdout, card);
+   }   
+   else if(ret == ESP_ERR_TIMEOUT)
+   {
+      ESP_LOGI(TAG, "SD card not detected");
    }
-   ESP_LOGI(TAG, "SD card mounted");
-   sdmmc_card_print_info(stdout, card);
-   gotSdCard=true;
-   return ESP_OK;
-}
-
-/* esp32.sdcard() */
-int lsdcard(lua_State* L)
-{
-#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX
-   if(lua_gettop(L))
+   else if(ret == ESP_FAIL)
    {
-      sdmmc_slot_config_t cfg = {
-         .clk = luaL_checkinteger(L, 1),
-         .cmd = luaL_checkinteger(L, 2),
-         .d0 = luaL_checkinteger(L, 3)
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-         ,
-         .d1 = luaL_checkinteger(L, 4),
-         .d2 = luaL_checkinteger(L, 5),
-         .d3 = luaL_checkinteger(L, 6)
-#endif
-      };
-      if(cfg.clk < GPIO_NUM_0 || cfg.clk >= GPIO_NUM_MAX ||
-         cfg.cmd < GPIO_NUM_0 || cfg.cmd >= GPIO_NUM_MAX ||
-         cfg.d0 < GPIO_NUM_0 || cfg.d0 >= GPIO_NUM_MAX
-#ifdef CONFIG_EXAMPLE_SDMMC_BUS_WIDTH_4
-         || cfg.d1 < GPIO_NUM_0 || cfg.d1 >= GPIO_NUM_MAX ||
-         cfg.d2 < GPIO_NUM_0 || cfg.d2 >= GPIO_NUM_MAX ||
-         cfg.d3 < GPIO_NUM_0 || cfg.d3 >= GPIO_NUM_MAX
-#endif
-         )
-      {
-         luaL_argerror(L, 1, "Invalid GPIO");
-      }
-      esp_err_t err = openSdCard(&cfg);
-      if(ESP_OK == err)
-      {
-         cfgSetSdCard(&cfg);
-         esp_restart();
-      }
-      return pushEspRetVal(L, err, 0);
+      ESP_LOGE(TAG, "Mounting SD card failed");
+   }
+   else
+   {
+      ESP_LOGE(TAG, "Cannot initialize SD card (%s)", esp_err_to_name(ret));
    }
    
+   return ret;
+}
+
+/**
+ * @brief Check that the number of parameters for init the sdcard.
+ *
+ * @param params Count of parametes.
+ *        width Bit width.
+ *
+ * @return TRUE when valid.
+ */
+static int checkSdcardParams(int params, int width)
+{
+   if((width != 8) && (width != 4) && (width != 1))
+   {
+      return FALSE;
+   }
+   
+   //  Only allows arbitrary GPIOs with the ESP32-S3.
+   if(params > 1)
+   {
+#ifdef SOC_SDMMC_USE_GPIO_MATRIX  
+      if((width == 8) && (params != 11))
+      {
+         return FALSE;
+      }
+      
+      if((width == 4) && (params != 7))
+      {
+         return FALSE;
+      }
+      
+      if((width == 1) && (params != 4))
+      {
+         return FALSE;
+      }
+#else
+   return FALSE;
+#endif
+   }
+   
+   return TRUE;
+}
+
+/**
+ * @brief Lua binding function for SD card.
+ *        for default pins use: esp32.sdcard(width)
+ *        for customiced 1 bit wide use: esp32.sdcard(1, clk, cmd, d0)
+ *        for customiced 4 bit wide use: esp32.sdcard(4, clk, cmd, d0, d1, d2, d3)
+ *        for customiced 8 bit wide use: esp32.sdcard(8, clk, cmd, d0, d1, d2, d3, d4, d5, d6, d7)
+ *
+ * @note: customiced pins is only for esp32-s3.
+ *
+ * @param L Lua state pointer.
+ * @return int Number of values returned to Lua.
+ */
+int lsdcard(lua_State* L)
+{
+   int params = lua_gettop(L);
+   
+   // The width parameter is mandatory.
+   if(params >= 1)
+   {
+      sdmmc_slot_config_t cfg = SDMMC_SLOT_CONFIG_DEFAULT();
+      
+      cfg.width = luaL_checkinteger(L, 1);
+
+      // Check that the number of parameters corresponds to the bit width and capabilities of the CPU.
+      if(checkSdcardParams(params, cfg.width))
+      {
+#ifdef SOC_SDMMC_USE_GPIO_MATRIX
+         if(params >= 4)
+         {
+            cfg.clk = luaL_checkinteger(L, 2);
+            cfg.cmd = luaL_checkinteger(L, 3);
+            cfg.d0 = luaL_checkinteger(L, 4);
+         }   
+   
+         if(params >= 7)
+         {  
+            cfg.d1 = luaL_checkinteger(L, 5);
+            cfg.d2 = luaL_checkinteger(L, 6);
+            cfg.d3 = luaL_checkinteger(L, 7);
+         }
+
+         if(params == 11)
+         {  
+            cfg.d4 = luaL_checkinteger(L, 8);
+            cfg.d5 = luaL_checkinteger(L, 9);
+            cfg.d6 = luaL_checkinteger(L, 10);
+            cfg.d7 = luaL_checkinteger(L, 11);
+         }
+#endif                
+         esp_err_t err = openSdCard(&cfg);
+         if(ESP_OK == err)
+         {
+            cfgSetSdCard(&cfg);
+            esp_restart();
+         }
+         
+         return pushEspRetVal(L, err, 0);
+      }
+      else
+      {
+          luaL_argerror(L, 1, "Invalid paramenters");
+      }
+   }
+   
+   // If the number of arguments is less 0, erase the SD card config.
    lua_pushboolean(L, (cfgEraseSdCard() == ESP_OK));
    return 1;
-#else
-   return 0;
-#endif
 }
 
 static void initComponents()
 {
-esp_err_t ret = ESP_FAIL;
 static Thread t;
    
    cfgInit();
 
-   sdmmc_slot_config_t cfg = {0};
-
-#ifdef CONFIG_SOC_SDMMC_USE_GPIO_MATRIX      
-   ret = cfgGetSdCard(&cfg);
-#endif      
+   sdmmc_slot_config_t cfg = SDMMC_SLOT_CONFIG_DEFAULT();
    
-   if(ret == ESP_OK)
+   if(cfgGetSdCard(&cfg) == ESP_OK)
    {
       openSdCard(&cfg);
    }

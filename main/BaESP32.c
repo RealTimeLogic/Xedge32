@@ -1380,9 +1380,6 @@ static int li2cMaster(lua_State* L)
    return 1;
 }
 
-
-
-
 /*********************************************************************
  *********************************************************************
                                   UART
@@ -1881,7 +1878,9 @@ static int lexecute(lua_State* L)
 
 static const luaL_Reg esp32Lib[] = {
    {"adc", ladc},
+#ifdef CONFIG_CAM_ENABLED
    {"cam", lcam},
+#endif
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
    {"pwmtimer", lLedTimer},

@@ -15,6 +15,7 @@
  * the image data. Please note that this binding assumes the ESP-IDF
  * camera driver has already been configured and installed.
  */
+#ifdef CONFIG_CAM_ENABLED
 #include "BaESP32.h"
 
 #include "esp_camera.h"
@@ -216,8 +217,7 @@ static const luaL_Reg camObjLib[] = {
  *   - frame: the image frame size (QQVGA, QVGA, SVGA ...), default is QVGA.
  *   - vflip: vertical flip on camera output, default false.
  *   - hmirror: horizontal mirror on camera output, default false.
- * Returns the camera object, or nill.
- * Note: Use the idf to set the default parameters of the CAM object.
+ * Returns the camera object, or nil,err on error.
  */
 int lcam(lua_State* L)
 {
@@ -226,23 +226,23 @@ int lcam(lua_State* L)
    camera_config_t cfg;
    
    lInitConfigTable(L, 1);
-   lua_Integer d0 = balua_getIntField(L, 1, "d0", CONFIG_CAM_D0);
-   lua_Integer d1 = balua_getIntField(L, 1, "d1", CONFIG_CAM_D1);
-   lua_Integer d2 = balua_getIntField(L, 1, "d2", CONFIG_CAM_D2);
-   lua_Integer d3 = balua_getIntField(L, 1, "d3", CONFIG_CAM_D3);
-   lua_Integer d4 = balua_getIntField(L, 1, "d4", CONFIG_CAM_D4);
-   lua_Integer d5 = balua_getIntField(L, 1, "d5", CONFIG_CAM_D5);
-   lua_Integer d6 = balua_getIntField(L, 1, "d6", CONFIG_CAM_D6);
-   lua_Integer d7 = balua_getIntField(L, 1, "d7", CONFIG_CAM_D7);
-   lua_Integer xclk = balua_getIntField(L, 1, "xclk", CONFIG_CAM_XCLK);
-   lua_Integer pclk = balua_getIntField(L, 1, "pclk", CONFIG_CAM_PCLK);
-   lua_Integer vsync = balua_getIntField(L, 1, "vsync", CONFIG_CAM_VSYNC);
-   lua_Integer href = balua_getIntField(L, 1, "href", CONFIG_CAM_HREF);
-   lua_Integer sda = balua_getIntField(L, 1, "sda", CONFIG_CAM_SDA);
-   lua_Integer scl = balua_getIntField(L, 1, "scl", CONFIG_CAM_SCL);
-   lua_Integer reset = balua_getIntField(L, 1, "reset", CONFIG_CAM_RESET);
+   lua_Integer d0 = balua_checkIntField(L, 1, "d0");
+   lua_Integer d1 = balua_checkIntField(L, 1, "d1");
+   lua_Integer d2 = balua_checkIntField(L, 1, "d2");
+   lua_Integer d3 = balua_checkIntField(L, 1, "d3");
+   lua_Integer d4 = balua_checkIntField(L, 1, "d4");
+   lua_Integer d5 = balua_checkIntField(L, 1, "d5");
+   lua_Integer d6 = balua_checkIntField(L, 1, "d6");
+   lua_Integer d7 = balua_checkIntField(L, 1, "d7");
+   lua_Integer xclk = balua_checkIntField(L, 1, "xclk");
+   lua_Integer pclk = balua_checkIntField(L, 1, "pclk");
+   lua_Integer vsync = balua_checkIntField(L, 1, "vsync");
+   lua_Integer href = balua_checkIntField(L, 1, "href");
+   lua_Integer sda = balua_checkIntField(L, 1, "sda");
+   lua_Integer scl = balua_checkIntField(L, 1, "scl");
+   lua_Integer reset = balua_checkIntField(L, 1, "reset");
    lua_Integer pwdn = balua_getIntField(L, 1, "pwdn", -1);
-   lua_Integer freq = balua_getIntField(L, 1, "freq", CONFIG_CAM_XCLK_FREQ);
+   lua_Integer freq = balua_checkIntField(L, 1, "freq");
    const char* format = balua_getStringField(L, 1, "format", cfg_format_to_str());
    const char* frame = balua_getStringField(L, 1, "frame", cfg_frame_to_str());
    int vflip = balua_getBoolField(L, 1, "vflip", cfg_vflip_to_int());
@@ -383,3 +383,5 @@ int lcam(lua_State* L)
    
    return 1;
 }
+#endif // CONFIG_CAM_ENABLED
+

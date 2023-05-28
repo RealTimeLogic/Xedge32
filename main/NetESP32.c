@@ -13,17 +13,22 @@
 #include <sys/time.h>
 #include <esp_sntp.h>
 #include <esp_wifi.h>
-#include <esp_eth_mac.h>
+
 #include <esp_mac.h>
 #include <esp_event.h>
 #include <esp_log.h>
 #include <esp_system.h>
 #include <esp_netif.h>
-#include "esp_eth.h"
+
 #include "esp_netif.h"
 #include "BaESP32.h"
 #include "CfgESP32.h"
 #include "NetESP32.h"
+
+#ifdef CONFIG_ETH_ENABLED
+#include <esp_eth_mac.h>
+#include <esp_eth.h>
+#endif
 
 #define WIFI_SCAN_LIST_SIZE 10
 
@@ -32,13 +37,16 @@ static const char TAG[]={"X"};
 static SemaphoreHandle_t semGotIp = 0;
 static uint8_t gotIP = FALSE; /* if IP set */
 
+#ifdef CONFIG_ETH_ENABLED
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_eth_mac_t *s_mac = NULL;
 static esp_eth_phy_t *s_phy = NULL;
 static esp_eth_netif_glue_handle_t s_eth_glue = NULL;
+static spi_host_device_t spiHostId = 0;
+#endif
+
 static esp_netif_t *wifi_netif = NULL;
 static esp_netif_t *eth_netif = NULL;
-static spi_host_device_t spiHostId = 0;
 
 /* This buffer is used as the memory for the eventBrokerQueue, which
  * serves various messaging purposes, including sending messages from
@@ -367,7 +375,7 @@ static esp_err_t netWifiStop(void)
 static esp_err_t netEthStop(void)
 {
     printf("Closing Ethernet connection\n");
-    
+#ifdef CONFIG_ETH_ENABLED    
     if((eth_netif != NULL) && (s_eth_handle != NULL)) 
     {
        ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
@@ -384,7 +392,7 @@ static esp_err_t netEthStop(void)
       
        spi_bus_free(spiHostId);  
    }
-   
+#endif   
    return ESP_OK;
 }
 
@@ -404,6 +412,7 @@ static void netRmiiInit(int mdcPin, int mdioPin)
 } 
 #endif
 
+#ifdef CONFIG_ETH_USE_SPI_ETHERNET
 /**
  * @brief Initialize the Ethernet interface using SPI mode.
  *
@@ -428,7 +437,9 @@ static void netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
    spi_devcfg->spics_io_num = spi->cs;
    spi_devcfg->queue_size = 20;
 }
+#endif
 
+#ifdef CONFIG_ETH_ENABLED
 /**
  * @brief Sets the MAC address for the ESP32's internal Ethernet MAC.
  *
@@ -436,6 +447,7 @@ static void netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
  */
 static esp_err_t netSetMac(void)
 {
+
 uint8_t mac[6];  // Array to store the MAC address
 
    // Read the MAC address of the ESP32's internal Ethernet MAC
@@ -448,6 +460,7 @@ uint8_t mac[6];  // Array to store the MAC address
 
    return err;
 }
+#endif
 
 /**
  * @brief Connect to a Wi-Fi network with the specified SSID and password.
@@ -517,11 +530,13 @@ esp_err_t ret = ESP_OK;
  */
 esp_err_t netEthConnect(void)
 {
+#ifdef CONFIG_ETH_ENABLED
    if(s_eth_handle != NULL)
    {
       esp_eth_start(s_eth_handle);
       return ESP_OK;
    }
+#endif
    
    return ESP_ERR_INVALID_ARG;
 }
@@ -534,6 +549,7 @@ esp_err_t netEthConnect(void)
  */
 static esp_err_t netEthStart(netConfig_t* cfg)
 {
+#ifdef CONFIG_ETH_ENABLED
    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_ETH();
    esp_netif_config.if_desc = "Ethernet";
    esp_netif_config.route_prio = 64;
@@ -654,6 +670,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    // combine driver with netif
    s_eth_glue = esp_eth_new_netif_glue(s_eth_handle);
    esp_netif_attach(eth_netif, s_eth_glue);
+#endif
 
    return ESP_OK; 
 }

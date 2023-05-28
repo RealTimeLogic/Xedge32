@@ -1,295 +1,72 @@
-menu "SD/MMC Example Configuration"
+menu "Xedge config"
+   
+   menu "Camera"
+   
+      config CAM_ENABLED
+	      bool "Enable camera module"
+	      default n
+	      help
+		      Includes in the compilation the CAM module, note that it is not compatible with the esp32 standard.
+		         
 
-    choice EXAMPLE_SDMMC_BUS_WIDTH
-        prompt "SD/MMC bus width"
-        default EXAMPLE_SDMMC_BUS_WIDTH_4
-        help
-            Select the bus width of SD or MMC interface.
-            Note that even if 1 line mode is used, D3 pin of the SD card must have a pull-up resistor connected.
-            Otherwise the card may enter SPI mode, the only way to recover from which is to cycle power to the card.
+      if CAM_ENABLED
+         choice CAM_GRAB
+            prompt "Mode of grabbing images"
+            default GRAB_WHEN_EMPTY
+            help
+              Select the camera capturing images mode.
 
-        config EXAMPLE_SDMMC_BUS_WIDTH_4
-            bool "4 lines (D0 - D3)"
+            config GRAB_WHEN_EMPTY
+              bool "EMPTY"
+              help
+                  Fills buffers when they are empty. Less resources but first 'fb_count' frames might be old.
 
-        config EXAMPLE_SDMMC_BUS_WIDTH_1
-            bool "1 line (D0)"
-    endchoice
+            config GRAB_LATEST
+              bool "LATEST"
+              help
+                  Except when 1 frame buffer is used, queue will always contain the last 'fb_count' frames.
+         endchoice
 
-    if SOC_SDMMC_USE_GPIO_MATRIX
+         choice CAM_FB_COUNT
+            prompt "Number of frame buffers"
+            default FB_ONE
+            help
+              Select number of frame buffers.
 
-        config EXAMPLE_PIN_CMD
-            int "CMD GPIO number"
-            default 35 if IDF_TARGET_ESP32S3
+            config FB_ONE
+              bool "ONE"
+              help
+                  Normal speed.
 
-        config EXAMPLE_PIN_CLK
-            int "CLK GPIO number"
-            default 36 if IDF_TARGET_ESP32S3
+            config FB_TWO
+              bool "TWO"
+              help
+                  Two double speed.
+         endchoice
+      endif # CAM_ENABLED
+   endmenu
 
-        config EXAMPLE_PIN_D0
-            int "D0 GPIO number"
-            default 37 if IDF_TARGET_ESP32S3
-
-        if EXAMPLE_SDMMC_BUS_WIDTH_4
-
-            config EXAMPLE_PIN_D1
-                int "D1 GPIO number"
-                default 38 if IDF_TARGET_ESP32S3
-
-            config EXAMPLE_PIN_D2
-                int "D2 GPIO number"
-                default 33 if IDF_TARGET_ESP32S3
-
-            config EXAMPLE_PIN_D3
-                int "D3 GPIO number"
-                default 34 if IDF_TARGET_ESP32S3
-
-        endif  # EXAMPLE_SDMMC_BUS_WIDTH_4
-
-    endif  # SOC_SDMMC_USE_GPIO_MATRIX
-
-endmenu
-
-menu "CAM Object Configuration"
+   menu "Connection"
       
-config CAM_XCLK_FREQ
-    int "XCLK Frequency"
-    default "20000000"
-    help
-        The XCLK Frequency in Herz.
-      
-menu "Pin Configuration"
-    config CAM_D0
-        int "D0"
-        default "34"
-    config CAM_D1
-        int "D1"
-        default "13"
-    config CAM_D2
-        int "D2"
-        default "14"
-    config CAM_D3
-        int "D3"
-        default "35"
-    config CAM_D4
-        int "D4"
-        default "39"
-    config CAM_D5
-        int "D5"
-        default "38"
-    config CAM_D6
-        int "D6"
-        default "37"
-    config CAM_D7
-        int "D7"
-        default "36"
-    config CAM_XCLK
-        int "XCLK"
-        default "4"
-    config CAM_PCLK
-        int "PCLK"
-        default "25"
-    config CAM_VSYNC
-        int "VSYNC"
-        default "5"
-    config CAM_HREF
-        int "HREF"
-        default "27"
-    config CAM_SDA
-        int "SDA"
-        default "18"
-    config CAM_SCL
-        int "SCL"
-        default "23"
-    config CAM_RESET
-        int "RESET"
-        default "-1"
-endmenu
+      config WIFI_SCAN_RSSI_THRESHOLD
+          int "WiFi minimum rssi"
+          range -127 0
+          default -127
+          help
+              The minimum rssi to accept in the scan mode.
 
-choice CAM_PIXEL_FORMAT
-    prompt "Select the pixel format"
-    default PIXFORMAT_JPEG
-    help
-        Select the sensor output pixel format.
+      config ETHERNET_EMAC_TASK_STACK_SIZE
+         int "emac_rx task stack size"
+         default 2048
+         help
+            This set stack size for emac_rx task
 
-    config PIXFORMAT_RGB565
-        bool "RGB565"
-        help
-            The RGB565 color format is the same as the RGB555 color format, 
-            except that 6 bits are used for the green value instead of 5. 
-            Therefore, all 16 bits are in use.
-
-    config PIXFORMAT_YUV422
-        bool "YUV422"
-        help
-            4 bytes per 2 pixels.
-
-    config PIXFORMAT_GRAYSCALE
-        bool "GRAYSCALE"
-        help
-            The value of each pixel is a single sample representing only an amount of light, 
-            that is, it carries only intensity information.
-
-    config PIXFORMAT_JPEG
-        bool "JPEG"
-        help
-            JPEG compression.
-
-    config PIXFORMAT_RGB888
-        bool "RGB888"
-        help
-            uncompressed, 3 bytes for pixel.
-
-    config PIXFORMAT_RAW
-        bool "RAW"
-        help
-            raw.
-
-    config PIXFORMAT_RGB444
-        bool "RGB444"
-        help
-            2 bytes por pixel.
-
-    config PIXFORMAT_RGB555
-        bool "RGB555"
-        help
-            2 bytes por pixel.
-endchoice
-
-choice CAM_FRAME_SIZE
-    prompt "Select the frame size"
-    default FRAMESIZE_QVGA
-    help
-        Select the sensor output frame size.
-
-    config FRAMESIZE_96X96
-        bool "96x96"
-        help
-            96 x 96 pixeles.
-
-    config FRAMESIZE_QQVGA
-        bool "QQVGA"
-        help
-            160 x 120 pixeles.
-
-    config FRAMESIZE_QCIF     
-        bool "QCIF"
-        help
-            176 x 144 pixeles.
-
-    config FRAMESIZE_HQVGA
-        bool "HQVGA"
-        help
-            240 x 176.
-
-    config FRAMESIZE_240X240
-        bool "240x240"
-        help
-            240 x 240 pixeles.
-
-    config FRAMESIZE_QVGA
-        bool "QVGA"
-        help
-            320 x 240 pixeles.
-
-    config FRAMESIZE_CIF
-        bool "CIF"
-        help
-            400 x 296 pixeles.
-
-    config FRAMESIZE_HVGA     
-        bool "HVGA"
-        help
-            480 x 320 pixeles.
-    
-    config FRAMESIZE_VGA     
-        bool "VGA"
-        help
-            640 x 480 pixeles.
-
-    config FRAMESIZE_SVGA     
-        bool "SVGA"
-        help
-            800 x 600 pixeles.
-
-    config FRAMESIZE_XGA     
-        bool "XGA"
-        help
-            1024 x 768 pixeles.
-
-    config FRAMESIZE_HD     
-        bool "HD"
-        help
-            1280 x 720 pixeles.
-endchoice
-
-config CAM_ENABLE_VERTICAL_FLIP
-	bool "Enable vertical flip on camera output"
-	default n
-	help
-		Flip the frame of the the camera module.
-
-config CAM_ENABLE_HORIZONTAL_MIRROR
-   bool "Enable horizontal mirror on camera output"
-	default n
-	help
-		Mirror the frame of the the camera module.
-
-choice CAM_GRAB
-    prompt "Mode of grabbing images"
-    default GRAB_WHEN_EMPTY
-    help
-        Select the camera capturing images mode.
-
-    config GRAB_WHEN_EMPTY
-        bool "EMPTY"
-        help
-            Fills buffers when they are empty. Less resources but first 'fb_count' frames might be old.
-
-    config GRAB_LATEST
-        bool "LATEST"
-        help
-            Except when 1 frame buffer is used, queue will always contain the last 'fb_count' frames.
-endchoice
-
-choice CAM_FB_COUNT
-    prompt "Number of frame buffers"
-    default FB_ONE
-    help
-        Select number of frame buffers.
-
-    config FB_ONE
-        bool "ONE"
-        help
-            Normal speed.
-
-    config FB_TWO
-        bool "TWO"
-        help
-            Two double speed.
-endchoice
-
-endmenu
-
-menu "Connection Configuration"
-   
-   config WIFI_SCAN_RSSI_THRESHOLD
-       int "WiFi minimum rssi"
-       range -127 0
-       default -127
-       help
-           The minimum rssi to accept in the scan mode.
-   
-   config ETHERNET_EMAC_TASK_STACK_SIZE
-      int "emac_rx task stack size"
-      default 2048
-      help
-         This set stack size for emac_rx task
-   
-   config ETHERNET_PHY_ADDR
-      int "PHY Address"
-      range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
-      default 1
-      help
-          Set PHY address according your board schematic.
-  
+      config ETHERNET_PHY_ADDR
+         int "PHY Address"
+         range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
+         default 1
+         help
+             Set PHY address according your board schematic.
+     
+   endmenu
 endmenu
