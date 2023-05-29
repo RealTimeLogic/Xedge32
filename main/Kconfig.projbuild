@@ -11,7 +11,7 @@ menu "Xedge config"
 
       if CAM_ENABLED
          choice CAM_GRAB
-            prompt "Mode of grabbing images"
+            prompt "Image capturing mode"
             default GRAB_WHEN_EMPTY
             help
               Select the camera capturing images mode.

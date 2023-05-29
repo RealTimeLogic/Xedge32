@@ -1878,7 +1878,7 @@ static int lexecute(lua_State* L)
 
 static const luaL_Reg esp32Lib[] = {
    {"adc", ladc},
-#ifdef CONFIG_CAM_ENABLED
+#if CONFIG_CAM_ENABLED
    {"cam", lcam},
 #endif
    {"gpio", lgpio},

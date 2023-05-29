@@ -15,8 +15,9 @@
  * the image data. Please note that this binding assumes the ESP-IDF
  * camera driver has already been configured and installed.
  */
-#ifdef CONFIG_CAM_ENABLED
+
 #include "BaESP32.h"
+#if CONFIG_CAM_ENABLED
 
 #include "esp_camera.h"
 
