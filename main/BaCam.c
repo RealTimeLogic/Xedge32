@@ -28,93 +28,6 @@ typedef struct {
 } LCAM;
 
 
-/**
- * Converts the pixel format selected in the KConfig menu to a string.
- * If no pixel format is defined, the function returns a dash ("-").
- */  
-static const char* cfg_format_to_str(void)
-{
-#if CONFIG_PIXFORMAT_RGB565
-   return "RGB565"; 
-#elif CONFIG_PIXFORMAT_YUV422
-   return "YUV422";
-#elif CONFIG_PIXFORMAT_GRAYSCALE
-   return "GRAYSCALE";
-#elif CONFIG_PIXFORMAT_JPEG
-   return "JPEG";
-#elif CONFIG_PIXFORMAT_RGB888
-   return "RGB888";
-#elif CONFIG_PIXFORMAT_RAW
-   return "RAW";
-#elif CONFIG_PIXFORMAT_RGB444
-   return "RGB444";
-#elif CONFIG_PIXFORMAT_RGB555
-   return "RGB555";
-#else
-   return "-";
-#endif
-}
-
-/**
- * Converts the size frame selected in the KConfig menu to a string.
- * If no pixel size is defined, the function returns a dash ("-").
- */ 
-static const char* cfg_frame_to_str(void)
-{
-//QQVGA-QXGA Do not use sizes above QVGA when not JPEG
-#if CONFIG_FRAMESIZE_96X96
-   return "96X96";      
-#elif CONFIG_FRAMESIZE_QQVGA
-   return "QQVGA";
-#elif CONFIG_FRAMESIZE_QCIF
-   return "QCIF";
-#elif CONFIG_FRAMESIZE_HQVGA
-   return "HQVGA";
-#elif CONFIG_FRAMESIZE_240X240
-   return "240X240";
-#elif CONFIG_FRAMESIZE_QVGA
-   return "QVGA";
-#elif CONFIG_FRAMESIZE_CIF
-   return "CIF";
-#elif CONFIG_FRAMESIZE_HVGA
-   return "HVGA";
-#elif CONFIG_FRAMESIZE_VGA
-   return "VGA";
-#elif CONFIG_FRAMESIZE_SVGA
-   return "SVGA";
-#elif CONFIG_FRAMESIZE_XGA
-   return "XGA";
-#elif CONFIG_FRAMESIZE_HD
-   return "HD";
-#else
-   return "-";
-#endif
-}
-
-/**
- * Converts the vertical flip selected in the KConfig menu to a boolean.
- */
-static int cfg_vflip_to_int(void)
-{
-#if ENABLE_VERTICAL_FLIP
-   return TRUE;
-#else
-   return FALSE;
-#endif
-}
-
-/**
- * Converts the vertical horizontal mirror in the KConfig menu to a boolean.
- */
-static int cfg_hmirror_to_int(void)
-{
-#if ENABLE_HORIZONTAL_MIRROR
-   return TRUE;
-#else
-   return FALSE;
-#endif
-}
-
 static LCAM* LCAM_getUD(lua_State* L)
 {
    return (LCAM*)luaL_checkudata(L, 1, BACAM);
@@ -244,10 +157,10 @@ int lcam(lua_State* L)
    lua_Integer reset = balua_checkIntField(L, 1, "reset");
    lua_Integer pwdn = balua_getIntField(L, 1, "pwdn", -1);
    lua_Integer freq = balua_checkIntField(L, 1, "freq");
-   const char* format = balua_getStringField(L, 1, "format", cfg_format_to_str());
-   const char* frame = balua_getStringField(L, 1, "frame", cfg_frame_to_str());
-   int vflip = balua_getBoolField(L, 1, "vflip", cfg_vflip_to_int());
-   int hmirror = balua_getBoolField(L, 1, "hmirror", cfg_hmirror_to_int());
+   const char* format = balua_getStringField(L, 1, "format", "JPEG");
+   const char* frame = balua_getStringField(L, 1, "frame", "QVGA");
+   int vflip = balua_getBoolField(L, 1, "vflip", FALSE);
+   int hmirror = balua_getBoolField(L, 1, "hmirror", FALSE);
 
    // Check pixel format
    if (strcmp(format, "JPEG") == 0)
