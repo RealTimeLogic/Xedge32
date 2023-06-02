@@ -47,8 +47,9 @@ struct {
 
 static const char TAG[]={"X"};
 
-static U8 gotSdCard=FALSE;
-static const char mountPoint[]={"/sdcard"};
+static bool gotSdCard = FALSE;
+static const char mountPoint[] = {"/sdcard"};
+static sdmmc_card_t *card = NULL;
 
 extern int (*platformInitDiskIo)(DiskIo*);  /* xedge.c */
 
@@ -230,8 +231,6 @@ static void mainServerTask(Thread *t)
  *                - `d3`: GPIO number for the SD card data pin 3 (applicable only for 4-bit wide bus).
  *                - `width`: Bus width of the SD card. Set to 1 for 1-bit wide bus or 4 for 4-bit wide bus.
  *
- * @note: The CONFIG_SOC_SDMMC_USE_GPIO_MATRIX must be enabled.
- *
  * @return esp_err_t Returns ESP_OK if the connection was successful.
  */
 static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
@@ -242,11 +241,10 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
       .max_files = 20, /* max open files */
       .allocation_unit_size = 16 * 1024
    };
-   sdmmc_card_t *card;
+   
    sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-  
    slotCfg->flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
-   ret = esp_vfs_fat_sdmmc_mount(mountPoint, &host, &slotCfg, &mountCfg, &card);
+   ret = esp_vfs_fat_sdmmc_mount(mountPoint, &host, slotCfg, &mountCfg, &card);
    
    gotSdCard = (ret == ESP_OK) ? true : false;
    
@@ -269,6 +267,30 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
    }
    
    return ret;
+}
+
+/**
+ * @brief Low-level function to close the SD card.
+ *
+ * @return esp_err_t Returns ESP_OK if the connection was successful.
+ */
+static esp_err_t closeSdcard(void)
+{
+esp_err_t err = ESP_OK;
+
+   if(card)
+   {
+      err = esp_vfs_fat_sdcard_unmount(mountPoint, card);
+      
+      if(err == ESP_OK)
+      {
+         ESP_LOGI(TAG, "SD card unmounted");
+         card = NULL;
+         gotSdCard = false;
+      }
+   }
+   
+   return err;
 }
 
 /**
@@ -360,12 +382,22 @@ int lsdcard(lua_State* L)
             cfg.d6 = luaL_checkinteger(L, 10);
             cfg.d7 = luaL_checkinteger(L, 11);
          }
-#endif                
-         esp_err_t err = openSdCard(&cfg);
+#endif     
+         esp_err_t err = closeSdcard();
          if(ESP_OK == err)
-         {
-            cfgSetSdCard(&cfg);
-            esp_restart();
+         {           
+            err = openSdCard(&cfg);
+            if(ESP_OK == err)
+            {
+               cfgSetSdCard(&cfg);
+               // TODO: When I execute esp_restart with esp32-s3 and the console 
+               // is CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, the restart hangs, but 
+               // when I put a delay of 1000 mS it works.
+#if CONFIG_IDF_TARGET_ESP32S3
+               Thread_sleep(1000);
+#endif
+               esp_restart();
+            }
          }
          
          return pushEspRetVal(L, err, 0);
@@ -377,6 +409,7 @@ int lsdcard(lua_State* L)
    }
    
    // If the number of arguments is less 0, erase the SD card config.
+   closeSdcard();
    lua_pushboolean(L, (cfgEraseSdCard() == ESP_OK));
    return 1;
 }
