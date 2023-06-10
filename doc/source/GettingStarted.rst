@@ -1,7 +1,14 @@
 Getting Started
 ================
 
-To get started, you must upload the firmware to an ESP32 with PSRAM, such as the `ESP32 WROVER <https://www.google.com/search?q=esp32+wrover>`_ board, using a flashing tool or programming software. You can either use our ready-to-use firmware binary files or compile the C source code using the Espressif ESP-IDF.
+To start using Xedge, you need to upload the firmware onto an ESP32-S3 or an ESP32 with PSRAM (for example, the `ESP32 WROVER <https://www.google.com/search?q=esp32+wrover>`_). You can do this using a flashing tool or programming software.
+
+We offer two options for the firmware:
+
+1. Ready-to-use firmware binary files which you can directly upload onto your board.
+2. C source code files which you can compile using the Espressif ESP-IDF toolchain.
+
+**Important:** We have provided instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
 
 .. contents:: Get started as follows:
    :depth: 2
@@ -21,26 +28,26 @@ To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ES
 - `ESP32  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
 - `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
 
-Unzip both archives.
+Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedge32-S3-Firmware.zip archive`.
 
 
 1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
 2. Start the ESPRESSIF Flash Tool `flash_download_tool_3.9.4.exe` executable.
-3. When the tool starts, select ChipType ESP32 and click OK.
+3. When the tool starts, select ChipType ESP32 or ESP32-S3 and click OK.
 4. On the SPIDownload page, set the COM port to the one used by the ESP32 and set Speed to 115200.
 5. Click the ERASE button and wait for it to complete.
 6. Click the 3 dots (...) to browse to the bin files you downloaded.
 7. Select the following binary files and set the address accordingly:
 
-+-----------------------+-------------------+
-| Binary File           | Address           |
-+=======================+===================+
-| `bootloader.bin`      | `0x1000`          |
-+-----------------------+-------------------+
-| `partition_table.bin` | `0x8000`          |
-+-----------------------+-------------------+
-| `xedge.bin`           | `0x10000`         |
-+-----------------------+-------------------+
++-----------------------+-------------------+-------------------+
+| Binary File           |   ESP32 Address   | ESP32-S3 Address  |
++=======================+===================+===================+
+| `bootloader.bin`      | `0x1000`          | `0x0`             |
++-----------------------+-------------------+-------------------+
+| `partition_table.bin` | `0x8000`          | `0x8000`          |
++-----------------------+-------------------+-------------------+
+| `xedge.bin`           | `0x10000`         | `0x10000`         |
++-----------------------+-------------------+-------------------+
 
 8.  Click the three checkboxes to the left of the three bin files to select them.
 9.  Do not change any other values.
@@ -82,7 +89,7 @@ Upload the **ESP32-S3** firmware:
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
    unzip Xedge32-S3-Firmware.zip
-   ~/.local/bin/esptool.py  -p /dev/ttyS10 --before default_reset --after hard_reset --chip esp32-s3  write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
+   ~/.local/bin/esptool.py  -p /dev/ttyUSB0 --chip esp32-s3 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 80m --flash_size detect 0x0  Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000  Xedge32-Firmware/xedge.bin 
 
 
 Firmware Option 2: Compile The Code
