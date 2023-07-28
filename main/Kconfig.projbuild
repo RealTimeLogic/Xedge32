@@ -1,0 +1,72 @@
+menu "Xedge config"
+   
+   menu "Camera"
+   
+      config CAM_ENABLED
+	      bool "Enable camera module"
+	      default n
+	      help
+		      Includes in the compilation the CAM module, note that it is not compatible with the esp32 standard.
+		         
+
+      if CAM_ENABLED
+         choice CAM_GRAB
+            prompt "Image capturing mode"
+            default GRAB_WHEN_EMPTY
+            help
+              Select the camera capturing images mode.
+
+            config GRAB_WHEN_EMPTY
+              bool "EMPTY"
+              help
+                  Fills buffers when they are empty. Less resources but first 'fb_count' frames might be old.
+
+            config GRAB_LATEST
+              bool "LATEST"
+              help
+                  Except when 1 frame buffer is used, queue will always contain the last 'fb_count' frames.
+         endchoice
+
+         choice CAM_FB_COUNT
+            prompt "Number of frame buffers"
+            default FB_ONE
+            help
+              Select number of frame buffers.
+
+            config FB_ONE
+              bool "ONE"
+              help
+                  Normal speed.
+
+            config FB_TWO
+              bool "TWO"
+              help
+                  Two double speed.
+         endchoice
+      endif # CAM_ENABLED
+   endmenu
+
+   menu "Connection"
+      
+      config WIFI_SCAN_RSSI_THRESHOLD
+          int "WiFi minimum rssi"
+          range -127 0
+          default -127
+          help
+              The minimum rssi to accept in the scan mode.
+
+      config ETHERNET_EMAC_TASK_STACK_SIZE
+         int "emac_rx task stack size"
+         default 2048
+         help
+            This set stack size for emac_rx task
+
+      config ETHERNET_PHY_ADDR
+         int "PHY Address"
+         range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
+         default 1
+         help
+             Set PHY address according your board schematic.
+     
+   endmenu
+endmenu

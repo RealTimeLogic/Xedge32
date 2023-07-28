@@ -36,18 +36,24 @@ The following Linux commands show all steps required for installing the developm
    mkdir esp
    cd esp
    git clone --recursive https://github.com/espressif/esp-idf.git
-   cd esp-idf
+   cd esp-idf/components
+   git clone https://github.com/espressif/esp32-camera.git
+   cd ..
    ./install.sh
    cd ..
    source esp-idf/export.sh
 
    # Download Xedge32
-   git clone --recursive https://github.com/RealTimeLogic/xedge-ESP32.git xedge
+   git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
 
-   # Add additional ESP32 resources to the Xedge ZIP file
-   chmod +x AddESP32Resources.sh
-   ./AddESP32Resources.sh
+   #set target to one of:
+   #idf.py set-target esp32
+   #idf.py set-target esp32s3
+
+   # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
+   chmod +x BuildESP32ResourceFile.sh
+   ./BuildESP32ResourceFile.sh
 
    # Build the code
    idf.py build

@@ -14,6 +14,8 @@
 #include <sys/time.h>
 #include <esp_vfs.h>
 #include <esp_vfs_fat.h>
+#include <sdmmc_cmd.h>
+#include <driver/sdmmc_host.h>
 #include <esp_sntp.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
@@ -23,11 +25,19 @@
 #include <esp_netif.h>
 #include <esp_console.h>
 #include <linenoise/linenoise.h>
-#include <protocol_examples_common.h>
 #include <barracuda.h>
 #include "BaESP32.h"
+#include "NetESP32.h"
+#include "CfgESP32.h"
 
-#define WIFI_SCAN_LIST_SIZE 10
+#define ADD_THREAD_DBG
+
+#ifdef ADD_THREAD_DBG
+#include <freertos/task_snapshot.h>
+#include <esp_debug_helpers.h>
+static lua_State* Lg; /* Global state */
+static void dbgThreads();
+#endif
 
 struct {
    char* buf;
@@ -35,69 +45,13 @@ struct {
    size_t size;
 } luaLineBuffer = {0};
 
+static const char TAG[]={"X"};
 
-static U8 gotIP=FALSE; /* if IP set */
-static SemaphoreHandle_t semGotIp = 0;
+static bool gotSdCard = FALSE;
+static const char mountPoint[] = {"/sdcard"};
+static sdmmc_card_t *card = NULL;
+
 extern int (*platformInitDiskIo)(DiskIo*);  /* xedge.c */
-
-typedef struct
-{
-   ThreadJob super;
-   const char* function;
-   char* param1;
-   char* param2;
-   char* param3;
-} ExecuteGlobalLFuncJob;
-
-static void* checkAlloc(void* mem)
-{
-   if( ! mem )
-      baFatalE(FE_MALLOC,0);
-   return mem;
-}
-
-
-/* This function runs in the context of a thread in the LThreadMgr, and
-   is triggered by the dispatchExecuteGlobalLFunc.
- */
-static void executeGlobalLFuncCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
-{
-   lua_State* L = jb->Lt;
-   ExecuteGlobalLFuncJob* job = (ExecuteGlobalLFuncJob*)jb;
-   lua_pushglobaltable(L);
-   lua_getfield(L, -1, job->function);
-   if(lua_isfunction(L, -1))
-   {
-      int params=0;
-      if(job->param1) { lua_pushstring(L, job->param1); params++; }
-      if(job->param2) { lua_pushstring(L, job->param2); params++; }
-      if(job->param3) { lua_pushstring(L, job->param3); params++; }
-      lua_pcall(L, params, 0, msgh);
-   }
-   else
-   {
-      HttpTrace_printf(0, "Warn: Lua function '%s' missing\n", job->function);
-   }
-   if(job->param1) baFree(job->param1);
-   if(job->param2) baFree(job->param2);
-   if(job->param3) baFree(job->param3);
-}
-
-
-static void executeGlobalLFunc(
-   const char* function, char* param1, char* param2, char* param3)
-{
-   ExecuteGlobalLFuncJob* job=(ExecuteGlobalLFuncJob*)checkAlloc(
-      ThreadJob_lcreate(sizeof(ExecuteGlobalLFuncJob),executeGlobalLFuncCB));
-   job->function=function;
-   job->param1=param1;
-   job->param2=param2;
-   job->param3=param3;
-   ThreadMutex_set(soDispMutex);
-   LThreadMgr_run(&ltMgr, (ThreadJob*)job);
-   ThreadMutex_release(soDispMutex);
-}
-
 
 /* mark in error messages for incomplete statements */
 #define EOFMARK		"<eof>"
@@ -136,7 +90,7 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
       const char* emsg = lcomplete(L, status);
       if( ! emsg )
          return; /* incomplete */
-      HttpTrace_printf(0, "Syntax error: %s\n", emsg);
+      ESP_LOGE(TAG, "Syntax error: %s\n", emsg);
    }
    if (LUA_OK == status)
    {
@@ -153,17 +107,43 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 */
 void luaopen_AUX(lua_State* L)
 {
+#ifdef ADD_THREAD_DBG
+   Lg=L;
+#endif
    installESP32Libs(L);
-   if( ! gotIP )
+
+netConfig_t cfg;
+
+   /* Delay execution until this point to avoid generating any events
+    * that might use the soDispMutex before it is initialized. The
+    * semaphore is initialized within the installESP32Libs function.
+    */
+   cfgGetNet(&cfg);
+
+   if(!strcmp("wifi", cfg.adapter))
    {
-      semGotIp = xSemaphoreCreateBinary();
-      baAssert(ThreadMutex_isOwner(soDispMutex));
-      ThreadMutex_release(soDispMutex);
-      xSemaphoreTake(semGotIp, portMAX_DELAY);
-      ThreadMutex_set(soDispMutex);
-      vSemaphoreDelete(semGotIp);
-      semGotIp=0;
+      netWifiConnect(cfg.ssid, cfg.password);
    }
+   else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
+   {
+      netEthConnect();
+   }  
+
+   if(gotSdCard)
+   {
+      /* Will not GC before VM terminates */
+      DiskIo* sdCard = (DiskIo*)lua_newuserdatauv(L, sizeof(DiskIo), 0);
+      luaL_ref(L, LUA_REGISTRYINDEX);
+
+      DiskIo_constructor(sdCard);
+      DiskIo_setRootDir(sdCard,mountPoint);
+      balua_iointf(L, "sd",  (IoIntf*)sdCard);
+   }
+
+   /* We return when we get an IP address, thus preventing the
+    * Barracuda App Server from starting until the network is ready.
+    */
+   netWaitIP();
 }
 
 
@@ -174,20 +154,21 @@ myErrHandler(BaFatalErrorCodes ecode1,
              const char* file,
              int line)
 {
-  ESP_LOGE("BAS", "Fatal error in Barracuda %d %d %s %d",
+  ESP_LOGE(TAG, "Fatal error in Barracuda %d %d %s %d\n",
            ecode1, ecode2, file, line);
   abort();
 }
 
+
 /* Send data from the server's trace to ESP console */
-static void
-writeHttpTrace(char* buf, int bufLen)
+static void writeHttpTrace(char* buf, int bufLen)
 {
   buf[bufLen]=0; /* Zero terminate. Bufsize is at least bufLen+1. */
   printf("%s",buf);
 }
 
-/* Configures DISK IO for examples/xedge/src/xedge.c
+
+/* Configures DISK IO for the C file: examples/xedge/src/xedge.c
  */
 static int initDiskIo(DiskIo* io)
 {
@@ -201,11 +182,11 @@ static int initDiskIo(DiskIo* io)
    if( ! mounted )
    {
       wl_handle_t hndl = WL_INVALID_HANDLE;
-      HttpTrace_printf(9,"Mounting FAT filesystem\n"); 
+      HttpTrace_printf(9,"Mounting internal FAT filesystem\n"); 
       esp_err_t err=esp_vfs_fat_spiflash_mount_rw_wl(bp,"storage",&mcfg,&hndl); 
       if (err != ESP_OK)
       {
-         HttpTrace_printf(0,"Failed to mount FATFS (%s)", esp_err_to_name(err));
+         ESP_LOGE(TAG, "mounting FATFS failed (%s)", esp_err_to_name(err));
          return -1;
       }
       mounted=TRUE;
@@ -217,13 +198,16 @@ static int initDiskIo(DiskIo* io)
 
 /* FreeRTOS task calling function barracuda() found in xedge.c
  */
-static void
-mainServerTask(Thread *t)
+static void mainServerTask(Thread *t)
 {
   (void)t;
 #ifdef USE_DLMALLOC
   /* Allocate as much pSRAM as possible */
+#if CONFIG_IDF_TARGET_ESP32S3
+  EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
+#else
   EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024 + 5*1024];
+#endif
   init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
 #else   
 #error must use dlmalloc
@@ -234,88 +218,216 @@ mainServerTask(Thread *t)
   barracuda(); /* Does not return */
 }
 
-
-static void onWifiDisconnect(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data)
+/**
+ * @brief Low-level function to open the SD card.
+ *
+ * @param slotCfg Pointer to the SD card slot configuration structure.
+ *                The `slotCfg` structure should be initialized with the following fields:
+ *                - `clk`: GPIO number for the SD card clock pin.
+ *                - `cmd`: GPIO number for the SD card command pin.
+ *                - `d0`: GPIO number for the SD card data pin 0.
+ *                - `d1`: GPIO number for the SD card data pin 1 (applicable only for 4-bit wide bus).
+ *                - `d2`: GPIO number for the SD card data pin 2 (applicable only for 4-bit wide bus).
+ *                - `d3`: GPIO number for the SD card data pin 3 (applicable only for 4-bit wide bus).
+ *                - `width`: Bus width of the SD card. Set to 1 for 1-bit wide bus or 4 for 4-bit wide bus.
+ *
+ * @return esp_err_t Returns ESP_OK if the connection was successful.
+ */
+static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
 {
-   if(gotIP)
+   esp_err_t ret;
+   esp_vfs_fat_sdmmc_mount_config_t mountCfg = {
+      .format_if_mount_failed = true,
+      .max_files = 20, /* max open files */
+      .allocation_unit_size = 16 * 1024
+   };
+   
+   sdmmc_host_t host = SDMMC_HOST_DEFAULT();
+   slotCfg->flags |= SDMMC_SLOT_FLAG_INTERNAL_PULLUP;
+   ret = esp_vfs_fat_sdmmc_mount(mountPoint, &host, slotCfg, &mountCfg, &card);
+   
+   gotSdCard = (ret == ESP_OK) ? true : false;
+   
+   if(ret == ESP_OK)
    {
-      gotIP=FALSE;
-      executeGlobalLFunc("_WiFi", strdup("down"), 0, 0);
+      ESP_LOGI(TAG, "SD card mounted");
+      sdmmc_card_print_info(stdout, card);
+   }   
+   else if(ret == ESP_ERR_TIMEOUT)
+   {
+      ESP_LOGI(TAG, "SD card not detected");
    }
-   esp_wifi_connect();
+   else if(ret == ESP_FAIL)
+   {
+      ESP_LOGE(TAG, "Mounting SD card failed");
+   }
+   else
+   {
+      ESP_LOGE(TAG, "Cannot initialize SD card (%s)", esp_err_to_name(ret));
+   }
+   
+   return ret;
 }
 
-
-static void onWifiConnect(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data)
+/**
+ * @brief Low-level function to close the SD card.
+ *
+ * @return esp_err_t Returns ESP_OK if the connection was successful.
+ */
+static esp_err_t closeSdcard(void)
 {
-   executeGlobalLFunc("_WiFi", baStrdup("up"), 0, 0);
+esp_err_t err = ESP_OK;
+
+   if(card)
+   {
+      err = esp_vfs_fat_sdcard_unmount(mountPoint, card);
+      
+      if(err == ESP_OK)
+      {
+         ESP_LOGI(TAG, "SD card unmounted");
+         card = NULL;
+         gotSdCard = false;
+      }
+   }
+   
+   return err;
 }
 
-
-static void onGotIP(void *arg, esp_event_base_t eventBase,
-                      int32_t eventId, void *eventData)
+/**
+ * @brief Check that the number of parameters for init the sdcard.
+ *
+ * @param params Count of parametes.
+ *        width Bit width.
+ *
+ * @return TRUE when valid.
+ */
+static int checkSdcardParams(int params, int width)
 {
-   ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
-   char* param1 = (char*)checkAlloc(baMalloc(16));
-   char* param2 = (char*)checkAlloc(baMalloc(16));
-   char* param3 = (char*)checkAlloc(baMalloc(16));
-   gotIP=TRUE;
-   basprintf(param1,IPSTR,IP2STR(&event->ip_info.ip));
-   basprintf(param2,IPSTR,IP2STR(&event->ip_info.netmask));
-   basprintf(param3,IPSTR,IP2STR(&event->ip_info.gw));
-   executeGlobalLFunc("_gotIP", param1, param2, param3);
-   HttpTrace_printf(9,"Interface \"%s\" up\n",
-                    esp_netif_get_desc(event->esp_netif));
-   if(semGotIp)
-      xSemaphoreGive(semGotIp);
+   if((width != 8) && (width != 4) && (width != 1))
+   {
+      return FALSE;
+   }
+   
+   //  Only allows arbitrary GPIOs with the ESP32-S3.
+   if(params > 1)
+   {
+#ifdef SOC_SDMMC_USE_GPIO_MATRIX  
+      if((width == 8) && (params != 11))
+      {
+         return FALSE;
+      }
+      
+      if((width == 4) && (params != 7))
+      {
+         return FALSE;
+      }
+      
+      if((width == 1) && (params != 4))
+      {
+         return FALSE;
+      }
+#else
+   return FALSE;
+#endif
+   }
+   
+   return TRUE;
 }
 
-
-static void onSntpSync(struct timeval *tv)
+/**
+ * @brief Lua binding function for SD card.
+ *        for default pins use: esp32.sdcard(width)
+ *        for customiced 1 bit wide use: esp32.sdcard(1, clk, cmd, d0)
+ *        for customiced 4 bit wide use: esp32.sdcard(4, clk, cmd, d0, d1, d2, d3)
+ *        for customiced 8 bit wide use: esp32.sdcard(8, clk, cmd, d0, d1, d2, d3, d4, d5, d6, d7)
+ *
+ * @note: customiced pins is only for esp32-s3.
+ *
+ * @param L Lua state pointer.
+ * @return int Number of values returned to Lua.
+ */
+int lsdcard(lua_State* L)
 {
-   executeGlobalLFunc("_gotTime", 0, 0, 0);
+   int params = lua_gettop(L);
+   
+   // The width parameter is mandatory.
+   if(params >= 1)
+   {
+      sdmmc_slot_config_t cfg = SDMMC_SLOT_CONFIG_DEFAULT();
+      
+      cfg.width = luaL_checkinteger(L, 1);
+
+      // Check that the number of parameters corresponds to the bit width and capabilities of the CPU.
+      if(checkSdcardParams(params, cfg.width))
+      {
+#ifdef SOC_SDMMC_USE_GPIO_MATRIX
+         if(params >= 4)
+         {
+            cfg.clk = luaL_checkinteger(L, 2);
+            cfg.cmd = luaL_checkinteger(L, 3);
+            cfg.d0 = luaL_checkinteger(L, 4);
+         }   
+   
+         if(params >= 7)
+         {  
+            cfg.d1 = luaL_checkinteger(L, 5);
+            cfg.d2 = luaL_checkinteger(L, 6);
+            cfg.d3 = luaL_checkinteger(L, 7);
+         }
+
+         if(params == 11)
+         {  
+            cfg.d4 = luaL_checkinteger(L, 8);
+            cfg.d5 = luaL_checkinteger(L, 9);
+            cfg.d6 = luaL_checkinteger(L, 10);
+            cfg.d7 = luaL_checkinteger(L, 11);
+         }
+#endif     
+         esp_err_t err = closeSdcard();
+         if(ESP_OK == err)
+         {           
+            err = openSdCard(&cfg);
+            if(ESP_OK == err)
+            {
+               cfgSetSdCard(&cfg);
+               // TODO: When I execute esp_restart with esp32-s3 and the console 
+               // is CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, the restart hangs, but 
+               // when I put a delay of 1000 mS it works.
+#if CONFIG_IDF_TARGET_ESP32S3
+               Thread_sleep(1000);
+#endif
+               esp_restart();
+            }
+         }
+         
+         return pushEspRetVal(L, err, 0);
+      }
+      else
+      {
+          luaL_argerror(L, 1, "Invalid paramenters");
+      }
+   }
+   
+   // If the number of arguments is less 0, erase the SD card config.
+   closeSdcard();
+   lua_pushboolean(L, (cfgEraseSdCard() == ESP_OK));
+   return 1;
 }
 
 static void initComponents()
 {
-   static Thread t;
-   esp_err_t err = nvs_flash_init();
-   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+static Thread t;
+   
+   cfgInit();
+
+   sdmmc_slot_config_t cfg = SDMMC_SLOT_CONFIG_DEFAULT();
+   
+   if(cfgGetSdCard(&cfg) == ESP_OK)
    {
-      HttpTrace_printf(0,"NVS init failed! Erasing memory.");
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      err = nvs_flash_init();
+      openSdCard(&cfg);
    }
-   ESP_ERROR_CHECK(err);
-   ESP_ERROR_CHECK(esp_netif_init());
-   ESP_ERROR_CHECK(esp_event_loop_create_default());
-
-   /* Fixme rewrite to not use EXAMPLE_xxxx */
-
-   esp_netif_t *netif;
-   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-   esp_netif_inherent_config_t esp_netif_config =
-      ESP_NETIF_INHERENT_DEFAULT_WIFI_STA();
-   esp_netif_config.if_desc = EXAMPLE_NETIF_DESC_STA;
-   esp_netif_config.route_prio = 128;
-   netif = esp_netif_create_wifi(WIFI_IF_STA, &esp_netif_config);
-   esp_wifi_set_default_wifi_sta_handlers();
-   ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-   ESP_ERROR_CHECK(esp_wifi_start());
-   ESP_ERROR_CHECK(esp_event_handler_register(
-      WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &onWifiDisconnect, NULL));
-   ESP_ERROR_CHECK(esp_event_handler_register(
-      IP_EVENT, IP_EVENT_STA_GOT_IP, &onGotIP, NULL));
-   ESP_ERROR_CHECK(esp_event_handler_register(
-      WIFI_EVENT, WIFI_EVENT_STA_CONNECTED,&onWifiConnect, netif));
-   esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-   esp_sntp_setservername(0, "pool.ntp.org");
-   esp_sntp_init();
-   sntp_set_time_sync_notification_cb(onSntpSync);
+   
+   netInit();
 
    /* Using BAS thread porting API */
    Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
@@ -323,156 +435,43 @@ static void initComponents()
 }
 
 
-esp_err_t wconnect(const char* ssid, const char* pwd)
-{
-   if(ssid)
-   {
-      wifi_config_t cfg = {
-         .sta = {
-            .scan_method = WIFI_FAST_SCAN,
-            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
-            .threshold.rssi = CONFIG_EXAMPLE_WIFI_SCAN_RSSI_THRESHOLD,
-            .threshold.authmode = WIFI_AUTH_OPEN
-         }
-      };
-      if(strlen(ssid) < sizeof(cfg.sta.ssid) &&
-         strlen(pwd) < sizeof(cfg.sta.password))
-      {
-         strcpy((char*)cfg.sta.ssid, ssid);
-         strcpy((char*)cfg.sta.password, pwd);
-
-         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
-         esp_err_t ret = esp_wifi_connect();
-         if(ESP_ERR_WIFI_NOT_STARTED == ret)
-         {
-            esp_wifi_start();
-            ret = esp_wifi_connect();
-         }
-         if(ESP_OK == ret)
-            return ESP_OK;
-         HttpTrace_printf(0,"WiFi connect failed! ret:%x\n", ret);
-         return ESP_ERR_WIFI_SSID;
-      }
-      return ESP_ERR_INVALID_ARG;
-   }
-   return esp_wifi_stop();
-}
-
-static const char* wifiAuthMode(int authmode, int print)
-{
-   const char* msg;
-   const char pre[]={"Authmode \t"};
-   switch (authmode)
-   {
-      case WIFI_AUTH_OPEN: msg="OPEN"; break;
-      case WIFI_AUTH_OWE: msg="OWE"; break;
-      case WIFI_AUTH_WEP: msg="WEP"; break;
-      case WIFI_AUTH_WPA_PSK: msg="WPA_PSK"; break;
-      case WIFI_AUTH_WPA2_PSK: msg="WPA2_PSK"; break;
-      case WIFI_AUTH_WPA_WPA2_PSK: msg="WPA_WPA2_PSK"; break;
-      case WIFI_AUTH_WPA2_ENTERPRISE: msg="WPA2_ENTERPRISE"; break;
-      case WIFI_AUTH_WPA3_PSK: msg="WPA3_PSK"; break;
-      case WIFI_AUTH_WPA2_WPA3_PSK: msg="WPA2_WPA3_PSK"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   return msg;
-}
-
-static const char*
-wifiCipherType(int pcipher, int gcipher, int print, const char** pciphers)
-{
-   const char* msg;
-   const char* pre="Pairwise Cipher\t";
-   switch(pcipher)
-   {
-      case WIFI_CIPHER_TYPE_NONE: msg="NONE"; break;
-      case WIFI_CIPHER_TYPE_WEP40: msg="WEP40"; break;
-      case WIFI_CIPHER_TYPE_WEP104: msg="WEP104"; break;
-      case WIFI_CIPHER_TYPE_TKIP: msg="TKIP"; break;
-      case WIFI_CIPHER_TYPE_CCMP: msg="CCMP"; break;
-      case WIFI_CIPHER_TYPE_TKIP_CCMP: msg="TKIP_CCMP"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   *pciphers=msg;
-   pre="Group Cipher \t";
-   switch(gcipher)
-   {
-      case WIFI_CIPHER_TYPE_NONE: msg="NONE"; break;
-      case WIFI_CIPHER_TYPE_WEP40: msg="WEP40"; break;
-      case WIFI_CIPHER_TYPE_WEP104: msg="WEP104"; break;
-      case WIFI_CIPHER_TYPE_TKIP: msg="TKIP"; break;
-      case WIFI_CIPHER_TYPE_CCMP: msg="CCMP"; break;
-      case WIFI_CIPHER_TYPE_TKIP_CCMP: msg="TKIP_CCMP"; break;
-      default: msg="UNKNOWN"; break;
-   }
-   if(print)
-      HttpTrace_printf(0,"%s%s\n",pre,msg);
-   return msg;
-}
-
-
-void wifiScan(int print, lua_State* L,
-              void (*cb)(lua_State* L, const uint8_t* ssid, int rssi,
-                        const char* authmode,const char*  pchiper,
-                        const char* gcipher, int channel))
-{
-   uint16_t number = WIFI_SCAN_LIST_SIZE;
-   wifi_ap_record_t apInfo[WIFI_SCAN_LIST_SIZE];
-   uint16_t apCount = 0;
-   memset(apInfo, 0, sizeof(apInfo));
-
-   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-   ESP_ERROR_CHECK(esp_wifi_start());
-   esp_wifi_scan_start(NULL, true);
-   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, apInfo));
-   ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&apCount));
-   if(print)
-      HttpTrace_printf(0,"Total APs scanned = %u\n", apCount);
-   for(int i = 0; (i < WIFI_SCAN_LIST_SIZE) && (i < apCount); i++)
-   {
-      if(print)
-      {
-         HttpTrace_printf(0,"SSID \t\t%s\n", apInfo[i].ssid);
-         HttpTrace_printf(0,"RSSI \t\t%d\n", apInfo[i].rssi);
-      }
-      const char* authmode=wifiAuthMode(apInfo[i].authmode,print);
-      const char* pcipher=0;
-      const char* gcipher=0;
-      if(apInfo[i].authmode != WIFI_AUTH_WEP) {
-         gcipher=wifiCipherType(
-            apInfo[i].pairwise_cipher,apInfo[i].group_cipher,print,&pcipher);
-      }
-      if(print)
-         HttpTrace_printf(0,"Channel \t\t%d\n\n", apInfo[i].primary);
-      cb(L,apInfo[i].ssid,apInfo[i].rssi,authmode,pcipher,gcipher,
-         apInfo[i].primary);
-   }
-}
-
-
-
 void
 app_main(void)
 {
    initComponents();
-   consoleInit();
-   HttpTrace_printf(5,"\n\nLuaShell32 ready.\n");
+   manageConsole(true);
+   for(int i = 0; i < 50 ; i++)
+   {
+      if(netGotIP()) break;
+      Thread_sleep(100);
+   }
+
+   HttpTrace_printf(5,
+                    "\n\n __   __        _            \n \\ \\ / /       | |"
+                    "           \n  \\ V / ___  __| | __ _  ___ \n   > < / _"
+                    " \\/ _` |/ _` |/ _ \\\n  / . \\  __/ (_| | (_| |  __/\n"
+                    " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
+                    "__/ |     \n                  |___/      \n\n");
+   HttpTrace_printf(5,"LuaShell32 ready.\n");
    for(;;)
    {
       char* line = linenoise("> ");
       if(line == NULL || !line[0])
          continue;
+#ifdef ADD_THREAD_DBG
+      if( ! strcmp(line, "threads") )
+      { 
+         dbgThreads();
+         continue;
+      }
+#endif
       size_t left = luaLineBuffer.size - luaLineBuffer.ix;
       size_t len = strlen(line);
       if (left < len)
       {
          luaLineBuffer.size += len + 100;
-         luaLineBuffer.buf = checkAlloc(
-            baRealloc(luaLineBuffer.buf, luaLineBuffer.size+1));
+         luaLineBuffer.buf = netCheckAlloc(
+                             baRealloc(luaLineBuffer.buf, luaLineBuffer.size+1));
       }
       memcpy(luaLineBuffer.buf + luaLineBuffer.ix, line, len);
       luaLineBuffer.ix += len;
@@ -484,3 +483,86 @@ app_main(void)
       ThreadMutex_release(soDispMutex);
    }
 }
+
+
+/* The following code can be enabled as an emergency if detailed
+ * thread and stack analysis is needed..
+ */
+#ifdef ADD_THREAD_DBG
+static void dbgThreads()
+{ /* The following code uses heuristics to find processes that are not
+   * executing.
+   */
+   UBaseType_t tcbSize;
+   static TaskSnapshot_t taskSnapshots[20];
+   portDISABLE_INTERRUPTS();
+   UBaseType_t snaps=uxTaskGetSnapshotAll(taskSnapshots, 20, &tcbSize);
+   portENABLE_INTERRUPTS();
+   long a,b,aIx,bIx;
+   a=b=aIx=bIx=0;
+   for(UBaseType_t i = 0 ; i < snaps ; i++)
+   {
+      XtExcFrame* f = (XtExcFrame*)taskSnapshots[i].pxTopOfStack;
+      if( ! a ) a = f->exit;
+      else if( ! b ) b = f->exit;
+      if(a == f->exit) aIx++;
+      else if(b == f->exit) bIx++;
+   }
+   if(bIx > aIx) a=b;
+   /* Print all thread stacks. This can be decoded using
+    * xtensa-esp32-elf-addr2line
+    */
+   for(UBaseType_t i = 0 ; i < snaps ; i++)
+   {
+      XtExcFrame* f = (XtExcFrame*)taskSnapshots[i].pxTopOfStack;
+      if(a == f->exit) /* If not running */
+      {
+         esp_backtrace_frame_t bf = {
+            .pc = f->pc, .sp = f->a1, .next_pc = f->a0, .exc_frame = f}; 
+         printf("\nTASK %d", i);
+         esp_backtrace_print_from_frame(100, &bf, true);
+      }
+   }
+   /* Print thread info.
+    */
+   TaskStatus_t *pxTaskStatusArray;
+   volatile UBaseType_t uxArraySize, uxTaskCount;
+   uxTaskCount = uxTaskGetNumberOfTasks();
+   pxTaskStatusArray =
+      (TaskStatus_t *) pvPortMalloc(uxTaskCount * sizeof(TaskStatus_t));
+   uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxTaskCount, NULL);
+   for(int i = 0; i < uxArraySize; i++)
+   {
+      printf("\nTask Name: %s\n", pxTaskStatusArray[i].pcTaskName);
+      printf("Task Priority: %u\n", pxTaskStatusArray[i].uxCurrentPriority);
+      printf("Task Handle: %p\n", pxTaskStatusArray[i].xHandle);
+      printf("Task Stack High Water Mark: %lu\n",
+             pxTaskStatusArray[i].usStackHighWaterMark);
+   }
+   vPortFree(pxTaskStatusArray);
+   vTaskPrioritySet(xTaskGetCurrentTaskHandle(), configMAX_PRIORITIES - 1);
+   /* Assume deadlock if not taken within 3 seconds */
+   int taken = xSemaphoreTake(soDispMutex->mutex, 3000/portTICK_PERIOD_MS);
+   printf("Sem taken: %d\n", taken);
+   int top = lua_gettop(Lg);
+   int status = luaL_loadstring(Lg,
+      "local t={} "
+      "for _,thread in ipairs(ba.thread.dbg()) do "
+      "table.insert(t, (debug.traceback(thread))) end "
+      "return table.concat(t)");
+   if(LUA_OK == status)
+   {
+      status = lua_pcall(Lg, 0, 1, 0);
+      if(LUA_OK == status)
+      {
+         printf("%s\n",lua_tostring(Lg, -1));
+      }
+   }
+   if(taken)
+      ThreadMutex_release(soDispMutex);
+   printf("Status %d\n",status);
+   lua_settop(Lg,top);
+   esp_wifi_stop();
+}
+#endif
+

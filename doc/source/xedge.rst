@@ -3,39 +3,27 @@ Xedge32
 
 Xedge32 is a development tool for embedded edge devices. Its web-based user interface makes it incredibly easy to develop embedded software using the Lua language.
 
-.. image:: https://realtimelogic.com/GZ/images/BAS-ESP32.svg
-   :alt: Xedge32
+.. image:: https://realtimelogic.com/images/xedge/v1/Xedge.png
+   :alt: Xedge32 UI
 
-What makes Xedge32 stand out is its ability to function as a Lua REPL, which means that you can execute Lua code directly on the device, making it incredibly useful for debugging and testing your applications.
-
+Xedge is a versatile tool that runs on various platforms, including ESP32. This documentation focuses on getting started with Xedge on ESP32. For more details on using Xedge, please refer to the `Xedge Main Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
 
 How To Use Xedge32
 ---------------------------------------
 
-Xedge32's GitHub repository includes a number of Lua examples that we will use in the instructions below. First, download these files to your computer and then upload them to the ESP32 using the built-in Web File Manager. You can use the combined WebDAV and Web File Manager URL at ``http://ip-address/fs/`` to upload files to the ESP32. You can refer to the :download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>` for more information on how to mount a WebDAV drive.
+The LSP-Example's GitHub repository includes `ESP32 specific examples <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ that we will use in the instructions below. First, download these files to your computer and then upload them to the ESP32 using the built-in Web File Manager. You can use the combined WebDAV and Web File Manager URL at ``http://ip-address/rtl/apps/`` to upload files to the ESP32. You can refer to the :download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>` for more information on how to mount a WebDAV drive.
 
-Upload this directory to the ESP32 by using WebDAV or If using the Web File Manager as shown below, use a browser and navigate to ``http://ip-address/fs/``
+Upload this directory to the ESP32 by using WebDAV or If using the Web File Manager as shown below, use a browser and navigate to ``http://ip-address/rtl/apps/``
 
 |Web File manager: Drag and Drop|
 
-Navigate to ``http://ip-address/fs/`` and click the :guilabel:`+` button to create a directory named "Lua-Examples". Then, click the "Lua-Examples" link to navigate to ``http://ip-address/fs/Lua-Examples/``, select the files, and drag & drop the files into the browser window at ``http://ip-address/fs/Lua-Examples/``. The Web File Manager starts uploading the files as soon as you drop them into the browser window.
+Navigate to ``http://ip-address/rtl/apps/`` and click the :guilabel:`+` button to create a directory named "Lua-Examples". Then, click the "Lua-Examples" link to navigate to ``http://ip-address/rtl/apps/Lua-Examples/``, select the files, and drag & drop the files into the browser window at ``http://ip-address/rtl/apps/Lua-Examples/``. The Web File Manager starts uploading the files as soon as you drop them into the browser window.
 
 |Web File Manager: Upload|
 
-After completing the upload process, go to ``http://ip-address`` and click on the :guilabel:`New Application` button. Then, click :guilabel:`Browse` (1) to open the file browser. In the file browser, expand the directory tree by clicking on the small expand symbol to the left of the folder icon. Double-click on the 'Lua-Examples' directory to select it. Next, click the :guilabel:`Submit` button (2) and follow the prompts in the New Application Wizard, making sure to use the default settings.
+After completing the upload process, navigate to ``http://ip-address/rtl/``, expand :guilabel:`disk` in the left pane, and right click the "Lua-Examples" directory. Then, click :guilabel:`New App`. In the dialog, enable :guilabel:`Running` and :guilabel:`LSP App`. click :guilabel:`Save`
 
-
-|Xedge32: New-Application|
-
-You can start the application by toggling the Running button (1). Click the Edit button (2) to bring up the integrated Lua IDE.
-
-|Xedge32: Start Example|
-
-In the Lua IDE, you can expand the examples in the left pane, and double click any of the examples to open the source code in the editor. Then, click the run button to execute the example. 
-
-|Xedge32 IDE|
-
-The IDE screenshot above shows an example acme.lsp, which automatically installs a trusted X.509 certificate using the `Let's Encrypt plugin <https://realtimelogic.com/products/SharkTrustX/#LetsEncrypt>`__. The :download:`FreeRTOS/lwIP video starting at 4:30 <https://youtu.be/T3ciiZueTlI?t=265>` shows how the Let's Encrypt example works. ACME is short for `Automatic Certificate Management Environment <https://realtimelogic.com/articles/Automatic-Certificate-Management-for-Devices>`__ (RFC 8555).
+In the Xedge Lua IDE, you can expand the examples in the left pane, and click any of the examples to open the source code in the editor. Then, click the run button to execute the example. 
 
 How To Use an External IDE
 --------------------------
@@ -44,7 +32,7 @@ While the internal web-based Lua IDE is easy to use since it is an integral part
 
 You can use any external IDE or editor to edit files directly on the ESP32 by mounting the device as a WebDAV drive. For instructions on how to mount the WebDAV drive using various client operating systems, visit the `How to Mount a WebDAV Drive <https://fuguhub.com/FileServer.lsp>`__ page on the FuguHub site.
 
-To mount the ESP32's WebDAV server, use the URL https://ip-address/fs/. Note that the WebDAV server does not require authentication or user credentials.
+To mount the ESP32's WebDAV server, use the URL https://ip-address/rtl/apps/.
 
 .. _LuaDebug:
 
@@ -76,13 +64,7 @@ The File Server App sets up a file server that is accessed by the NetIo client r
 
 |Web File Server|
 
-Using the browser, navigate to the device IP address, click New Application (1), select net (2), paste in the URL (3), and click the Submit button.
-
-|Network File System|
-
-Complete the New Application wizard and name the application LuaExamplesR (R for remote). To avoid confusion, make sure to only have one application running when using the debugger.
-
-|Xedge32 with two applications|
+Using the browser, navigate to ``http://ip-address/rtl/``, right-click :guilabel:`net` in the left pane and paste in the URL in the app dialog's :guilabel:`URL` field. Enable :guilabel:`Running` and :guilabel:`LSP App`. click :guilabel:`Save`.
 
 The following printout should appear in the File Server console as soon as the NetIo client connects to the File Server App running on your host:
 
@@ -107,7 +89,7 @@ The following screenshot shows the code modification:
 
 |Visual Studio Code with Lua|
 
-Using your browser, navigate to ``http://ip-address/LuaExamplesR/httpclient.lsp``, where ip-address is your ESP32's IP address. The browser will now be waiting (spinning) since the web server is now frozen and waiting for the debugger client (Visual Studio Code) to connect. The web server can at this point only be resumed by the debugger.
+Using your browser, navigate to ``http://ip-address/LuaExamples/httpclient.lsp``, where ip-address is your ESP32's IP address. The browser will now be waiting (spinning) since the web server is now frozen and waiting for the debugger client (Visual Studio Code) to connect. The web server can at this point only be resumed by the debugger.
 
 In Visual Studio Code, press the F5 button to start a debug session.  Visual Studio Code should now connect to the debug monitor and automatically halt the code as shown in the screenshot below.
 
@@ -124,10 +106,11 @@ The following short video shows how to remotely debug Lua code on a Raspberry Pi
 Further Reading
 ---------------
 
-   Prior to reading any of the following tutorials, check out the
-   `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and
-   read the `Xedge32
-   Documentation <https://realtimelogic.com/ba/doc/?url=examples/xedge/readme.html#ide>`__.
+   Prior to reading any of the following tutorials, check out the `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and read the `Xedge Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+
+**Lua examples designed for ESP32:**
+
+See the `ESP32 section <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ in the LSP-Example's GitHub repository.
 
 **Lua examples and tutorials compatible with ESP32:**
 
@@ -156,16 +139,8 @@ Further Reading
    :class: fright
 .. |Web File Manager: Upload| image:: https://realtimelogic.com/downloads/bas/rt1020/Web-File-Manager-Upload.png
    :class: fright
-.. |Xedge32: New-Application| image:: https://realtimelogic.com/downloads/bas/rt1020/LSP-Application-Manager-New-Application.png
-   :class: center
-.. |Xedge32: Start Example| image:: https://realtimelogic.com/downloads/bas/rt1020/LSP-Application-Manager-Start-Example.png
-   :class: fright
-.. |Xedge32 IDE| image:: https://realtimelogic.com/downloads/bas/rt1020/LSP-Application-Manager-IDE.png
-   :class: center
 .. |Lua Debugger Screenshot| image:: https://makoserver.net/blogmedia/Lua-Debugger.gif
 .. |Web File Server| image:: https://realtimelogic.com/downloads/bas/rt1020/FileServer-URL.png
-.. |Network File System| image:: https://realtimelogic.com/downloads/bas/rt1020/LSP-Application-Manager-NetIo.png
-.. |Xedge32 with two applications| image:: https://realtimelogic.com/downloads/bas/rt1020/LSP-Application-Manager-2-apps.png
 .. |Visual Studio Code with Lua| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Mod.png
 .. |Visual Studio Code with Lua Http Client| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Auto-BP.png
 .. |Visual Studio Code Set Breakpoint| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Set-BP.png
