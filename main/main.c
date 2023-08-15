@@ -434,7 +434,6 @@ static Thread t;
    Thread_start(&t);
 }
 
-
 void
 app_main(void)
 {
@@ -445,7 +444,7 @@ app_main(void)
       if(netGotIP()) break;
       Thread_sleep(100);
    }
-
+   
    HttpTrace_printf(5,
                     "\n\n __   __        _            \n \\ \\ / /       | |"
                     "           \n  \\ V / ___  __| | __ _  ___ \n   > < / _"
@@ -483,7 +482,6 @@ app_main(void)
       ThreadMutex_release(soDispMutex);
    }
 }
-
 
 /* The following code can be enabled as an emergency if detailed
  * thread and stack analysis is needed..

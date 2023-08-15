@@ -4,6 +4,8 @@
 */
 
 #include <stdio.h>
+#include <fcntl.h>
+#include <sys/cdefs.h>
 #include <string.h>
 #include "esp_system.h"
 #include "esp_console.h"
@@ -12,6 +14,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "linenoise/linenoise.h"
 #include "esp_vfs_usb_serial_jtag.h"
+#include "esp_log.h"
 
 void manageConsole(bool start)
 {
@@ -25,12 +28,6 @@ void manageConsole(bool start)
    }
    /* called by main() */
    mainTaskHandle = xTaskGetCurrentTaskHandle();
-
-   /* Drain stdout before reconfiguring it */
-   fflush(stdout);
-   fsync(fileno(stdout));
-   /* Disable buffering on stdin */
-   setvbuf(stdin, NULL, _IONBF, 0);
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
@@ -51,9 +48,12 @@ void manageConsole(bool start)
       .source_clk = UART_SCLK_XTAL,
 #endif
    };
+   /* Drain stdout before reconfiguring it */
+   fflush(stdout);
+   fsync(fileno(stdout));
+   
    /* Install UART driver for interrupt-driven reads and writes */
-   ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM,
-                                        256, 0, 0, NULL, 0) );
+   ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM, 256, 0, 0, NULL, 0) );
    ESP_ERROR_CHECK( uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config) );
    /* Tell VFS to use UART driver */
    esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
@@ -63,6 +63,10 @@ void manageConsole(bool start)
    esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
    /* Move the caret to the beginning of the next line on '\n' */
    esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+
+   /* Enable blocking mode on stdin and stdout */
+   fcntl(fileno(stdout), F_SETFL, 0);
+   fcntl(fileno(stdin), F_SETFL, 0);
 
    usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
 
@@ -74,12 +78,14 @@ void manageConsole(bool start)
 #else
 #error Unsupported console type
 #endif
-  
-   /* Initialize the console */
-   esp_console_config_t console_config = {
-      .max_cmdline_args = 8,
-      .max_cmdline_length = 256
-   };
+   
+   esp_console_config_t console_config = ESP_CONSOLE_CONFIG_DEFAULT();
+#if CONFIG_LOG_COLORS
+   console_config.hint_color = atoi(LOG_COLOR_CYAN);
+#else
+   console_config.hint_color = -1;
+#endif
+
    ESP_ERROR_CHECK( esp_console_init(&console_config) );
    
    /* Configure linenoise line completion library */
@@ -90,7 +96,12 @@ void manageConsole(bool start)
    /* Set command history size */
    linenoiseHistorySetMaxLen(10);
    /* Set command maximum length */
-   linenoiseSetMaxLineLen(console_config.max_cmdline_length); //console_config.max_cmdline_length);
+   linenoiseSetMaxLineLen(console_config.max_cmdline_length); 
    /* Don't return empty lines */
    linenoiseAllowEmpty(false);
+   
+   /* Disable buffering on stdin of the current task.
+    * If the console is ran on a different UART than the default one,
+    * buffering shall only be disabled for the current one. */
+   setvbuf(stdin, NULL, _IONBF, 0);    
 }

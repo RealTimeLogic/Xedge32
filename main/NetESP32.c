@@ -379,9 +379,11 @@ static esp_err_t netEthStop(void)
     if((eth_netif != NULL) && (s_eth_handle != NULL)) 
     {
        ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
-
        ESP_ERROR_CHECK(esp_eth_stop(s_eth_handle));
        ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
+       s_eth_glue = NULL;
+       
+       vTaskDelay(pdMS_TO_TICKS(100));
        ESP_ERROR_CHECK(esp_eth_driver_uninstall(s_eth_handle));
        s_eth_handle = NULL;
        ESP_ERROR_CHECK(s_phy->del(s_phy));
@@ -660,8 +662,14 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    
    // Install Ethernet driver
    esp_eth_config_t config = ETH_DEFAULT_CONFIG(s_mac, s_phy);
-   ESP_ERROR_CHECK(esp_eth_driver_install(&config, &s_eth_handle));
+   esp_err_t err = esp_eth_driver_install(&config, &s_eth_handle);
 
+   if(err != ESP_OK)
+   {
+      return err;
+   }
+   
+   
    if(netIsAdapterSpi(cfg->adapter))
    {
       netSetMac();
