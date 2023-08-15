@@ -71,5 +71,11 @@ Configuration Table Examples:
       reset=-1, freq="20000000", frame="HD"
    }
 
-
+   -- Settings for FREENOVE  ESP32-S3 WROOM
+   local cfg={
+      d0=11, d1=9, d2=8, d3=10, d4=12, d5=18, d6=17, d7=16,
+      xclk=15, pclk=13, vsync=6, href=7, sda=4, scl=5, pwdn=-1,
+      reset=-1, freq="20000000", frame="HD"
+   }
+   
 

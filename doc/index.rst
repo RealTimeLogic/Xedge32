@@ -10,23 +10,25 @@ Xedge32 Introduction
 .. image:: https://realtimelogic.com/GZ/images/BAS-ESP32.svg
    :alt: Xedge32
 
-**Visualize Xedge32 as an Xedge south bridge for ESP32.**
+**Think of Xedge32 as an enhanced version of Xedge, featuring an additional peripheral south bridge specifically engineered for the ESP32.**
 
-Xedge32 enables developers to quickly test and prototype code without the need for a full compile and deploy cycle, enabling faster iteration and development. Additionally, Xedge32's Lua peripheral API simplifies the interaction with the device's sensors, motors, and other hardware components, making it easier to develop and test code that interacts with the device's peripherals. The immediate feedback provided by the REPL also makes it easier to debug and troubleshoot code, reducing development time and improving the overall quality of the code. The use of the Xedge32 LUA REPL can help to reduce development costs by allowing for faster development and testing cycles and by making it easier to reuse and share code across different projects.
+Xedge32 significantly accelerates the development of IoT devices, combining a comprehensive ready-to-use `IoT north bridge API <../doc/?url=IoT.html>`_ with the ESP32 peripheral, aka south bridge API. This approach, which does not require C coding, streamlines working with device components such as sensors. The added advantage of using the ESP32, a cost-effective solution, makes it easy to retrofit existing products with IoT capabilities. By streamlining development and testing stages, Xedge32 dramatically reduces the time it takes to bring secure IoT-enabled sensor products to market. All these benefits make Xedge32 an exceptionally user-friendly and efficient choice for IoT device development.
 
-.. epigraph::
+Xedge32 leverages the high-level Lua language. Lua's learning curve is considerably less steep than other computer languages, making it an invaluable tool in high-paced development environments, including creating secure IoT-enabled device products. If you're new to Lua, be sure to check out the `Online Interactive Lua Tutorials <https://tutorial.realtimelogic.com/Lua-Types.lsp>`_ for an easy and accessible way to learn the language.
 
-   If you're new to Lua, be sure to check out the `Online Interactive Lua Tutorials <https://tutorial.realtimelogic.com/Lua-Types.lsp>`_ for an easy and accessible way to learn the language.
+**Xedge vs. Xedge32**
 
+This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_ and the generic `Xedge documentation <../doc/?url=Xedge.html>`_.
 
 Note that the ESP32 LUA API, provided by Xedge32, currently exports a subset of the ESP-IDF C peripheral API to Lua.
 
-This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_ and the generic `Xedge documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+
+
 
 Interrupts
 -----------
 
-The ESP32 Lua API is designed to take advantage of interrupt-driven events, and it is highly recommended to use the interrupt-driven (callback) API when it is available. While it is possible to poll for data using a `timer <https://realtimelogic.com/ba/doc/?url=ua.html#ba_timer>`_, it is not the recommended approach for APIs that provide event-driven data reading.
+The ESP32 Lua API is designed to take advantage of interrupt-driven events, and it is highly recommended to use the interrupt-driven (callback) API when it is available. While it is possible to poll for data using a `timer <../ba/doc/?url=ua.html#ba_timer>`_, it is not the recommended approach for APIs that provide event-driven data reading.
 
 Automatic collection of HW resources
 -------------------------------------
@@ -55,6 +57,7 @@ Xedge ESP32
    source/BME280
    source/cam
    source/misc
+   source/license
 
 
 
