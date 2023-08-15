@@ -15,7 +15,7 @@ that will impress even the most tech-savvy enthusiasts.
 
 ## Documentation, Binaries, and Getting Started Guide
 
-[realtimelogic.com/ba/ESP32/](https://realtimelogic.com/ba/ESP32/)
+You do not need to compile Xedge32. Compiling Xedge32 is for C code experts. For a quick Xedge32 introduction and pre-compiled firmware download instructions, visit the [Xedge32 introduction page](https://realtimelogic.com/downloads/bas/ESP32/).
 
 
 ## Compiling The Code
