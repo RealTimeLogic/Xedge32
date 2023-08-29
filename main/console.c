@@ -8,13 +8,11 @@
 #include <sys/cdefs.h>
 #include <string.h>
 #include "esp_system.h"
-#include "esp_console.h"
 #include "esp_vfs_dev.h"
 #include "driver/uart.h"
 #include "driver/usb_serial_jtag.h"
 #include "linenoise/linenoise.h"
 #include "esp_vfs_usb_serial_jtag.h"
-#include "esp_log.h"
 
 void manageConsole(bool start)
 {
@@ -23,7 +21,7 @@ void manageConsole(bool start)
    {
       /* Called by Lua binding esp32.execute"killmain" */
       vTaskDelete(mainTaskHandle);
-      printf("deinit %d\n",esp_console_deinit());
+      printf("deinit\n"); 
       return;
    }
    /* called by main() */
@@ -76,17 +74,8 @@ void manageConsole(bool start)
    /* Tell vfs to use usb-serial-jtag driver */
    esp_vfs_usb_serial_jtag_use_driver();
 #else
-#error Unsupported console type
+   #error Unsupported console type
 #endif
-   
-   esp_console_config_t console_config = ESP_CONSOLE_CONFIG_DEFAULT();
-#if CONFIG_LOG_COLORS
-   console_config.hint_color = atoi(LOG_COLOR_CYAN);
-#else
-   console_config.hint_color = -1;
-#endif
-
-   ESP_ERROR_CHECK( esp_console_init(&console_config) );
    
    /* Configure linenoise line completion library */
    /* Enable multiline editing. If not set, long commands will scroll within
@@ -96,7 +85,7 @@ void manageConsole(bool start)
    /* Set command history size */
    linenoiseHistorySetMaxLen(10);
    /* Set command maximum length */
-   linenoiseSetMaxLineLen(console_config.max_cmdline_length); 
+   linenoiseSetMaxLineLen(256); 
    /* Don't return empty lines */
    linenoiseAllowEmpty(false);
    

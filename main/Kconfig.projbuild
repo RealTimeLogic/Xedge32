@@ -69,4 +69,15 @@ menu "Xedge config"
              Set PHY address according your board schematic.
      
    endmenu
+   
+   menu "Debug Threads"
+      config DEBUG_THREADS
+         bool "Enable Debug Threads"
+      default n
+      help
+             Enable this option to enable debugging of threads.
+
+      # Automatically set CONFIG_FREERTOS_USE_TRACE_FACILITY to y when DEBUG_THREADS is enabled
+      select FREERTOS_USE_TRACE_FACILITY if DEBUG_THREADS
+   endmenu
 endmenu
