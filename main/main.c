@@ -30,19 +30,21 @@
 #include "NetESP32.h"
 #include "CfgESP32.h"
 
-#define ADD_THREAD_DBG
-
-#ifdef ADD_THREAD_DBG
-#include <freertos/task_snapshot.h>
-#include <esp_debug_helpers.h>
-static lua_State* Lg; /* Global state */
-static void dbgThreads();
+/*
+ * To enable the thread debug please execute idf.py menuconfig and go to xedge->debug thread.
+ */
+#if CONFIG_DEBUG_THREADS
+    #include <freertos/task_snapshot.h>
+    #include <esp_debug_helpers.h>
+    static lua_State* Lg; /* Global state */
+    static void dbgThreads();
 #endif
 
 struct {
    char* buf;
    size_t ix;
    size_t size;
+   SemaphoreHandle_t sem; 
 } luaLineBuffer = {0};
 
 static const char TAG[]={"X"};
@@ -84,21 +86,26 @@ static const char* lcomplete(lua_State* L, int status)
 static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 {
    lua_State* L = job->Lt;
-   int status = luaL_loadbuffer(L,luaLineBuffer.buf,luaLineBuffer.ix,"=stdin");
-   if(LUA_OK != status)
-   {
-      const char* emsg = lcomplete(L, status);
-      if( ! emsg )
-         return; /* incomplete */
-      ESP_LOGE(TAG, "Syntax error: %s\n", emsg);
-   }
-   if (LUA_OK == status)
+   int status = luaL_loadbuffer(L, luaLineBuffer.buf, luaLineBuffer.ix, "=stdin");
+   
+   if(LUA_OK == status)
    {
       lua_pcall(L, 0, 0, msgh);
-      luaLineBuffer.buf[luaLineBuffer.ix]=0;
+      luaLineBuffer.buf[luaLineBuffer.ix] = 0;
       linenoiseHistoryAdd(luaLineBuffer.buf);
+      luaLineBuffer.ix = 0;
    }
-   luaLineBuffer.ix = 0;
+   else 
+   {
+      const char* emsg = lcomplete(L, status);
+      if(emsg)
+      {
+         ESP_LOGE(TAG, "Syntax error: %s\n", emsg);
+         luaLineBuffer.ix = 0;
+      }
+   }
+   
+   xSemaphoreGive(luaLineBuffer.sem);
 }
 
 
@@ -107,12 +114,12 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 */
 void luaopen_AUX(lua_State* L)
 {
-#ifdef ADD_THREAD_DBG
+#if CONFIG_DEBUG_THREADS
    Lg=L;
 #endif
    installESP32Libs(L);
 
-netConfig_t cfg;
+   netConfig_t cfg;
 
    /* Delay execution until this point to avoid generating any events
     * that might use the soDispMutex before it is initialized. The
@@ -200,22 +207,22 @@ static int initDiskIo(DiskIo* io)
  */
 static void mainServerTask(Thread *t)
 {
-  (void)t;
+   (void)t;
 #ifdef USE_DLMALLOC
-  /* Allocate as much pSRAM as possible */
+   /* Allocate as much pSRAM as possible */
 #if CONFIG_IDF_TARGET_ESP32S3
-  EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
+   EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
 #else
-  EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024 + 5*1024];
+   EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024 + 5*1024];
 #endif
-  init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
+   init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
 #else   
-#error must use dlmalloc
+   #error must use dlmalloc
 #endif
-  platformInitDiskIo=initDiskIo;
-  HttpTrace_setFLushCallback(writeHttpTrace);
-  HttpServer_setErrHnd(myErrHandler); 
-  barracuda(); /* Does not return */
+   platformInitDiskIo=initDiskIo;
+   HttpTrace_setFLushCallback(writeHttpTrace);
+   HttpServer_setErrHnd(myErrHandler); 
+   barracuda(); /* Does not return */
 }
 
 /**
@@ -276,7 +283,7 @@ static esp_err_t openSdCard(sdmmc_slot_config_t* slotCfg)
  */
 static esp_err_t closeSdcard(void)
 {
-esp_err_t err = ESP_OK;
+   esp_err_t err = ESP_OK;
 
    if(card)
    {
@@ -416,7 +423,7 @@ int lsdcard(lua_State* L)
 
 static void initComponents()
 {
-static Thread t;
+   static Thread t;
    
    cfgInit();
 
@@ -434,9 +441,7 @@ static Thread t;
    Thread_start(&t);
 }
 
-
-void
-app_main(void)
+void app_main(void)
 {
    initComponents();
    manageConsole(true);
@@ -446,6 +451,12 @@ app_main(void)
       Thread_sleep(100);
    }
 
+   /*
+    * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
+    * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.
+    */
+   luaLineBuffer.sem = xSemaphoreCreateBinary();
+   
    HttpTrace_printf(5,
                     "\n\n __   __        _            \n \\ \\ / /       | |"
                     "           \n  \\ V / ___  __| | __ _  ___ \n   > < / _"
@@ -453,12 +464,32 @@ app_main(void)
                     " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
                     "__/ |     \n                  |___/      \n\n");
    HttpTrace_printf(5,"LuaShell32 ready.\n");
+   
+   /*
+    * The app_main thread originally runs at low priority (ESP_TASK_MAIN_PRIO, or ESP_TASK_PRIO_MIN + 1).
+    * The linenoise library uses the read() function that can block while waiting for USB/UART characters.
+    * Occasionally, the console hangs, especially when closing the network adapter. The root cause seems to be
+    * priority inversion, which can impact the RX ring buffer.
+    * 
+    * We've identified two potential fixes:
+    * 
+    * 1. Lower the FreeRTOS tick frequency to 100 Hz. This approach minimizes context switches and interrupts,
+    *    but it might affect the overall responsiveness of the firmware.
+    * 
+    * 2. Increase the priority of the app_main thread. We chose this solution to avoid altering the tick frequency
+    *    and maintain firmware responsiveness.
+    * 
+    * The chosen solution may increase the app_main thread's priority to mitigate priority inversion. This helps
+    * prevent delays in the RX ring buffer processing caused by other tasks. Note that careful consideration
+    * of task priorities is necessary to avoid other unexpected behavior or conflicts.
+    */
+   vTaskPrioritySet(NULL, uxTaskPriorityGet(NULL) + 4);  
    for(;;)
    {
-      char* line = linenoise("> ");
+      char* line = linenoise("\033[0m> ");
       if(line == NULL || !line[0])
          continue;
-#ifdef ADD_THREAD_DBG
+#if CONFIG_DEBUG_THREADS
       if( ! strcmp(line, "threads") )
       { 
          dbgThreads();
@@ -476,19 +507,21 @@ app_main(void)
       memcpy(luaLineBuffer.buf + luaLineBuffer.ix, line, len);
       luaLineBuffer.ix += len;
       linenoiseFree(line);
-      ThreadJob* job=ThreadJob_lcreate(sizeof(ThreadJob),executeOnLuaReplCB);
+      ThreadJob* job=ThreadJob_lcreate(sizeof(ThreadJob), executeOnLuaReplCB);
       if( ! job ) baFatalE(FE_MALLOC,0);
+      
       ThreadMutex_set(soDispMutex);
       LThreadMgr_run(&ltMgr, (ThreadJob*)job);
       ThreadMutex_release(soDispMutex);
+      
+      xSemaphoreTake(luaLineBuffer.sem, portMAX_DELAY);
    }
 }
-
 
 /* The following code can be enabled as an emergency if detailed
  * thread and stack analysis is needed..
  */
-#ifdef ADD_THREAD_DBG
+#if CONFIG_DEBUG_THREADS
 static void dbgThreads()
 { /* The following code uses heuristics to find processes that are not
    * executing.
