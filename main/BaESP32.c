@@ -87,7 +87,7 @@ ThreadMutex* soDispMutex;
 static ThreadMutex rMutex;
 #define GPIO_QUEUE_SIZE 10 /* See executeLuaGpioCB() */
 
-typedef struct
+typedef struct LGPIO
 {
    int callbackRef;
    gpio_num_t pin;
@@ -103,7 +103,7 @@ typedef struct
 } GpioThreadJob;
 
 /* Array of pointers with len GPIO_NUM_MAX */
-static LGPIO* activeGPOI[GPIO_NUM_MAX];
+LGPIO* activeGPOI[GPIO_NUM_MAX];
 
 
 /*********************************************************************

@@ -25,6 +25,7 @@
 
 typedef struct {
    sensor_t* sensor;
+   int pins[16];
 } LCAM;
 
 
@@ -50,7 +51,15 @@ static int LCAM_close(lua_State* L)
    LCAM* o = LCAM_getUD(L);
    if(o->sensor)
    {
-      // The sensor field at NULL indicates that the camera could not be initialized.
+      for(int i = 0 ; i < sizeof(o->pins)/sizeof(o->pins[0]) ; i++)
+      {
+         if(o->pins[i] >= 0)
+         {
+            activeGPOI[o->pins[i]] = NULL; // Release
+         }
+      }
+      // The sensor field at NULL indicates that the camera could not
+      // be initialized.
       o->sensor = NULL;
       // Free camera configuration memory.
       // Deinit camera.
@@ -161,6 +170,18 @@ int lcam(lua_State* L)
    const char* frame = balua_getStringField(L, 1, "frame", "QVGA");
    int vflip = balua_getBoolField(L, 1, "vflip", FALSE);
    int hmirror = balua_getBoolField(L, 1, "hmirror", FALSE);
+
+   lua_Integer pins[] = {
+      pwdn,reset,xclk,sda,scl,d7,d6,d5,d4,d3,d2,d1,d0,vsync,href,pclk
+   };
+   for(int i = 0 ; i < sizeof(pins)/sizeof(pins[0]) ; i++)
+   {
+      if(pins[i] >= 0)
+      {
+         if(pins[i] >= GPIO_NUM_MAX || activeGPOI[pins[i]])
+            luaL_error(L,"Pin %d in use", pins[i]);
+      }
+   }
 
    // Check pixel format
    if (strcmp(format, "JPEG") == 0)
@@ -294,7 +315,23 @@ int lcam(lua_State* L)
    cam->sensor = esp_camera_sensor_get();
    cam->sensor->set_vflip(cam->sensor, vflip);
    cam->sensor->set_hmirror(cam->sensor, hmirror);
-   
+
+   for(int i = 0 ; i < sizeof(pins)/sizeof(pins[0]) ; i++)
+   {
+      /* We assign the activeGPOI a non NULL value to indicate it is
+       * in use; the pointer is only used for checking that it is non
+       * NULL and it is not used as a valid pointer value.
+       */
+      if(pins[i] >= 0)
+      {
+         activeGPOI[pins[i]] = (struct LGPIO*)1;
+      }
+   }
+   baAssert(sizeof(pins)/sizeof(pins[0]) == sizeof(cam->pins)/sizeof(cam->pins[0]));
+   for(int i = 0 ; i < sizeof(pins)/sizeof(pins[0]) ; i++)
+   {
+      cam->pins[i]=pins[i];
+   }
    return 1;
 }
 #endif // CONFIG_CAM_ENABLED
