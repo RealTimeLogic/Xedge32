@@ -22,6 +22,28 @@ Example using the `serpent <https://github.com/pkulchenko/serpent>`_ module for 
    print(serpent.block(esp32.apinfo()))
 
 
+
+esp32.loglevel(level)
+-----------------------
+   :param level: A string representing the desired log level for the ESP32 system log. 
+   
+   This function allows you to configure the log level for the ESP32 system log.
+   The log level determines which log messages are displayed. The valid options for the ``level`` parameter are:
+
+   - **none**: No log messages will be displayed.
+   - **error**: Only error messages will be displayed.
+   - **warn**: Error and warning messages will be displayed.
+   - **info**: Error, warning, and informational messages will be displayed.
+   - **debug**: Error, warning, informational, and debug messages will be displayed.
+   - **verbose**: All log messages, including verbose debug messages, will be displayed.
+
+   .. note::
+   
+      The maximum log level is configured in the menuconfig settings.
+      If an invalid log level is provided, or if the requested log level exceeds the
+      maximum level set in menuconfig, an error will be raised with a detailed message.
+
+
 esp32.mac()
 --------------------
 This function returns the ESP32's 6 byte base MAC address.

@@ -1826,45 +1826,37 @@ netConfig_t cfg = {0};
  */ 
 static int lloglevel(lua_State* L)
 {
-   char levelName[32];
-
-   static const char* levelNames[] = 
-   {
-       "none",
-       "error",
-       "warn",
-       "info",
-       "debug",
-       "verbose"
+   static const char* levelNames[] =  {
+      "none",
+      "error",
+      "warn",
+      "info",
+      "debug",
+      "verbose"
    };
-   
-   strlcpy(levelName, (char*)luaL_checkstring(L, 1), sizeof(levelName));
-   
-   esp_log_level_t level;
-   size_t len = strlen(levelName);
-   for(level = ESP_LOG_NONE; level <= ESP_LOG_VERBOSE; level++) 
+   const char* levelName = luaL_checkstring(L, 1);
+   esp_log_level_t level=ESP_LOG_NONE;
+   for(int i=0 ;  i < sizeof(levelNames)/sizeof(levelNames[0]) ; i++,level++)
    {
-      if(memcmp(levelName, levelNames[level], len) == 0) 
+      if(strcmp(levelName, levelNames[i]) == 0)
       {
          break;
       }
-    }
-
+   }
    if(level > ESP_LOG_VERBOSE) 
    {
       luaL_error(L, "Invalid log level '%s', choose from none|error|warn|info|debug|verbose\n", levelName);
    }
    else if(level > CONFIG_LOG_MAXIMUM_LEVEL) 
    {
-      luaL_error(L, "Can't set log level to %s, max level limited in menuconfig to %s. "
-                    "Please increase CONFIG_LOG_MAXIMUM_LEVEL in menuconfig.\n",
-                    levelNames[level], levelNames[CONFIG_LOG_MAXIMUM_LEVEL]);
+      luaL_error(L, "Can't set log level to %s; max level limited in menuconfig to %s. "
+                 "Please increase CONFIG_LOG_MAXIMUM_LEVEL in menuconfig.\n",
+                 levelName, levelNames[CONFIG_LOG_MAXIMUM_LEVEL]);
    }
    else 
    {
       esp_log_level_set("*", level);
    }
-   
    return 0;
 }
 
