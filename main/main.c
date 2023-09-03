@@ -443,6 +443,9 @@ static void initComponents()
 
 void app_main(void)
 {
+   // Disable the esp log system.
+   esp_log_level_set("*", ESP_LOG_NONE);
+   
    initComponents();
    manageConsole(true);
    for(int i = 0; i < 50 ; i++)
@@ -464,7 +467,7 @@ void app_main(void)
                     " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
                     "__/ |     \n                  |___/      \n\n");
    HttpTrace_printf(5,"LuaShell32 ready.\n");
-   
+    
    /*
     * The app_main thread originally runs at low priority (ESP_TASK_MAIN_PRIO, or ESP_TASK_PRIO_MIN + 1).
     * The linenoise library uses the read() function that can block while waiting for USB/UART characters.

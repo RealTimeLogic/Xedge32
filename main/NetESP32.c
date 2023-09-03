@@ -282,18 +282,26 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       else
          ESP_LOGD(TAG, "Non managed WiFi event %ld\n",eventId);
    }
-   else if(IP_EVENT == eventBase && ((IP_EVENT_STA_GOT_IP == eventId) || 
-                                     (IP_EVENT_ETH_GOT_IP == eventId)) )
+   else if((IP_EVENT == eventBase) && ((IP_EVENT_STA_GOT_IP == eventId) || 
+                                      (IP_EVENT_ETH_GOT_IP == eventId)) )
    {
       ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
       char* param1 = (char*)netCheckAlloc(baMalloc(16));
       char* param2 = (char*)netCheckAlloc(baMalloc(16));
       char* param3 = (char*)netCheckAlloc(baMalloc(16));
       gotIP=TRUE;
-      basprintf(param1,IPSTR,IP2STR(&event->ip_info.ip));
-      basprintf(param2,IPSTR,IP2STR(&event->ip_info.netmask));
-      basprintf(param3,IPSTR,IP2STR(&event->ip_info.gw));
+      basprintf(param1, IPSTR,IP2STR(&event->ip_info.ip));
+      basprintf(param2, IPSTR,IP2STR(&event->ip_info.netmask));
+      basprintf(param3, IPSTR,IP2STR(&event->ip_info.gw));
       
+      if(esp_log_level_get("*") < ESP_LOG_INFO) 
+      {
+         HttpTrace_printf(0, "\033[32m\nip: %d.%d.%d.%d, mask: %d.%d.%d.%d, gw: %d.%d.%d.%d\033[0m\n", 
+                              IP2STR(&event->ip_info.ip),
+                              IP2STR(&event->ip_info.netmask),
+                              IP2STR(&event->ip_info.gw));
+      }
+                           
       if(IP_EVENT_STA_GOT_IP == eventId)
       {
          netExecXedgeEvent("wip", param1, param2, param3);

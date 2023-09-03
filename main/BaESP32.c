@@ -87,7 +87,7 @@ ThreadMutex* soDispMutex;
 static ThreadMutex rMutex;
 #define GPIO_QUEUE_SIZE 10 /* See executeLuaGpioCB() */
 
-typedef struct
+typedef struct LGPIO
 {
    int callbackRef;
    gpio_num_t pin;
@@ -103,7 +103,7 @@ typedef struct
 } GpioThreadJob;
 
 /* Array of pointers with len GPIO_NUM_MAX */
-static LGPIO* activeGPOI[GPIO_NUM_MAX];
+LGPIO* activeGPOI[GPIO_NUM_MAX];
 
 
 /*********************************************************************
@@ -1802,7 +1802,71 @@ netConfig_t cfg = {0};
    // Call the netConnect function and push the return value to the Lua stack.
    return pushEspRetVal(L, netConnect(&cfg), 0);
 }
+ 
+/**
+ * @brief Set the log level for the ESP32 system log.
+ *
+ * This function allows you to configure the log level for the ESP32 system log.
+ * The log level determines which log messages are displayed, with options ranging
+ * from "none" (no logs) to "verbose" (all logs).
+ *
+ * @param level A string representing the desired log level. Valid options are:
+ *        - "none": No log messages will be displayed.
+ *        - "error": Only error messages will be displayed.
+ *        - "warn": Error and warning messages will be displayed.
+ *        - "info": Error, warning, and informational messages will be displayed.
+ *        - "debug": Error, warning, informational, and debug messages will be displayed.
+ *        - "verbose": All log messages, including verbose debug messages, will be displayed.
+ *
+ * @return Number of values pushed to the Lua stack (always 0 in this case).
+ *
+ * @note The maximum log level is configured in the menuconfig settings.
+ * If an invalid log level is provided, or if the requested log level exceeds the
+ * maximum level set in menuconfig, an error will be raised with a detailed message.
+ */ 
+static int lloglevel(lua_State* L)
+{
+   char levelName[32];
 
+   static const char* levelNames[] = 
+   {
+       "none",
+       "error",
+       "warn",
+       "info",
+       "debug",
+       "verbose"
+   };
+   
+   strlcpy(levelName, (char*)luaL_checkstring(L, 1), sizeof(levelName));
+   
+   esp_log_level_t level;
+   size_t len = strlen(levelName);
+   for(level = ESP_LOG_NONE; level <= ESP_LOG_VERBOSE; level++) 
+   {
+      if(memcmp(levelName, levelNames[level], len) == 0) 
+      {
+         break;
+      }
+    }
+
+   if(level > ESP_LOG_VERBOSE) 
+   {
+      luaL_error(L, "Invalid log level '%s', choose from none|error|warn|info|debug|verbose\n", levelName);
+   }
+   else if(level > CONFIG_LOG_MAXIMUM_LEVEL) 
+   {
+      luaL_error(L, "Can't set log level to %s, max level limited in menuconfig to %s. "
+                    "Please increase CONFIG_LOG_MAXIMUM_LEVEL in menuconfig.\n",
+                    levelNames[level], levelNames[CONFIG_LOG_MAXIMUM_LEVEL]);
+   }
+   else 
+   {
+      esp_log_level_set("*", level);
+   }
+   
+   return 0;
+}
 
 static int lapinfo(lua_State* L)
 {
@@ -1892,6 +1956,7 @@ static const luaL_Reg esp32Lib[] = {
    {"mac", lmac},
    {"execute", lexecute},
    {"sdcard", lsdcard},
+   {"loglevel", lloglevel},
    {NULL, NULL}
 };
 
