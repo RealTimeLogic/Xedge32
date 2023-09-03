@@ -38,6 +38,9 @@ const char* wifiCipherType(
    int pcipher, int gcipher, int print, const char** pciphers);
 const char* wifiAuthMode(int authmode, int print);
 
+struct LGPIO;
+
+extern struct LGPIO* activeGPOI[GPIO_NUM_MAX];
 
 
 /*
