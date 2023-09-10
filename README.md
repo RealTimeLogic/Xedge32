@@ -35,7 +35,7 @@ The following Linux commands show all steps required for installing the developm
    # Install the latest esp-idf
    mkdir esp
    cd esp
-   git clone --recursive https://github.com/espressif/esp-idf.git
+   git clone --recursive --recurse-submodules https://github.com/espressif/esp-idf.git
    cd esp-idf/components
    git clone https://github.com/espressif/esp32-camera.git
    cd ..
