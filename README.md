@@ -35,7 +35,7 @@ The following Linux commands show all steps required for installing the developm
    # Install the latest esp-idf
    mkdir esp
    cd esp
-   git clone --recursive --recurse-submodules https://github.com/espressif/esp-idf.git
+   git clone --recursive https://github.com/espressif/esp-idf.git
    cd esp-idf/components
    git clone https://github.com/espressif/esp32-camera.git
    cd ..
@@ -44,7 +44,7 @@ The following Linux commands show all steps required for installing the developm
    source esp-idf/export.sh
 
    # Download Xedge32
-   git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
+   git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
 
    #set target to one of:
