@@ -11,6 +11,8 @@ for dir in "${directories[@]}"; do
     fi
 done
 
+mkdir -p main/BAS/examples/xedge/obj
+
 export BIN2C=main/BAS-Resources/tools/linux/bin2c
 #Resource build directory
 RB=main/BAS-Resources/build
