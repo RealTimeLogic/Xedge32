@@ -64,6 +64,13 @@ Configuration Table Examples:
 
 .. code-block:: lua
 
+   -- Settings for Seeed Studio XIAO ESP32S3 Sense
+   local cfg={
+      d0=15, d1=17, d2=18, d3=16, d4=14, d5=12, d6=11, d7=48,
+      xclk=10, pclk=13, vsync=38, href=47, sda=40, scl=39, pwdn=-1,
+      reset=-1, freq="20000000", frame="HD"
+   }
+
    -- Settings for Aideepen ESP32-CAM
    local cfg={
       d0=5, d1=18, d2=19, d3=21, d4=36, d5=39, d6=34, d7=35,
