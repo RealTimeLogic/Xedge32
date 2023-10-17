@@ -103,6 +103,8 @@ You can also call this function to disconnect from a network by not providing th
    esp32.netconnect("wifi",{ssid="My-Wi-Fi", pwd="My-Password"})
    -- Example 2: Configuring Ethernet for EdgeBox-ESP-100
    esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
+   -- Example 3: Configuring Ethernet for LILYGO T-ETH-Lite
+   esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
 
 esp32.sdcard(width)
 ---------------------------
@@ -156,7 +158,7 @@ The following example shows how to set the GPIO pins CLK, CMD, and D0 for the Fr
 
 .. code-block:: lua
 
-   esp32.sdcard(39, 38, 40)
+   esp32.sdcard(1, 39, 38, 40)
 
 
 esp32.execute(command)

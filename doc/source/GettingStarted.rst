@@ -32,10 +32,9 @@ Windows Graphical Installer
 To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and one of:
 
 - `ESP32  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
-- `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
+- `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_: includes two firmware files. See the `firmware-options`_ for details.
 
 Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedge32-S3-Firmware.zip archive`.
-
 
 1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
 2. Start the ESPRESSIF Flash Tool `flash_download_tool_3.9.4.exe` executable.
@@ -101,7 +100,27 @@ Upload the **ESP32-S3** firmware:
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
    unzip Xedge32-S3-Firmware.zip
-   python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 Xedge32-Firmware/bootloader/bootloader.bin 0x8000 Xedge32-Firmware/partition_table/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
+   python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
+
+
+.. _firmware-options:
+
+For the ESP32-S3, we provide two firmware options
+-------------------------------------------------
+
+.. image:: img/esp-s3-usb.jpg
+   :align: right
+
+**xedge.bin**
+   - Tailored for boards like "xiao esp32-s3" with a single USB port.
+   - This firmware activates the Xedge32 console :ref:`LuaShell32` through the USB port.
+
+**xedge-s0.bin**
+   - Ideal for boards that utilize serial UART0 for flashing or console logging. The USB to serial converter chip, such as CP210x or FTDI, can be integrated or external.
+   - This firmware version initializes the Xedge32 console using :ref:`LuaShell32` via the USB-to-UART serial connection.
+
+.. note::
+   If you upload the xedge.bin software via USB-to-UART, and your board has two USB ports, you'll need to switch to the other USB port after uploading. However, with xedge-s0.bin, you can continue using the same USB-to-UART port.
 
 
 Firmware Option 2: Compile The Code
@@ -144,3 +163,12 @@ Next Step
 ------------
 
 Once Xedge has successfully connected to your network, continue your journey by exploring our guide on how to use :ref:`Xedge32` .
+
+Support and Discussions
+------------------------
+
+If you encounter any issues, have questions, or simply want to join discussions about the firmware, our main platform for support is the GitHub Discussions page for the project.
+
+Please visit the `Xedge32 Discussions on GitHub`_ for assistance and community interactions.
+
+.. _Xedge32 Discussions on GitHub: https://github.com/RealTimeLogic/Xedge32/discussions
