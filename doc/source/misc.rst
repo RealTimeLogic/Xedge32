@@ -103,6 +103,8 @@ You can also call this function to disconnect from a network by not providing th
    esp32.netconnect("wifi",{ssid="My-Wi-Fi", pwd="My-Password"})
    -- Example 2: Configuring Ethernet for EdgeBox-ESP-100
    esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
+   -- Example 3: Configuring Ethernet for LILYGO T-ETH-Lite
+   esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
 
 esp32.sdcard(width)
 ---------------------------
@@ -156,7 +158,7 @@ The following example shows how to set the GPIO pins CLK, CMD, and D0 for the Fr
 
 .. code-block:: lua
 
-   esp32.sdcard(39, 38, 40)
+   esp32.sdcard(1, 39, 38, 40)
 
 
 esp32.execute(command)
@@ -177,23 +179,11 @@ Commands:
 xedge.event()
 -----------------
 
-Xedge32 extends the `xedge.event() <https://realtimelogic.com/ba/doc/?url=Xedge.html#event>`_ mechanism, allowing you to subscribe and unsubscribe from network events, thus enabling the monitoring of network status changes.
-
-Syntax
-~~~~~~~
+Xedge32 extends the Xedge xedge.event() mechanism, allowing you to subscribe and unsubscribe from network events, thus enabling the monitoring of network status changes. The following shows the xedge.event() function in the `Xedge xedge.event() <https://realtimelogic.com/ba/doc/?url=Xedge.html#event>`_ documentation.
 
 .. code-block:: lua
 
-   xedge.event(callback [,unsubscribe])
-
-Parameters
-~~~~~~~~~~~
-
-- ``callback``: A function that will be called when a network event occurs.
-- ``unsubscribe``: An optional boolean parameter. If set to ``true``, the callback function will be unsubscribed from network events.
-
-Callback Function
-~~~~~~~~~~~~~~~~~~
+   xedge.event(event, callback [,unsubscribe])
 
 The specified ``callback`` function will be called when the network changes state or when an error or warning message is generated. The function takes the following arguments, all represented as Lua strings, including numbers:
 
@@ -202,7 +192,6 @@ The specified ``callback`` function will be called when the network changes stat
   - **Arg1**: ``"up"``: Wi-Fi has transitioned from not connected to connected.
   - **Arg1**: ``"down"``: Wi-Fi has transitioned from connected to not connected.
   - **Arg1**: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
-
 
 
 - ``wip`` (WiFi IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the WiFi connection.
@@ -220,40 +209,41 @@ The specified ``callback`` function will be called when the network changes stat
 - ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
 
 
-xedge.event usage
-~~~~~~~~~~~~~~~~~~~~~
-
-To subscribe to network events, simply pass a callback function to ``xedge.event()``
+Example code
+~~~~~~~~~~~~~~~~
 
 .. code-block:: lua
 
-   xedge.event(function(event, arg1, arg2, arg3)
-      if event == "wifi" then
-         if arg1 == "up" then
-            trace("Wi-Fi connected")
-         elseif arg1 == "down" then
-            trace("Wi-Fi disconnected")
-         else
-            trace("Wi-Fi error:", arg1)
-         end
-      elseif event == "wip" then
-         trace("IP address:", arg1, "network mask", arg2, "gateway", arg3)
-         -- We do not need LuaShell32 when we have a network connection
-         esp32.execute"killmain"
-      elseif event == "eth" then
-         -- Received if this device has Ethernet.
-         trace("IP address:", arg1, "network mask", arg2, "gateway", arg3)
-      elseif event == "sntp" then
-         trace("Time synchronized")
+   xedge.event("wifi",function(status)
+      if status == "up" then
+         trace("Wi-Fi connected")
+      elseif status == "down" then
+         trace("Wi-Fi disconnected")
+      else
+         trace("Wi-Fi error:", status)
       end
    end)
 
+   xedge.event("wip",function(ip,mask,gw)
+      trace("IP address:", ip, "network mask", mask, "gateway", gw)
+      -- We do not need LuaShell32 when we have a network connection
+      esp32.execute"killmain"
+   end)
 
-To unsubscribe from network events, pass the same callback function along with the ``unsubscribe`` parameter set to ``true``::
+   xedge.event("eth",function(ip,mask,gw)
+      -- Received if this device has Ethernet and Ethernet connected during runtime.
+      trace("IP address:", ip, "network mask", mask, "gateway", gw)
+   end)
 
-  xedge.event(myCallbackFunction, true)
+   xedge.event("sntp",function()
+      trace("Time synchronized")
+   end)
+
 
 Note
 ~~~~
 
-Keep in mind that all arguments in the callback function are represented as Lua strings, including numbers.
+All arguments provided by C-code-generated-events are represented as Lua strings, including numbers.
+
+The events "wifi", "wip", and "eth" are not generated at startup since Xedge32 does not start any apps before connecting to the network. However, you get these events during runtime if the network connection changes.
+
