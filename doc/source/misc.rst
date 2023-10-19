@@ -154,11 +154,12 @@ Initialize the SD-CARD driver of a 1-bit wide bus that has clock pin connected t
 
    esp32.sdcard(1)
 
-The following example shows how to set the GPIO pins CLK, CMD, and D0 for the Freenove ESP32-S3-WROOM CAM Board.
+The following example shows how to set the GPIO pins CLK, CMD, and D0 for a few board.
 
 .. code-block:: lua
 
-   esp32.sdcard(1, 39, 38, 40)
+   esp32.sdcard(1, 39, 38, 40) -- ESP32-S3-WROOM CAM Board
+   esp32.sdcard(1,  7,  6,  5) -- Lilygo's T-ETH-Lite
 
 
 esp32.execute(command)
