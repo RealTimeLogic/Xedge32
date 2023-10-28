@@ -15,7 +15,7 @@ end
 
 function commands.uploadfw(cmd)
    cmd:allow{"PUT"}
-   if busy then senderror(cmd,"Busy: processing firmware upgrade") end
+   if busy then senderror(cmd,"Busy: processing firmware update") end
    local ok
    local ota,err=esp32.ota"begin"
    if ota then
@@ -27,7 +27,7 @@ function commands.uploadfw(cmd)
    end
    busy=false
    if not ok then
-      senderror(cmd,"firmware upgrade failed: "..tostring(err))
+      senderror(cmd,"firmware update failed: "..tostring(err))
    end
    ba.timer(function() esp32.execute"restart" end):set(500,true)
    cmd:setstatus(204)

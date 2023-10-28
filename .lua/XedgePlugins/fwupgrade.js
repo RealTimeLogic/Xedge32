@@ -13,7 +13,7 @@ const fwObj = [
 
 ideCfgCB.push(function(mlist) {
 
-    mlist.append($('<li>').text("Firmware Upgrade").on("click",()=>{
+    mlist.append($('<li>').text("Firmware Update").on("click",()=>{
 	logR('\nDrag and drop a valid firmware file to upload, flash, and restart device!\n');
 	sendCmd("getfwver",(rsp)=>log("Current Firmware\n\tName: "+rsp.projectname+"\n\tVersion: "+rsp.version+"\n\tTime: "+rsp.time+"\n\tDate: "+rsp.date+"\n\tIDF: "+rsp.idfver+"\n"));
 	let elems={};
@@ -36,7 +36,7 @@ ideCfgCB.push(function(mlist) {
 	    }
 	};
 	let pe=mkForm(fwObj,elems,null,true);
-	let editorId=createEditor(" Firmware Upgrade",null,null,pe);
+	let editorId=createEditor(" Firmware Update",null,null,pe);
 	elems.fwguage.hide();
 	setDropArrow();
 	let timer;
@@ -63,7 +63,7 @@ ideCfgCB.push(function(mlist) {
 		    if(204 != xhr.status) {
 			let err=xhr.getResponseHeader("X-Error");
 			if(!err) err=xhr.responseText;
-			pe.html("<h2>Upgrade Failed</h2><p>"+err+"</p>");
+			pe.html("<h2>Update Failed</h2><p>"+err+"</p>");
 		    }
 		    else {
 			setFwGuage(100);
