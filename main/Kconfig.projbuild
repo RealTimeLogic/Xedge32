@@ -69,6 +69,15 @@ menu "Xedge config"
              Set PHY address according your board schematic.
      
    endmenu
+
+   menu "OPC UA"
+      config OPCUA_ENABLED
+         bool "Enable OPC UA"
+      default n
+      help
+             Enabling this is required if you build BAS-Resources:Xedge with OPC UA
+   endmenu
+
    
    menu "Debug Threads"
       config DEBUG_THREADS
