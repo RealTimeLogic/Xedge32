@@ -46,6 +46,19 @@ esp_err_t cfgInit(void)
    return err;
 }
 
+
+/**
+   Save mDNS name in NVRAM if 'namebuf' is set, otherwise read mDNS name from
+   NVRAM and copy to 'namebuf'.
+ */
+#if CONFIG_mDNS_ENABLED
+esp_err_t mDnsCfg(char namebuf[80])
+{
+   size_t size=80;
+   return namebuf[0] ? nvs_set_str(nvsh, "mdns", namebuf) : nvs_get_str(nvsh, "mdns",namebuf,&size);
+}
+#endif
+
 /**
  * @brief Save the SD card parameters to the configuration storage.
  *
