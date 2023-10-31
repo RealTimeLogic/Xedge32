@@ -70,6 +70,14 @@ menu "Xedge config"
      
    endmenu
 
+   menu "mDNS"
+      config mDNS_ENABLED
+         bool "Enable mDNS"
+      default n
+      help
+             Enable mDNS - zeroconf
+   endmenu
+
    menu "OPC UA"
       config OPCUA_ENABLED
          bool "Enable OPC UA"

@@ -16,6 +16,7 @@
 #include <esp_vfs_fat.h>
 #include <sdmmc_cmd.h>
 #include <driver/sdmmc_host.h>
+#include <esp_random.h>
 #include <esp_sntp.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
@@ -23,6 +24,9 @@
 #include <esp_system.h>
 #include <nvs_flash.h>
 #include <esp_netif.h>
+#if CONFIG_mDNS_ENABLED
+#include <mdns.h>
+#endif
 #include <esp_console.h>
 #include <linenoise/linenoise.h>
 #include <barracuda.h>
@@ -104,7 +108,7 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
          luaLineBuffer.ix = 0;
       }
    }
-   
+
    xSemaphoreGive(luaLineBuffer.sem);
 }
 
@@ -219,6 +223,12 @@ static void mainServerTask(Thread *t)
 #else   
    #error must use dlmalloc
 #endif
+
+   for(int i = 0 ; i < 16 ; i++)
+   {
+      sharkssl_entropy(esp_random());
+   }
+
    platformInitDiskIo=initDiskIo;
    HttpTrace_setFLushCallback(writeHttpTrace);
    HttpServer_setErrHnd(myErrHandler); 
@@ -441,6 +451,20 @@ static void initComponents()
    Thread_start(&t);
 }
 
+#if CONFIG_mDNS_ENABLED
+static void startMdnsService()
+{
+   //initialize mDNS service
+  ESP_ERROR_CHECK(mdns_init());
+  mdns_hostname_set("Xedge32");
+  mdns_instance_name_set("Xedge32");
+  mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+}
+#else
+#define startMdnsService()
+#endif
+
+
 void app_main(void)
 {
    // Disable the esp log system.
@@ -453,6 +477,7 @@ void app_main(void)
       if(netGotIP()) break;
       Thread_sleep(100);
    }
+   startMdnsService();
 
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
@@ -601,4 +626,3 @@ static void dbgThreads()
    esp_wifi_stop();
 }
 #endif
-
