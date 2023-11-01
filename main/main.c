@@ -459,6 +459,7 @@ static void startMdnsService()
    const char* ptr = ESP_OK == mDnsCfg(buf) ? buf : "Xedge32";
    ESP_ERROR_CHECK(mdns_init());
    mdns_hostname_set(ptr);
+   HttpTrace_printf(9,"mDNS: %s\n",ptr); 
    mdns_instance_name_set("Xedge32");
    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
 }
