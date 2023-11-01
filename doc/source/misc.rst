@@ -180,7 +180,7 @@ Commands:
 
 .. code-block:: lua
 
-   xedge.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
+   esp32.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
    esp32.execute"restart" -- Navigate to http://myesp.local after restarting
 
 
