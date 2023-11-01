@@ -456,7 +456,6 @@ static void startMdnsService()
 {
    //initialize mDNS service
    char buf[80]={0};
-   size_t size = sizeof(buf);
    const char* ptr = ESP_OK == mDnsCfg(buf) ? buf : "Xedge32";
    ESP_ERROR_CHECK(mdns_init());
    mdns_hostname_set(ptr);

@@ -156,7 +156,7 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 
 The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32. Here are the best practices for navigating to your ESP32:
 
-   -  **http://xedge32.local:** You can navigate to http://xedge32.local/ if you are using the Pre-Compiled Firmware or have enabled mDNS when you compiled your own firmware.
+   -  **http://xedge32.local:** You can navigate to http://xedge32.local/ if you are using the Pre-Compiled Firmware or have enabled mDNS when you compiled your own firmware. **Note:** You can change the mdns name using :ref:`esp32-execute-label`.
 
    -  **IP Address Assignment:** The ESP32 gets an IP address from the network's DHCP (Dynamic Host Configuration Protocol). Usually, your router will assign the same IP address each time the ESP32 reconnects to the network. You can bookmark this IP address in your web browser. That way, the next time you power on your ESP32, you can simply click the bookmark to connect to it.
 

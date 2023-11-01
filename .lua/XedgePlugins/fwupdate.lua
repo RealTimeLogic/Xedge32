@@ -8,9 +8,12 @@ local function senderror(cmd,msg)
 end
 
 function commands.getfwver(cmd)
-   local v=esp32.ota()
-   v.sha256=nil
-   cmd:json(v)
+   if esp32.ota then
+      local v=esp32.ota()
+      v.sha256=nil
+      cmd:json(v)
+   end
+   cmd:json{err="No OTA API"}
 end
 
 function commands.uploadfw(cmd)

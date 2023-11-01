@@ -161,6 +161,7 @@ The following example shows how to set the GPIO pins CLK, CMD, and D0 for a few 
    esp32.sdcard(1, 39, 38, 40) -- ESP32-S3-WROOM CAM Board
    esp32.sdcard(1,  7,  6,  5) -- Lilygo's T-ETH-Lite
 
+.. _esp32-execute-label:
 
 esp32.execute(command)
 -------------------------
@@ -174,6 +175,13 @@ Commands:
 - ``"restart"``: Restarts the ESP32.
 
 - ``"killmain"``: Terminates the main process powering LuaShell32, and reclaims memory. You may choose to terminate the main process and stop LuaShell32 when a network connection is established. Refer to the ``xedge.event()`` function for example code.
+
+- ``"mdns"``: Change the mDNS name (see example below). The default name is Xedge32.
+
+.. code-block:: lua
+
+   xedge.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
+   esp32.execute"restart" -- Navigate to http://myesp.local after restarting
 
 
 

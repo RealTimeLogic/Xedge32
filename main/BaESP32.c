@@ -1931,7 +1931,9 @@ static int lexecute(lua_State* L)
 #endif
    else
    {
+#if CONFIG_mDNS_ENABLED
      L_err:
+#endif
       luaL_argerror(L, 1, cmd);
    }
    return 0;
