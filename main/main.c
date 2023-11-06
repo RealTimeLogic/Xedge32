@@ -471,7 +471,7 @@ static void startMdnsService()
 void app_main(void)
 {
    // Disable the esp log system.
-   esp_log_level_set("*", ESP_LOG_NONE);
+   esp_log_level_set("*", ESP_LOG_ERROR);
    
    initComponents();
    manageConsole(true);
