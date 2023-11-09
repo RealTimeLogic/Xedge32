@@ -86,6 +86,14 @@ menu "Xedge config"
              Enabling this is required if you build BAS-Resources:Xedge with OPC UA
    endmenu
 
+   menu "softTPM"
+      config softTPM_EFUSE_ENABLED
+         bool "Use eFuse"
+      default n
+      help
+             Use Efuse for storing soft TPM (Trusted Platform Module) key
+   endmenu
+
    
    menu "Debug Threads"
       config DEBUG_THREADS

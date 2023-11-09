@@ -27,9 +27,10 @@
 #if CONFIG_mDNS_ENABLED
 #include <mdns.h>
 #endif
+#include <esp_efuse.h>
 #include <esp_console.h>
 #include <linenoise/linenoise.h>
-#include <barracuda.h>
+#include <xedge.h>
 #include "BaESP32.h"
 #include "NetESP32.h"
 #include "CfgESP32.h"
@@ -56,8 +57,6 @@ static const char TAG[]={"X"};
 static bool gotSdCard = FALSE;
 static const char mountPoint[] = {"/sdcard"};
 static sdmmc_card_t *card = NULL;
-
-extern int (*platformInitDiskIo)(DiskIo*);  /* xedge.c */
 
 /* mark in error messages for incomplete statements */
 #define EOFMARK		"<eof>"
@@ -116,8 +115,9 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 /* xedge.c calls this function. We use it to register the auto
  * generated bindings and the bindings in installESP32Libs.
 */
-void luaopen_AUX(lua_State* L)
+int xedgeOpenAUX(XedgeOpenAUX* aux)
 {
+   lua_State* L = aux->L;
 #if CONFIG_DEBUG_THREADS
    Lg=L;
 #endif
@@ -142,19 +142,89 @@ void luaopen_AUX(lua_State* L)
 
    if(gotSdCard)
    {
-      /* Will not GC before VM terminates */
       DiskIo* sdCard = (DiskIo*)lua_newuserdatauv(L, sizeof(DiskIo), 0);
+      /* Make sure it will not GC until VM terminates */
       luaL_ref(L, LUA_REGISTRYINDEX);
-
       DiskIo_constructor(sdCard);
       DiskIo_setRootDir(sdCard,mountPoint);
       balua_iointf(L, "sd",  (IoIntf*)sdCard);
    }
 
+   uint8_t keyBuf[32]; // 256 bits = 32 bytes
+#if CONFIG_softTPM_EFUSE_ENABLED
+   static const esp_efuse_desc_t efuseSecDescriptor =
+      {EFUSE_BLK3, 0, 256}; // Use entire block
+   static const esp_efuse_desc_t* efuseSecBlock[] = {
+      &efuseSecDescriptor, // Point to the descriptor
+      NULL
+   };
+   // Read the key from the custom efuse field
+   esp_err_t err = esp_efuse_read_field_blob(efuseSecBlock, keyBuf, 256);
+   if(ESP_OK != err)
+   {
+      ESP_LOGE(TAG,"eFuse TPM read err: %s\n", esp_err_to_name(err));
+      return -1;
+   }
+   // Check if the key is all zeros (not set)
+   bool isKeySet = false;
+   for (int i = 0; i < 32; i++)
+   {
+      if (keyBuf[i] != 0)
+      {
+         isKeySet = true;
+         break;
+      }
+   }
+   if( ! isKeySet )
+   {
+      HttpTrace_printf(5, "Creating TPM eFuse key\n");
+      // Generate a random 256-bit number
+      esp_fill_random(keyBuf, 32);
+      // Burn the key into the custom eFuse field
+      err = esp_efuse_write_field_blob(efuseSecBlock, keyBuf, 256);
+      if(ESP_OK != err)
+      {
+         ESP_LOGE(TAG,"eFuse TPM write err: %s\n", esp_err_to_name(err));
+         return -1;
+      }
+   }
+#else
+   IoStat sb;
+   int status=0;
+   IoIntfPtr io = aux->dio;
+   size_t size=0;
+   static const char pmkey[]={"cert/softpmkey.bin"};
+   if(io->statFp(io, "cert", &sb))
+      io->mkDirFp(io, "cert", 0);
+   ResIntf* fp = io->openResFp(io,pmkey,OpenRes_READ,&status,0);
+   if(fp)
+   {
+      if(fp->readFp(fp, keyBuf, sizeof(keyBuf),&size))
+      {
+         ESP_LOGE(TAG, "Cannot save %s\n",pmkey);
+         goto L_create;
+      }
+   }
+   else
+   {
+     L_create:
+      HttpTrace_printf(5,"Creating %s\n",pmkey);
+      esp_fill_random(keyBuf, sizeof(keyBuf));
+      fp = io->openResFp(io,pmkey, OpenRes_WRITE, &status, 0);
+      if(!fp || fp->writeFp(fp, keyBuf, sizeof(keyBuf)))
+         ESP_LOGE(TAG, "Cannot save %s\n",pmkey);
+   }
+   if(fp)
+      fp->closeFp(fp);
+#endif
+   lua_pushlstring(L,(char*)keyBuf,sizeof(keyBuf));
+   aux->initXedge(L, aux->initXedgeFuncRef); /* Send pm key to Lua code */
+
    /* We return when we get an IP address, thus preventing the
     * Barracuda App Server from starting until the network is ready.
     */
    netWaitIP();
+   return 0;
 }
 
 
@@ -167,6 +237,7 @@ myErrHandler(BaFatalErrorCodes ecode1,
 {
   ESP_LOGE(TAG, "Fatal error in Barracuda %d %d %s %d\n",
            ecode1, ecode2, file, line);
+  Thread_sleep(1000);
   abort();
 }
 
@@ -181,7 +252,7 @@ static void writeHttpTrace(char* buf, int bufLen)
 
 /* Configures DISK IO for the C file: examples/xedge/src/xedge.c
  */
-static int initDiskIo(DiskIo* io)
+int xedgeInitDiskIo(DiskIo* io) /* Called by xedge.c */
 {
    static const char bp[] = {"/spiflash"}; 
    const esp_vfs_fat_mount_config_t mcfg = {
@@ -229,7 +300,6 @@ static void mainServerTask(Thread *t)
       sharkssl_entropy(esp_random());
    }
 
-   platformInitDiskIo=initDiskIo;
    HttpTrace_setFLushCallback(writeHttpTrace);
    HttpServer_setErrHnd(myErrHandler); 
    barracuda(); /* Does not return */

@@ -31,7 +31,7 @@ esp32.loglevel(level)
    The log level determines which log messages are displayed. The valid options for the ``level`` parameter are:
 
    - **none**: No log messages will be displayed.
-   - **error**: Only error messages will be displayed.
+   - **error**: Only error messages will be displayed (default setting).
    - **warn**: Error and warning messages will be displayed.
    - **info**: Error, warning, and informational messages will be displayed.
    - **debug**: Error, warning, informational, and debug messages will be displayed.

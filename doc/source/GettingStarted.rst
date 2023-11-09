@@ -8,7 +8,7 @@ We offer two options for the firmware:
 1. Ready-to-use firmware binary files which you can directly upload onto your board.
 2. C source code files which you can compile using the Espressif ESP-IDF toolchain.
 
-**Important:** We have provided instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
+**Important:** We provide instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
 
 .. contents:: Get started as follows:
    :depth: 2
@@ -19,6 +19,18 @@ Firmware Option 1: Use Pre-Compiled Firmware
 ---------------------------------------------
 
 The firmware binaries can be uploaded using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
+
+ESP32 Pre-Compiled Firmware Requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before you begin, ensure your ESP32 device meets the following requirements for the pre-compiled firmware:
+
+- **Standard ESP32**: Requires a minimum of 4MB flash memory and 4MB RAM.
+- **ESP32-S3 Variant**: Requires a minimum of 8MB flash memory and 8MB RAM, but comes with additional features:
+
+  - **OPC UA Plugin**: This is included by default, offering advanced communication capabilities.
+  - **Over-The-Air (OTA) Updates**: Enables easy firmware upgrades.
+
 
 Windows Graphical Installer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
