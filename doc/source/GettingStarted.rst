@@ -63,7 +63,7 @@ Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedg
 +-----------------------+-------------------+-------------------+
 | `partition_table.bin` | `0x8000`          | `0x8000`          |
 +-----------------------+-------------------+-------------------+
-| `xedge.bin`           | `0x10000`         | `0x10000`         |
+| `xedge.bin`           | `0x10000`         | `0x20000`         |
 +-----------------------+-------------------+-------------------+
 
 8.  Click the three checkboxes to the left of the three bin files to select them.
@@ -112,8 +112,7 @@ Upload the **ESP32-S3** firmware:
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
    unzip Xedge32-S3-Firmware.zip
-   python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
-
+   python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x20000 Xedge32-Firmware/xedge.bin
 
 .. _firmware-options:
 
