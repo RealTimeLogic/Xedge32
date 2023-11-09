@@ -14,6 +14,7 @@
 #include "NetESP32.h"
 
 esp_err_t cfgInit(void);
+esp_err_t mDnsCfg(char namebuf[80]);
 esp_err_t cfgSetSdCard(sdmmc_slot_config_t* cfg);
 esp_err_t cfgGetSdCard(sdmmc_slot_config_t* cfg);
 esp_err_t cfgEraseSdCard(void);

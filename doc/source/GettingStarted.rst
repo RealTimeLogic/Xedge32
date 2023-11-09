@@ -8,7 +8,7 @@ We offer two options for the firmware:
 1. Ready-to-use firmware binary files which you can directly upload onto your board.
 2. C source code files which you can compile using the Espressif ESP-IDF toolchain.
 
-**Important:** We have provided instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
+**Important:** We provide instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
 
 .. contents:: Get started as follows:
    :depth: 2
@@ -19,6 +19,18 @@ Firmware Option 1: Use Pre-Compiled Firmware
 ---------------------------------------------
 
 The firmware binaries can be uploaded using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
+
+ESP32 Pre-Compiled Firmware Requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Before you begin, ensure your ESP32 device meets the following requirements for the pre-compiled firmware:
+
+- **Standard ESP32**: Requires a minimum of 4MB flash memory and 4MB RAM.
+- **ESP32-S3 Variant**: Requires a minimum of 8MB flash memory and 8MB RAM, but comes with additional features:
+
+  - **OPC UA Plugin**: This is included by default, offering advanced communication capabilities.
+  - **Over-The-Air (OTA) Updates**: Enables easy firmware upgrades.
+
 
 Windows Graphical Installer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -59,7 +71,7 @@ Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedg
 10. Click the START button and wait for it to upload the bin files to your ESP32.
 11. When completed, open a terminal emulator such as Putty.
 12. You should see a terminal window with text being printed, as shown in the screenshot below.
-13. When you see `LuaShell32 ready` being printed, proceed by :ref:`setting the Wi-Fi credentials <wificredentials>` as explained below.
+13. When you see `LuaShell32 ready` being printed, proceed by :ref:`configuring the ESP32 <configesp32>` as explained below.
 
 .. image:: https://realtimelogic.com/images/Xedg32-Flash-Firmware.png
    :alt: Firmware Upload Tool
@@ -129,40 +141,55 @@ Firmware Option 2: Compile The Code
 See the `GitHub Repository <https://github.com/RealTimeLogic/Xedge-ESP32>`_ for details.
 
 
-Set The Wi-Fi Credentials
+Configure the ESP32
 --------------------------
 
-.. _wificredentials:
+.. _configesp32:
 
 Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShell32` prompt after printing some information. See the *Potential Issues and Solutions* section above if you do not see the LuaShell32.
 
 
-1. In the :ref:`LuaShell32` prompt, type the following to connect to your Wi-Fi:
+1. In the :ref:`LuaShell32` prompt, type the following to connect to your network:
 
-.. code-block:: lua
+   -  Using **Wi-Fi**:
 
-   esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
+   .. code-block:: lua
+
+      esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
+
+   -  Using **Ethernet**:
+
+   .. code-block:: lua
+
+      esp32.netconnect("W5500", {spi-settings})
 
 2. After a second or two, the ESP32 should connect to your network.
 3. Using your web browser, navigate to the IP address printed in the :ref:`LuaShell32` to access the ESP32.
 
-The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32. Here's what happens:
+The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32. Here are the best practices for navigating to your ESP32:
 
-1. IP Address Assignment: The ESP32 gets an IP address from the network's DHCP (Dynamic Host Configuration Protocol). Usually, your router will assign the same IP address each time the ESP32 reconnects to the network.
+   -  **http://xedge32.local:** You can navigate to http://xedge32.local/ if you are using the Pre-Compiled Firmware or have enabled mDNS when you compiled your own firmware. **Note:** You can change the mdns name using :ref:`esp32-execute-label`.
 
-2. Bookmarking the IP Address: You can bookmark this IP address in your web browser. That way, the next time you power on your ESP32, you can simply click the bookmark to connect to it.
+   -  **IP Address Assignment:** The ESP32 gets an IP address from the network's DHCP (Dynamic Host Configuration Protocol). Usually, your router will assign the same IP address each time the ESP32 reconnects to the network. You can bookmark this IP address in your web browser. That way, the next time you power on your ESP32, you can simply click the bookmark to connect to it.
 
-3. Consistent IP Address with DHCP Reservations: If you want to make sure the ESP32 always uses the same IP address, most routers allow you to reserve that IP address specifically for your device using `DHCP reservations <https://portforward.com/dhcp-reservation/>`_. This ensures consistent IP address assignment for the ESP32.
+   -  **Consistent IP Address with DHCP Reservations:** If you want to make sure the ESP32 always uses the same IP address, most routers allow you to reserve that IP address specifically for your device using `DHCP reservations <https://portforward.com/dhcp-reservation/>`_. This ensures consistent IP address assignment for the ESP32.
 
-4. Using Let's Encrypt Plugin - SharkTrust: As an alternative, you can also enable a permanent URL for your ESP32 by activating the Let's Encrypt plugin called SharkTrust through the `Xedge's configuration menu <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
+   -  **Using Let's Encrypt Plugin - SharkTrust:** As an alternative, you can also enable a permanent URL for your ESP32 by activating the Let's Encrypt plugin called SharkTrust through the `Xedge's configuration menu <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
 
-By following these guidelines, you can create a seamless connection experience with your ESP32 device without using a serial connection to discover the IP address assignment.
+By following the above instructions, you can easily browse to your your ESP32 device without using a serial connection to discover the IP address assignment.
 
 
 Next Step
 ------------
 
 Once Xedge has successfully connected to your network, continue your journey by exploring our guide on how to use :ref:`Xedge32` .
+
+
+Upgrading the Firmware
+------------------------
+
+The ESP32-S3 pre-compiled firmware includes drag-and-drop firmware upgrades. When it is time to upgrade Xedge32, you can repeat the firmware installation process as outlined in this tutorial, or you can use the much simpler drag-and-drop feature. See the `drag-and-drop firmware upgrade info <https://www.linkedin.com/feed/update/urn:li:activity:7123087429762256896>`_ for details.
+
 
 Support and Discussions
 ------------------------

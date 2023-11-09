@@ -68,8 +68,9 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <esp_mac.h>
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
+#include <esp_ota_ops.h>
 #include "BaESP32.h"
-#include "NetESP32.h"
+#include "CfgESP32.h"
 
 #define ECHK ESP_ERROR_CHECK
 
@@ -119,10 +120,11 @@ static int throwInvArg(lua_State* L, const char* type)
    return luaL_error(L,"Invalidarg %s", type); /* does not return; throws */
 }
 
-static void pushErr(lua_State* L, const char* msg)
+static int pushErr(lua_State* L, const char* msg)
 {
    lua_pushnil(L);
    lua_pushstring(L,msg);
+   return 2;
 }
 
 
@@ -1911,18 +1913,131 @@ static int lerase(lua_State* L)
 static int lexecute(lua_State* L)
 {
    const char* cmd = luaL_checkstring(L,1);
-   if(cmd[0] == 'e')
+   if(cmd[0] == 'e') /* erase */
       lerase(L);
-   else if(cmd[0] == 'r')
+   else if(cmd[0] == 'r') /* restart */
       esp_restart();
-   else if(cmd[0] == 'k')
+   else if(cmd[0] == 'k') /* killmain */
       manageConsole(false);
+#if CONFIG_mDNS_ENABLED
+   else if(cmd[0] == 'm') /* mdns */
+   {
+      size_t len;
+      const char* name = luaL_checklstring(L,2,&len);
+      if(len >= 80) /* See main.c: startMdnsService */
+         goto L_err;
+      mDnsCfg((char*)name);
+   }
+#endif
    else
+   {
+#if CONFIG_mDNS_ENABLED
+     L_err:
+#endif
       luaL_argerror(L, 1, cmd);
+   }
    return 0;
 }
 
 
+
+/*********************************************************************
+ *********************************************************************
+                             OTA
+ *********************************************************************
+ *********************************************************************/
+#if CONFIG_IDF_TARGET_ESP32S3
+
+#define BAOTA "OTA"
+
+typedef struct {
+    esp_ota_handle_t handle;
+} LOTA;
+
+
+static LOTA* LOTA_getUD(lua_State* L)
+{
+   return (LOTA*)luaL_checkudata(L,1,BAOTA);
+}
+
+
+static int LOTA_write(lua_State *L)
+{
+   LOTA* ota = LOTA_getUD(L);
+   size_t len;
+   const char* data = luaL_checklstring(L, 2, &len);
+   esp_err_t err =  ota->handle ? esp_ota_write(ota->handle, data, len) : ESP_ERR_INVALID_STATE;
+   if(LUA_OK != err)
+      return pushErr(L,esp_err_to_name(err));
+   lua_pushboolean(L, TRUE);
+   return 1;
+}
+
+static int LOTA_commit(lua_State *L)
+{
+   LOTA* ota = LOTA_getUD(L);
+   esp_err_t err = ota->handle ? esp_ota_end(ota->handle) : ESP_ERR_INVALID_STATE;
+   ota->handle=0;
+   if(LUA_OK == err)
+   {
+      err=esp_ota_set_boot_partition(esp_ota_get_next_update_partition(0));
+   }
+   if(LUA_OK == err)
+   {
+      lua_pushboolean(L, TRUE);
+      return 1;
+   }
+   return pushErr(L,esp_err_to_name(err));
+}
+
+static int LOTA_abort(lua_State *L)
+{
+   LOTA* ota = LOTA_getUD(L);
+   esp_err_t err = ota->handle ? esp_ota_abort(ota->handle) : ESP_ERR_INVALID_STATE;
+   if(LUA_OK != err)
+      return pushErr(L,esp_err_to_name(err));
+   lua_pushboolean(L, TRUE);
+   return 1;
+}
+
+static const struct luaL_Reg otaObjLib[] = {
+    {"write", LOTA_write},
+    {"commit", LOTA_commit},
+    {"abort", LOTA_abort},
+    {"__gc", LOTA_abort},
+    {NULL, NULL}
+};
+
+
+static int lota(lua_State *L)
+{
+   const char* action=luaL_optstring(L,1,0);
+   if(!action)
+   {
+      const esp_app_desc_t* desc=esp_app_get_description();
+      lua_createtable(L, 0, 7);
+      lua_pushinteger(L,desc->secure_version); lua_setfield(L,-2,"secureversion");
+      lua_pushstring(L,desc->version); lua_setfield(L,-2,"version");
+      lua_pushstring(L,desc->project_name); lua_setfield(L,-2,"projectname");
+      lua_pushstring(L,desc->time); lua_setfield(L,-2,"time");
+      lua_pushstring(L,desc->date); lua_setfield(L,-2,"date");
+      lua_pushstring(L,desc->idf_ver); lua_setfield(L,-2,"idfver");
+      lua_pushlstring(L,(const char *)desc->app_elf_sha256,32); lua_setfield(L,-2,"sha256");
+      return 1;
+   }
+   if( ! strcmp("begin",action) )
+   {
+      LOTA* ota=(LOTA*)lNewUdata(L, sizeof(LOTA), BAOTA, otaObjLib);
+      const esp_partition_t *partition = esp_ota_get_next_update_partition(NULL);
+      esp_err_t err = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &ota->handle);
+      if(LUA_OK != err)
+         return pushErr(L,esp_err_to_name(err));
+      return 1;
+   }
+   return throwInvArg(L, "action");
+}
+
+#endif /* CONFIG_IDF_TARGET_ESP32S3 (OTA) */
 
 
 /*********************************************************************
@@ -1949,6 +2064,9 @@ static const luaL_Reg esp32Lib[] = {
    {"execute", lexecute},
    {"sdcard", lsdcard},
    {"loglevel", lloglevel},
+#if CONFIG_IDF_TARGET_ESP32S3
+   {"ota",lota},
+#endif
    {NULL, NULL}
 };
 
