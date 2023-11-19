@@ -43,9 +43,10 @@ The following Linux commands show all steps required for installing the developm
    cd ..
    source esp-idf/export.sh
 
-   # Download Xedge32
+   # Download and update Xedge32
    git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
+   git submodule update --init --remote
 
    # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
    chmod +x BuildESP32ResourceFile.sh
@@ -55,11 +56,14 @@ The following Linux commands show all steps required for installing the developm
    #idf.py set-target esp32
    #idf.py set-target esp32s3
 
+   # Configure Xedge32 options such as enabling CAM. Note, You must
+   # enabled the C side OPC UA if you included OPC-UA when running
+   # BuildESP32ResourceFile.sh.
+   #idf.py menuconfig
+
    # Build the code
    idf.py build
 ```
-
-Note that the camera module is not enabled. To enable this module, run idf.py menuconfig, navigate to xedge configuration, and enable the camera before building the project.
 
 Note that the code can be compiled in a Linux console, including the Windows Subsystem for Linux (WSL). If you use WSL, it's recommended to use generation one (WSL1), as it can be difficult to get the USB serial working in WSL2. For more information, see [the WSL documentation](https://docs.microsoft.com/en-us/windows/wsl/about).
 
