@@ -970,11 +970,14 @@ typedef struct
 {
    pcnt_unit_handle_t unit;
    int callbackRef;
-   gpio_num_t pin; /* One of the GPIO pins used; We use it as index in activeGPOI */ 
+   gpio_num_t pin; // One of the GPIO pins used; We use it as index in activeGPOI 
    int noOfChannels;
-   int queueLen;
-   int onReachQueue[ONREACH_QUEUE_SIZE]; /* holds counter values */
-   pcnt_channel_handle_t channels[1]; /* Must be last */
+   int qHead;
+   int qTail;
+   int lCbRunning; // LPCNT_onReachLuaCB running flag
+   int onReachQueueVal[ONREACH_QUEUE_SIZE]; // holds counter values
+   U8 onReachQueueCrossMode[ONREACH_QUEUE_SIZE]; // holds cross mode
+   pcnt_channel_handle_t channels[1]; // Must be last
 } LPCNT;
 
 static LPCNT* LPCNT_getUD(lua_State* L)
@@ -1202,32 +1205,33 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
  */
 static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   int queueLen,ix;
-   int queue[ONREACH_QUEUE_SIZE];
    GpioThreadJob* job = (GpioThreadJob*)jb;
-   ThreadMutex_set(&rMutex);
    LPCNT* o = (LPCNT*)activeGPOI[job->pin];
    if(o)
    {
-      queueLen = o->queueLen;
-      memcpy(queue,o->onReachQueue,queueLen*sizeof(int));
-      o->queueLen=0;
-   }
-   ThreadMutex_release(&rMutex);
-   if(o)
-   {
       lua_State* L = jb->Lt;
-      for(ix=0 ; ix < queueLen ; ix++)
+      /* This code, which can be interrupted by
+       * LPCNT_onReachInterruptHandler, is designed such that its
+       * operation should be safe. The code only updates the tail.
+       */
+      while(o->qHead != o->qTail)
       {
+         o->lCbRunning=TRUE;
          /* Push user's callback on the stack */
          balua_wkPush(L, o->callbackRef);
-         lua_pushinteger(L,queue[ix]);
-         if(LUA_OK != lua_pcall(L, 1, 0, msgh))
+         lua_pushinteger(L,o->onReachQueueVal[o->qTail]);
+         lua_pushinteger(L,o->onReachQueueCrossMode[o->qTail]);
+         if(LUA_OK != lua_pcall(L, 2, 0, msgh))
          {
             LPCNT_close(L, o);
             break;
          }
          lua_settop(L,1);
+         int next = o->qTail+1;
+         if(next >= ONREACH_QUEUE_SIZE)
+            next=0;
+         o->qTail = next; // Atomic with regards to LPCNT_onReachInterruptHandler
+         o->lCbRunning=FALSE;
       }
    }
 }
@@ -1238,21 +1242,7 @@ static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LPCNT_onReachCB(EventBrokerCallbackArg arg)
 {
-   int queueLen=0;
-   ThreadMutex_set(&rMutex);
-   LPCNT* o=(LPCNT*)activeGPOI[arg.pin];
-   if(o)
-   {
-      int count;
-      if(o->queueLen < ONREACH_QUEUE_SIZE && ESP_OK == pcnt_unit_get_count(o->unit, &count))
-      {
-         o->onReachQueue[o->queueLen++] = count;
-         queueLen=o->queueLen;
-      }
-   }
-   ThreadMutex_release(&rMutex);
-   /* If transitioning from empty to one element in the queue */
-   if(1 == queueLen)
+   if(activeGPOI[arg.pin])
       dispatchThreadJob(arg.pin,LPCNT_onReachLuaCB);
 }
 
@@ -1262,9 +1252,26 @@ static void LPCNT_onReachCB(EventBrokerCallbackArg arg)
 static bool LPCNT_onReachInterruptHandler(
    pcnt_unit_handle_t unit, const pcnt_watch_event_data_t* edata, void* pin)
 {
-   BaseType_t highTaskWakeup;
-   EventBrokerQueueNode n = {.callback=LPCNT_onReachCB,.arg.pin=(gpio_num_t)pin};
-   xQueueSendFromISR(eventBrokerQueue, &n, &highTaskWakeup);
+   BaseType_t highTaskWakeup=pdFALSE;
+   LPCNT* o=(LPCNT*)activeGPOI[(gpio_num_t)pin];
+   /* This interrupt function has higher priority than step 3;
+    * thus, the following appears as an atomic operation to LPCNT_onReachLuaCB
+    */
+   int next = o->qHead+1;
+   if(next >= ONREACH_QUEUE_SIZE)
+      next=0;
+   if(next != o->qTail) // Not full
+   {
+      o->onReachQueueVal[o->qHead] = edata->watch_point_value;
+      o->onReachQueueCrossMode[o->qHead] = edata->zero_cross_mode;
+      o->qHead=next;
+      if( ! o->lCbRunning )
+      {
+         EventBrokerQueueNode n = {.callback=LPCNT_onReachCB,.arg.pin=(gpio_num_t)pin};
+         xQueueSendFromISR(eventBrokerQueue, &n, &highTaskWakeup);
+         o->lCbRunning=TRUE;
+      }
+   }
    return highTaskWakeup == pdTRUE;
 }
 

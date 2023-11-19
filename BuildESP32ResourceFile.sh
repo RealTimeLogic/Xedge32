@@ -11,8 +11,6 @@ for dir in "${directories[@]}"; do
     fi
 done
 
-mkdir -p main/BAS/examples/xedge/obj
-
 export BIN2C=main/BAS-Resources/tools/linux/bin2c
 #Resource build directory
 RB=main/BAS-Resources/build
@@ -24,7 +22,12 @@ export NO_BIN2C=1
 popd
 
 echo "Adding ESP32 modules"
-zip -D -r -9 $RB/Xedge.zip  .lua || exit 1
+if [ "$NO_FWUPDATE" == "1" ]; then
+    zip -D -r -9 $RB/Xedge.zip .lua -x ".lua/XedgePlugins/fw*" || exit 1
+else
+    zip -D -r -9 $RB/Xedge.zip  .lua || exit 1
+fi
+
 $BIN2C -z getLspZipReader $RB/Xedge.zip  main/BAS/examples/xedge/obj/XedgeZip.c || exit 1
 echo "Created: main/BAS/examples/xedge/obj/XedgeZip.c"
 

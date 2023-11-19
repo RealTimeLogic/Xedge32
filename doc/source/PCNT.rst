@@ -2,7 +2,39 @@
 PCNT API
 ==========
 
-This API provides an interface to the ESP32's Pulse Counter (PCNT) functionality.
+The Lua PCNT module interfaces with the `ESP-IDF PCNT <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/pcnt.html>`_ (Pulse Counter) functionality, designed for counting the rising and falling edges of an input signal on the ESP32.
+
+Key Features
+------------
+
+- **16-bit Signed Counter**
+  
+  - Each pulse counter unit features a 16-bit signed counter register.
+
+- **Two Configurable Channels**
+  
+  - There are two channels per unit, each configurable to increment or decrement the counter based on the input signal.
+
+- **Signal and Control Inputs**
+  
+  - *Signal Input*: Accepts signal edges (rising or falling) for detection.
+  - *Control Input*: Enables or disables the signal input dynamically.
+
+- **Input Filters**
+  
+  - Optional filters are available for count and control inputs to eliminate unwanted signal glitches.
+
+- **Watchpoints and Interrupts**
+  
+  - The pulse counters offer five watchpoints sharing a single interrupt.  The watchpoints include:
+
+    - *Maximum/Minimum Count Value*: Triggers an interrupt when the counter reaches the set upper (positive number) or lower (negative number) limit, resetting the counter to 0.
+    - *Two Threshold Values (Threshold 0 and 1)*: Triggers an interrupt when these preset values are reached while counting continues.
+    - *Zero*: Triggers an interrupt when the counter value is zero, with counting continuing.
+
+For a comprehensive understanding of the pulse counter hardware, refer to Chapter 17 of the `ESP32 Technical Reference Manual <https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf>`_.
+
+
 
 esp32.pcnt
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -55,8 +87,16 @@ Argument cfg is a table with the following fields:
       
       - The function to call when a watch point is reached. Receives the current count as an argument.
       - Type: function
-      - Signature: ``function(count)``
+      - Signature: ``function(count, crossmode)``
+      - Arguments:
 
+        - ``count`` Watch point value that triggered the event
+        - ``crossmode`` Indicates how the PCNT unit crossed the last zero point. The possible zero cross modes are:
+          
+          - 0 Start from positive value, end to zero, i.e., +N -> 0
+          - 1 Start from negative value, end to zero, i.e., -N -> 0
+          - 2 Start from negative value, end to positive value, i.e., -N -> +M
+          - 3 Start from positive value, end to negative value, i.e., +N -> -M
 
 - ``channels``
   
@@ -147,12 +187,14 @@ The `esp32.pcnt` function returns an object with the following methods:
 Usage Example
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
+This Lua example is designed to mirror the functionality of the `Rotary Encoder C Code Example <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotary_encoder>`_.
+
 .. code-block:: lua
 
     local gpioA = 0
     local gpioB = 2
 
-    pcnt = esp32.pcnt{
+    pcnt,err = esp32.pcnt{
         high = 100,
         low = -100,
         glitch=1000,
@@ -197,7 +239,13 @@ Usage Example
             }
         }
     }
-    pcnt:start()
+    if pcnt then
+       pcnt:start()
+       timer=ba.timer(function() trace("Pulse count:",pcnt:count()) return true end)
+       timer:set(1000)
+    else
+       trace(err)
+    end
 
 
 How to Use the Example

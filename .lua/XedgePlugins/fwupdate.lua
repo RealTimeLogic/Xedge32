@@ -7,11 +7,6 @@ local function senderror(cmd,msg)
    cmd:abort()
 end
 
-function commands.getmac(cmd)
-   local fmt=string.format
-   cmd:json{ok=true,mac=esp32.mac():gsub('.', function(c) return fmt('%02X',c:byte()) end)}
-end
-
 function commands.getfwver(cmd)
    if esp32.ota then
       local v=esp32.ota()
