@@ -54,6 +54,7 @@ Xedge ESP32
    source/ADC
    source/GPIO
    source/I2C
+   source/PCNT
    source/PWM
    source/UART
    source/BME280

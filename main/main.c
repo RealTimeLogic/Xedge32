@@ -487,7 +487,7 @@ int lsdcard(lua_State* L)
             }
          }
          
-         return pushEspRetVal(L, err, 0);
+         return pushEspRetVal(L, err, 0, TRUE);
       }
       else
       {

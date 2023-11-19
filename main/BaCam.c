@@ -66,7 +66,7 @@ static int LCAM_close(lua_State* L)
       esp_err_t err = esp_camera_deinit();
       if (err != ESP_OK)
       {
-         return pushEspRetVal(L, err, "Deinit camera failed");
+         return pushEspRetVal(L, err, "Deinit camera failed", FALSE);
       }
       return 1;
    }
@@ -103,7 +103,7 @@ static int LCAM_lread(lua_State* L)
    ThreadMutex_set(soDispMutex);
    if(!fb)
    {
-      return pushEspRetVal(L, ESP_FAIL, "Camera Capture Failed");
+      return pushEspRetVal(L, ESP_FAIL, "Camera Capture Failed", FALSE);
    }
    luaL_Buffer lb;
    luaL_buffinit(L, &lb);
@@ -309,7 +309,7 @@ int lcam(lua_State* L)
    esp_err_t err = esp_camera_init(&cfg);
    if (err != ESP_OK)
    {
-      return pushEspRetVal(L, ESP_FAIL, "Camera Init Failed");
+      return pushEspRetVal(L, ESP_FAIL, "Camera Init Failed", TRUE);
    }
 
    cam->sensor = esp_camera_sensor_get();

@@ -64,6 +64,7 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <driver/i2c.h>
 #include <driver/uart.h>
 #include <driver/ledc.h>
+#include <driver/pulse_cnt.h>
 #include <esp_wifi.h>
 #include <esp_mac.h>
 #include <esp_log.h>
@@ -120,6 +121,11 @@ static int throwInvArg(lua_State* L, const char* type)
    return luaL_error(L,"Invalidarg %s", type); /* does not return; throws */
 }
 
+static int throwPinInUse(lua_State* L, int pin)
+{
+   return luaL_error(L,"Pin %d in use",pin);
+}
+
 static int pushErr(lua_State* L, const char* msg)
 {
    lua_pushnil(L);
@@ -128,9 +134,9 @@ static int pushErr(lua_State* L, const char* msg)
 }
 
 
-int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg)
+int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg, int throwOnInvArg)
 {
-   if(ESP_ERR_INVALID_ARG == err)
+   if(ESP_ERR_INVALID_ARG == err && throwOnInvArg)
       throwInvArg(L, msg ? msg : "");
    if(ESP_OK == err)
    {
@@ -183,7 +189,8 @@ void* lNewUdata(lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
    balua_wkPush().
    https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
    This function returns a reference to the function, but does not
-   push any values on the stack.  */
+   push any values on the stack.
+*/
 static int
 lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
 {
@@ -364,14 +371,14 @@ static int ADC_lread(lua_State* L)
       luaL_error(L,"Continuous mode");
    err = adc_oneshot_read(o->u.oneShot.handle, o->channel, &val);
    if(ESP_OK != err)
-      return pushEspRetVal(L, err, "read");
+      return pushEspRetVal(L, err, "read",FALSE);
    lua_pushinteger(L,val);
    if(o->caliHandle)
    {
       int volt;
       err = adc_cali_raw_to_voltage(o->caliHandle, val, &volt);
       if(ESP_OK != err)
-         return pushEspRetVal(L, err, "calibrate");
+         return pushEspRetVal(L, err, "calibrate",FALSE);
       lua_pushinteger(L,volt);
       return 2;
    }
@@ -606,9 +613,9 @@ static int ladc(lua_State* L)
       bitwidth=SOC_ADC_DIGI_MAX_BITWIDTH;
    err = adc_oneshot_channel_to_io(unitId, channel, &pin);
    if(ESP_OK != err)
-      return pushEspRetVal(L, err, "channel_to_io");
+      return pushEspRetVal(L, err, "channel_to_io",TRUE);
    if(activeGPOI[pin])
-      luaL_error(L,"INUSE");
+      throwPinInUse(L,pin);
    if(hasCB) /* continuous mode */
    {
       const char* f = balua_checkStringField(L, 3, "filter");
@@ -636,7 +643,7 @@ static int ladc(lua_State* L)
          .conv_frame_size = bufSize,
       };
       err=adc_continuous_new_handle(&adcHandleConfig, &contHandle);
-      if(ESP_OK != err) return pushEspRetVal(L, err, "new_handle");
+      if(ESP_OK != err) return pushEspRetVal(L, err, "new_handle",TRUE);
       adc_digi_pattern_config_t adcPattern[1]={
          {
             .atten = atten,
@@ -665,7 +672,7 @@ static int ladc(lua_State* L)
       if(ESP_OK != err) 
       {
          adc_continuous_deinit(contHandle);
-         return pushEspRetVal(L, err, "continuous_config");
+         return pushEspRetVal(L, err, "continuous_config",TRUE);
       }
    }
    else /* Oneshot mode */
@@ -681,7 +688,7 @@ static int ladc(lua_State* L)
       if(ESP_OK != err)
       {
          adc_oneshot_del_unit(oneShotHandle);
-         return pushEspRetVal(L, err, "oneshot");
+         return pushEspRetVal(L, err, "oneshot",TRUE);
       }
    }
    LADC* adc = (LADC*)lNewUdata(L, sizeof(LADC)+bufSize+blLen*sizeof(uint16_t),
@@ -729,7 +736,7 @@ static int ladc(lua_State* L)
       err = adc_cali_create_scheme_line_fitting(&caCfg2, &adc->caliHandle);
 #endif
       if(ESP_OK != err)
-         return pushEspRetVal(L, err, "calibrate");
+         return pushEspRetVal(L, err, "calibrate",TRUE);
    }
    lua_pushinteger(L,pin);
    return 2;
@@ -873,7 +880,7 @@ static int GPIO_value(lua_State* L)
    if( GPIO_MODE_OUTPUT == o->mode || GPIO_MODE_OUTPUT_OD == o->mode ||
        lua_isboolean(L, 2))
    {
-      return pushEspRetVal(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)),0);
+      return pushEspRetVal(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)),0,FALSE);
    }
    else
    {
@@ -912,7 +919,7 @@ static int lgpio(lua_State* L)
         ('I' == mode[0] && !mode[5] ? GPIO_MODE_INPUT_OUTPUT :
          GPIO_MODE_INPUT_OUTPUT_OD)));
    if(activeGPOI[pin])
-      luaL_error(L,"INUSE");
+      throwPinInUse(L,pin);
    lInitConfigTable(L, 3);
    lua_getfield(L, 3, "callback"); /* callback IX is now 4 */
    int hasCB = lua_isfunction(L, 4);
@@ -952,7 +959,381 @@ static int lgpio(lua_State* L)
 
 /*********************************************************************
  *********************************************************************
-                       PWM:   LED Control (LEDC)
+                       PCNT:   Pulse Counter
+ *********************************************************************
+ *********************************************************************/
+
+#define BAPCNT "PCNT"
+#define ONREACH_QUEUE_SIZE 5
+
+typedef struct
+{
+   pcnt_unit_handle_t unit;
+   int callbackRef;
+   gpio_num_t pin; /* One of the GPIO pins used; We use it as index in activeGPOI */ 
+   int noOfChannels;
+   int queueLen;
+   int onReachQueue[ONREACH_QUEUE_SIZE]; /* holds counter values */
+   pcnt_channel_handle_t channels[1]; /* Must be last */
+} LPCNT;
+
+static LPCNT* LPCNT_getUD(lua_State* L)
+{
+   return (LPCNT*)luaL_checkudata(L,1,BAPCNT);
+}
+
+static LPCNT* LPCNT_checkUD(lua_State* L)
+{
+   LPCNT* o = LPCNT_getUD(L);
+   if( ! o->callbackRef )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+static int LPCNT_close(lua_State* L, LPCNT* o)
+{
+   if(o->noOfChannels)
+   {
+      esp_err_t status;
+      pcnt_unit_stop(o->unit);
+      pcnt_unit_disable(o->unit);
+      for(int i=0 ; i < o->noOfChannels ; i++)
+      {
+         status = pcnt_del_channel(o->channels[i]);
+         if(ESP_OK != status)
+            HttpTrace_printf(5, "Cannot close PCNT channel %d", i, esp_err_to_name(status));
+      }
+      o->noOfChannels=0;
+      status = pcnt_del_unit(o->unit);
+      if(ESP_OK != status)
+         HttpTrace_printf(5, "Cannot close PCNT unit", esp_err_to_name(status));
+      activeGPOI[o->pin]=0; /* release */
+   }
+   return 0;
+}
+
+static int LPCNT_lclose(lua_State* L)
+{
+   return LPCNT_close(L, LPCNT_getUD(L));
+}
+
+static int LPCNT_start(lua_State* L)
+{
+   return pushEspRetVal(L,pcnt_unit_start(LPCNT_checkUD(L)->unit),0,FALSE);
+}
+
+static int LPCNT_stop(lua_State* L)
+{
+   return pushEspRetVal(L,pcnt_unit_stop(LPCNT_checkUD(L)->unit),0,FALSE);
+}
+
+static int LPCNT_count(lua_State* L)
+{
+   int count;
+   esp_err_t status = pcnt_unit_get_count(LPCNT_checkUD(L)->unit, &count);
+   if(ESP_OK != status)
+      return pushEspRetVal(L,pcnt_unit_start(LPCNT_checkUD(L)->unit),0,FALSE);
+   lua_pushinteger(L,count);
+   return 1;
+}
+
+static int LPCNT_clear(lua_State* L)
+{
+   return pushEspRetVal(L,pcnt_unit_clear_count(LPCNT_checkUD(L)->unit),0,FALSE);
+}
+
+
+static const luaL_Reg pcntLib[] = {
+   {"close", LPCNT_lclose},
+   {"__close", LPCNT_lclose},
+   {"__gc", LPCNT_lclose},
+   {"start", LPCNT_start},
+   {"stop", LPCNT_stop},
+   {"count", LPCNT_count},
+   {"clear", LPCNT_clear},
+   {NULL, NULL}
+};
+
+static void
+LPCNT_throwWatchMissing(lua_State* L, const char* missing)
+{
+   luaL_error(L, "watch missing %s",missing);
+}
+
+static esp_err_t
+LPCNT_watch(lua_State* L, LPCNT* pcnt, int userdataIx)
+{
+   esp_err_t status = ESP_OK;
+   int watchIx=balua_getTabField(L, 1, "watch");
+   if(watchIx)
+   {
+      lua_getfield(L, watchIx, "callback");
+      if( ! lua_isfunction(L, -1) )
+         LPCNT_throwWatchMissing(L, "callback");
+      if(pcnt)
+         pcnt->callbackRef=lReferenceCallback(L,userdataIx,lua_absindex(L,-1));
+      int pointsIx=balua_getTabField(L, watchIx, "points");
+      if( ! pointsIx )
+         LPCNT_throwWatchMissing(L, "points");
+      int points;
+      for(points = 1 ; ; points++) /* Iterate, start at Lua ix 1 */
+      {
+         lua_rawgeti(L, pointsIx, points);
+         if(lua_isnil(L, -1))
+            break;
+         int point = (int)luaL_checkinteger(L, -1);
+         if(pcnt)
+         {
+            status=pcnt_unit_add_watch_point(pcnt->unit, point);
+            if(ESP_OK != status)
+            {
+               pushEspRetVal(L,status,"watch_point", FALSE);
+               return status;
+            }
+         }
+      }
+   }
+   return status;
+}
+
+static pcnt_channel_edge_action_t
+LPCNT_getEdgeAction(lua_State* L, int tabIx, const char* key)
+{
+   const char* action=balua_checkStringField(L,tabIx,key);
+   return 'H' == action[0] ? PCNT_CHANNEL_EDGE_ACTION_HOLD :
+      ('I' == action[0] ? PCNT_CHANNEL_EDGE_ACTION_INCREASE :
+       PCNT_CHANNEL_EDGE_ACTION_DECREASE);
+}
+
+static pcnt_channel_level_action_t
+LPCNT_getLevelAction(lua_State* L, int tabIx, const char* key)
+{
+   const char* action=balua_checkStringField(L,tabIx,key);
+   return 'K' == action[0] ?  PCNT_CHANNEL_LEVEL_ACTION_KEEP :
+      ('I' == action[0] ? PCNT_CHANNEL_LEVEL_ACTION_INVERSE :
+       PCNT_CHANNEL_LEVEL_ACTION_HOLD);
+}
+
+
+static esp_err_t
+LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
+               int* noOfChannelsPtr,pcnt_channel_handle_t* channels, int* pinPtr)
+{
+   esp_err_t status = ESP_OK;
+   int top=lua_gettop(L);
+   int channelsIx=balua_getTabField(L, 1, "channels");
+   if( ! channelsIx )
+      luaL_error(L, "channels required");
+   int noOfChannels;
+   for(noOfChannels = 1 ; ; noOfChannels++) /* Iterate, start at Lua ix 1 */
+   {
+      lua_rawgeti(L, channelsIx, noOfChannels);
+      if(lua_isnil(L, -1))
+         break;
+      int channelIx=lua_gettop(L);
+      if(LUA_TTABLE != lua_type(L, channelIx))
+         luaL_error(L,"Channel %d not a table",noOfChannels);
+      int gpioIx=balua_getTabField(L, channelIx, "gpio");
+      int actionIx=balua_getTabField(L, channelIx, "action");
+      if(!gpioIx || !actionIx)
+         luaL_error(L,"Channel %d missing %s",noOfChannels,gpioIx ? "action" : "gpio");
+      pcnt_chan_config_t chanCfg = {
+         .edge_gpio_num = (int)balua_checkIntField(L, gpioIx, "edge"),
+         .level_gpio_num = (int)balua_checkIntField(L, gpioIx, "level")
+      };
+      /* Only check during phase 1, the throw phase */
+      if( ! channels )
+      {
+         if(activeGPOI[chanCfg.edge_gpio_num])
+            throwPinInUse(L,chanCfg.edge_gpio_num);
+         if(activeGPOI[chanCfg.level_gpio_num])
+            throwPinInUse(L,chanCfg.level_gpio_num);
+         /* Select any GPIO we use. Used for activeGPOI[] lookup */ 
+         *pinPtr=chanCfg.edge_gpio_num;
+      }
+      int edgeIx=balua_getTabField(L, actionIx, "edge");
+      int levelIx=balua_getTabField(L, actionIx, "level");
+      if(!edgeIx || !levelIx)
+         luaL_error(L,"Channel %d missing %s",noOfChannels,edgeIx ? "level" : "edge");
+      pcnt_channel_edge_action_t positive = LPCNT_getEdgeAction(L, edgeIx, "positive");
+      pcnt_channel_edge_action_t negative = LPCNT_getEdgeAction(L, edgeIx, "negative");
+      pcnt_channel_level_action_t high = LPCNT_getLevelAction(L, levelIx, "high");
+      pcnt_channel_level_action_t low = LPCNT_getLevelAction(L, levelIx, "low");
+      if(channels)
+      {
+         pcnt_channel_handle_t channel;
+         status = pcnt_new_channel(unit, &chanCfg, &channel);
+         if(ESP_OK == status)
+         {
+            channels[noOfChannels-1]=channel;
+            status = pcnt_channel_set_edge_action(channel,positive,negative);
+            if(ESP_OK == status)
+            {
+               status = pcnt_channel_set_level_action(channel,high,low);
+               if(ESP_OK == status)
+               {
+                  lua_settop(L,channelIx-1);
+                  continue;
+               }
+               else
+                  pushEspRetVal(L,status,"level_action", FALSE);
+            }
+            else
+               pushEspRetVal(L,status,"edge_action", FALSE);
+         }
+         else
+            pushEspRetVal(L,status,"new_channel", FALSE);
+         /* Iterate, start at C ix */
+         for(--noOfChannels ; noOfChannels >= 0; noOfChannels--)
+            pcnt_del_channel(channels[noOfChannels]);
+         return status;
+      }
+      lua_settop(L,channelIx-1);
+   }
+   if(1 == noOfChannels)
+      luaL_error(L, "channels empty");
+   *noOfChannelsPtr=noOfChannels-1; /* from Lua Ix to C Ix */
+   lua_settop(L,top);
+   return ESP_OK;
+}
+
+/* 3 of 3:
+   This CB runs in the context of a thread in the LThreadMgr.
+ */
+static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   int queueLen,ix;
+   int queue[ONREACH_QUEUE_SIZE];
+   GpioThreadJob* job = (GpioThreadJob*)jb;
+   ThreadMutex_set(&rMutex);
+   LPCNT* o = (LPCNT*)activeGPOI[job->pin];
+   if(o)
+   {
+      queueLen = o->queueLen;
+      memcpy(queue,o->onReachQueue,queueLen*sizeof(int));
+      o->queueLen=0;
+   }
+   ThreadMutex_release(&rMutex);
+   if(o)
+   {
+      lua_State* L = jb->Lt;
+      for(ix=0 ; ix < queueLen ; ix++)
+      {
+         /* Push user's callback on the stack */
+         balua_wkPush(L, o->callbackRef);
+         lua_pushinteger(L,queue[ix]);
+         if(LUA_OK != lua_pcall(L, 1, 0, msgh))
+         {
+            LPCNT_close(L, o);
+            break;
+         }
+         lua_settop(L,1);
+      }
+   }
+}
+
+
+/* 2 of 3:
+   This CB runs in the context of the eventBrokerTask.
+ */
+static void LPCNT_onReachCB(EventBrokerCallbackArg arg)
+{
+   int queueLen=0;
+   ThreadMutex_set(&rMutex);
+   LPCNT* o=(LPCNT*)activeGPOI[arg.pin];
+   if(o)
+   {
+      int count;
+      if(o->queueLen < ONREACH_QUEUE_SIZE && ESP_OK == pcnt_unit_get_count(o->unit, &count))
+      {
+         o->onReachQueue[o->queueLen++] = count;
+         queueLen=o->queueLen;
+      }
+   }
+   ThreadMutex_release(&rMutex);
+   /* If transitioning from empty to one element in the queue */
+   if(1 == queueLen)
+      dispatchThreadJob(arg.pin,LPCNT_onReachLuaCB);
+}
+
+
+/* 1 of 3
+ */
+static bool LPCNT_onReachInterruptHandler(
+   pcnt_unit_handle_t unit, const pcnt_watch_event_data_t* edata, void* pin)
+{
+   BaseType_t highTaskWakeup;
+   EventBrokerQueueNode n = {.callback=LPCNT_onReachCB,.arg.pin=(gpio_num_t)pin};
+   xQueueSendFromISR(eventBrokerQueue, &n, &highTaskWakeup);
+   return highTaskWakeup == pdTRUE;
+}
+
+
+static int lLPCNT(lua_State* L)
+{
+   luaL_checktype(L, 1, LUA_TTABLE);
+   pcnt_unit_config_t ucfg = {
+      .high_limit = (int)balua_checkIntField(L, 1, "high"),
+      .low_limit = (int)balua_checkIntField(L, 1, "low"),
+      .flags.accum_count = balua_getBoolField(L, 1, "accumulator", FALSE)
+   };
+   int noOfChannels;
+   int gpioPin=-1; /* One of the pins used. Used for activeGPOI[gpioPin] lookup */
+   /* Validate input table and count channels. This may throw error message. */
+   LPCNT_channels(L,0,&noOfChannels,0, &gpioPin);
+   baAssert(gpioPin != -1);
+   /* Validate optional watch table: throw on error */
+   LPCNT_watch(L, 0, 0);
+
+   LPCNT* pcnt = (LPCNT*)lNewUdata(
+      L, sizeof(LPCNT)+noOfChannels*sizeof(pcnt_channel_handle_t),BAPCNT, pcntLib);
+   memset(pcnt, 0, sizeof(LPCNT)); /* default vals for the struct */
+   pcnt->pin=gpioPin;
+   int userdataIx=lua_absindex(L,-1);
+
+   /* Create and configure PCNT */
+   esp_err_t status = pcnt_new_unit(&ucfg, &pcnt->unit);
+   if(ESP_OK != status)
+      return pushEspRetVal(L,status,"new_unit",TRUE);
+   if(0 != balua_getIntField(L, 1, "glitch", 0))
+   {
+      pcnt_glitch_filter_config_t filterCfg = {
+         .max_glitch_ns = (uint32_t)balua_getIntField(L, 1, "glitch", 0),
+      };
+      status=pcnt_unit_set_glitch_filter(pcnt->unit, &filterCfg);
+      if(ESP_OK != status)
+         pushEspRetVal(L,status,"glitch_filter",FALSE);
+   }
+   if(ESP_OK == status)
+   {
+      if(ESP_OK == LPCNT_channels(L,pcnt->unit,&pcnt->noOfChannels,pcnt->channels,&gpioPin))
+      {
+         baAssert(noOfChannels == pcnt->noOfChannels);
+         if(ESP_OK == LPCNT_watch(L, pcnt, userdataIx))
+         {
+            pcnt_event_callbacks_t cbs = {
+               .on_reach = LPCNT_onReachInterruptHandler,
+            };
+            pcnt_unit_register_event_callbacks(pcnt->unit, &cbs, (void *)gpioPin);
+            pcnt_unit_enable(pcnt->unit);
+            pcnt_unit_clear_count(pcnt->unit);
+            activeGPOI[gpioPin]=(LGPIO*)pcnt; /* used for activeGPOI[] lookup */
+            lua_settop(L,userdataIx);
+            return 1; /* LPCNT userdata */
+         }
+         for( ; noOfChannels >= 0; noOfChannels--)
+            pcnt_del_channel(pcnt->channels[noOfChannels]);
+      }
+   }
+   pcnt_del_unit(pcnt->unit);
+   pcnt->noOfChannels=0; /* Closed */
+   return 2; /* Error values from pushEspRetVal */
+}
+
+
+/*********************************************************************
+ *********************************************************************
+                       PWM: LED Control (LEDC)
  *********************************************************************
  *********************************************************************/
 
@@ -990,7 +1371,7 @@ static int LLEDC_duty(lua_State* L)
    uint32_t hpoint = (uint32_t)(lua_isinteger(L,3) ? lua_tointeger(L,3) :
                                 ledc_get_hpoint(o->mode,o->channel));
    return pushEspRetVal(L,ledc_set_duty_and_update(
-                           o->mode,o->channel, duty, hpoint),0);
+                           o->mode,o->channel, duty, hpoint),0,FALSE);
 }
 
 
@@ -1002,7 +1383,7 @@ static int LLEDC_fade(lua_State* L)
    uint32_t duty = (uint32_t)luaL_checkinteger(L, 2);
    uint32_t fadeTime = (uint32_t)luaL_checkinteger(L, 3);
    return pushEspRetVal(L,ledc_set_fade_time_and_start(
-      o->mode,o->channel,duty,fadeTime,LEDC_FADE_NO_WAIT),0);
+                           o->mode,o->channel,duty,fadeTime,LEDC_FADE_NO_WAIT),0,FALSE);
 }
 
 
@@ -1106,7 +1487,7 @@ static int lLedChannel(lua_State* L)
    if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid GPIO pin");
    if(activeGPOI[pin])
-      luaL_error(L,"GPIO INUSE");
+      throwPinInUse(L,pin);
    if(channel < LEDC_CHANNEL_0 || channel >= LEDC_CHANNEL_MAX)
       throwInvArg(L, "channel");
    if(timer < LEDC_TIMER_0 || timer >= LEDC_TIMER_MAX)
@@ -1123,10 +1504,10 @@ static int lLedChannel(lua_State* L)
    };
    esp_err_t status = ledc_channel_config(&cfg);
    if(ESP_OK != status)
-      return pushEspRetVal(L,status,"channel_config");
+      return pushEspRetVal(L,status,"channel_config",FALSE);
    status = ledc_set_duty_and_update(mode, channel, duty, hpoint);
    if(ESP_OK != status)
-      return pushEspRetVal(L,status,"set_duty_and_update");
+      return pushEspRetVal(L,status,"set_duty_and_update",FALSE);
    LLEDC* led = (LLEDC*)lNewUdata(L,sizeof(LLEDC),BALEDC,ledcObjLib);
    led->pin=pin;
    led->mode=mode;
@@ -1161,7 +1542,7 @@ static int lLedTimer(lua_State* L)
       .freq_hz=freq,
       .clk_cfg=LEDC_AUTO_CLK
    };
-   return pushEspRetVal(L,ledc_timer_config(&cfg),0);
+   return pushEspRetVal(L,ledc_timer_config(&cfg),0,TRUE);
 }
 
 
@@ -1218,7 +1599,7 @@ static int I2CMaster_start(lua_State* L)
       i2cm->cmd = i2c_cmd_link_create();
    /* else recursive: https://www.i2c-bus.org/repeated-start-condition/ */
    return pushEspRetVal(
-      L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM, 0);
+      L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM, 0, FALSE);
 }
 
 
@@ -1232,7 +1613,7 @@ static int I2CMaster_address(lua_State* L)
    return pushEspRetVal(L,i2c_master_write_byte(
       i2cm->cmd,
       ((uint8_t)luaL_checkinteger(L, 2) << 1) | i2cm->direction,
-      balua_optboolean(L, 4, TRUE)), 0);
+      balua_optboolean(L, 4, TRUE)), 0, FALSE);
 }
 
 
@@ -1257,7 +1638,7 @@ static int I2CMaster_write(lua_State* L)
    }
    bool ack = balua_optboolean(L, 3, TRUE);
    return pushEspRetVal(L,dlen==1 ? i2c_master_write_byte(i2cm->cmd,*data,ack) :
-                        i2c_master_write(i2cm->cmd,data,dlen,ack), 0);
+                        i2c_master_write(i2cm->cmd,data,dlen,ack), 0, FALSE);
 }
 
 
@@ -1277,7 +1658,7 @@ static int I2CMaster_read(lua_State* L)
       throwInvArg(L, "no recbuf");
    i2cm->recbuf = (uint8_t*)baLMalloc(L, i2cm->recblen+1);
    if( ! i2cm->recbuf )
-      return pushEspRetVal(L,ESP_ERR_NO_MEM, 0);
+      return pushEspRetVal(L,ESP_ERR_NO_MEM, 0, FALSE);
    if(I2C_MASTER_NACK == ack && i2cm->recblen > 1)
    {
       i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen-1,I2C_MASTER_ACK);
@@ -1295,7 +1676,7 @@ static int I2CMaster_read(lua_State* L)
       baFree(i2cm->recbuf);
       i2cm->recbuf=0;
    }
-   return pushEspRetVal(L,status, 0);
+   return pushEspRetVal(L,status, 0, FALSE);
 }
 
 
@@ -1325,7 +1706,7 @@ static int I2CMaster_commit(lua_State* L)
       baFree(i2cm->recbuf);
       i2cm->recbuf=0;
    }
-   return pushEspRetVal(L,status,0);
+   return pushEspRetVal(L,status,0, FALSE);
 }
 
 
@@ -1802,7 +2183,7 @@ netConfig_t cfg = {0};
    }
  
    // Call the netConnect function and push the return value to the Lua stack.
-   return pushEspRetVal(L, netConnect(&cfg), 0);
+   return pushEspRetVal(L, netConnect(&cfg), 0, TRUE);
 }
  
 /**
@@ -1874,7 +2255,7 @@ static int lapinfo(lua_State* L)
       return pushApInfo(L,ap.ssid,ap.rssi,wifiAuthMode(ap.authmode, FALSE),
                         pciphers,gcipher,ap.primary);
    }
-   return pushEspRetVal(L,err,0);
+   return pushEspRetVal(L,err,0,FALSE);
 }
 
 
@@ -2055,6 +2436,7 @@ static const luaL_Reg esp32Lib[] = {
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
    {"pwmtimer", lLedTimer},
+   {"pcnt", lLPCNT},
    {"pwmchannel", lLedChannel},
    {"uart", luart},
    {"wscan", lwscan},
