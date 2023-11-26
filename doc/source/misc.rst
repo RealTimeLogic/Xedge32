@@ -194,6 +194,8 @@ Xedge32 extends the Xedge xedge.event() mechanism, allowing you to subscribe and
 
    xedge.event(event, callback [,unsubscribe])
 
+All Xedge32 events carry a 'retained' flag, ensuring subscribers receive these events even if they subscribe after the event's generation.
+
 The specified ``callback`` function will be called when the network changes state or when an error or warning message is generated. The function takes the following arguments, all represented as Lua strings, including numbers:
 
 - ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
@@ -215,7 +217,7 @@ The specified ``callback`` function will be called when the network changes stat
   - **Arg2**: ``netmask``: The assigned network mask.
   - **Arg3**: ``gateway``: The assigned gateway.
 
-- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
+- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. This event is generated only once, specifically when the device initially receives the time from the network. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
 
 
 Example code
@@ -253,6 +255,4 @@ Note
 ~~~~
 
 All arguments provided by C-code-generated-events are represented as Lua strings, including numbers.
-
-The events "wifi", "wip", and "eth" are not generated at startup since Xedge32 does not start any apps before connecting to the network. However, you get these events during runtime if the network connection changes.
 

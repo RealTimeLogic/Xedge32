@@ -14,6 +14,8 @@ We offer two options for the firmware:
    :depth: 2
    :local:
 
+.. _flashing-the-firmware:
+
 
 Firmware Option 1: Use Pre-Compiled Firmware
 ---------------------------------------------
@@ -145,10 +147,10 @@ Configure the ESP32
 
 .. _configesp32:
 
-Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShell32` prompt after printing some information. See the *Potential Issues and Solutions* section above if you do not see the LuaShell32.
+Once the firmware upload is complete, reboot the ESP32. The ESP32 will be in Access Point mode after restarting. You can now :ref:`connect to it using a serial terminal <LuaShell32>` or :ref:`access the web-based shell by connection to the access point <Access Point Mode>`. Select one of these options and program the ESP32 as follows if you want it to connect to your network and not operate as an access point:
 
 
-1. In the :ref:`LuaShell32` prompt, type the following to connect to your network:
+In the :ref:`LuaShell32` prompt, type the following to connect to your network:
 
    -  Using **Wi-Fi**:
 
@@ -162,21 +164,7 @@ Once the upload is complete, the ESP32 should reboot and display a :ref:`LuaShel
 
       esp32.netconnect("W5500", {spi-settings})
 
-2. After a second or two, the ESP32 should connect to your network.
-3. Using your web browser, navigate to the IP address printed in the :ref:`LuaShell32` to access the ESP32.
-
-The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32. Here are the best practices for navigating to your ESP32:
-
-   -  **http://xedge32.local:** You can navigate to http://xedge32.local/ if you are using the Pre-Compiled Firmware or have enabled mDNS when you compiled your own firmware. **Note:** You can change the mdns name using :ref:`esp32-execute-label`.
-
-   -  **IP Address Assignment:** The ESP32 gets an IP address from the network's DHCP (Dynamic Host Configuration Protocol). Usually, your router will assign the same IP address each time the ESP32 reconnects to the network. You can bookmark this IP address in your web browser. That way, the next time you power on your ESP32, you can simply click the bookmark to connect to it.
-
-   -  **Consistent IP Address with DHCP Reservations:** If you want to make sure the ESP32 always uses the same IP address, most routers allow you to reserve that IP address specifically for your device using `DHCP reservations <https://portforward.com/dhcp-reservation/>`_. This ensures consistent IP address assignment for the ESP32.
-
-   -  **Using Let's Encrypt Plugin - SharkTrust:** As an alternative, you can also enable a permanent URL for your ESP32 by activating the Let's Encrypt plugin called SharkTrust through the `Xedge's configuration menu <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
-
-By following the above instructions, you can easily browse to your your ESP32 device without using a serial connection to discover the IP address assignment.
-
+The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32.
 
 Next Step
 ------------

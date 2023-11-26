@@ -9,7 +9,7 @@ Key Features
 
 - **16-bit Signed Counter**
   
-  - Each pulse counter unit features a 16-bit signed counter register.
+  - Each pulse counter unit features a 16-bit signed counter register. The maximum frequency the counters can manage is 40 Mhz.
 
 - **Two Configurable Channels**
   
