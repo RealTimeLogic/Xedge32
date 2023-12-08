@@ -2,14 +2,14 @@
 Access Point Mode
 ===================
 
-After successfully :ref:`flashing the firmware <flashing-the-firmware>` onto your ESP32 for the first time, Xedge32 automatically configures the ESP32 to operate in access point mode.  The default name of this access point is ``xedge32``.
+After successfully :ref:`flashing the firmware <flashing-the-firmware>` onto your ESP32 for the first time, Xedge32 automatically configures the ESP32 to operate in Access Point Mode.  The default name of this access point is ``xedge32``.
 
 Connecting to Xedge32
 ------------------------------------
 
 1. **Connecting to the Access Point**:
 
-   - On your device, connect to the ``xedge32`` Wi-Fi network. The default password is 1234 (can be changed).
+   - On your device, connect to the ``xedge32`` Wi-Fi network. The default password is 123445678 (can be changed).
 
 2. **Accessing the Web Interface**:
 
@@ -23,12 +23,12 @@ Connecting to Xedge32
 Access Point Mode Considerations
 ------------------------------------
 
-While in access point mode, be aware that the web-based editor will be a basic HTML textarea, not the advanced Visual Studio Code-like editor you will see if your computer can access the Internet. If you prefer to keep your ESP32 in access point mode for development, it's recommended to use a computer that is connected to the ESP32 via Wi-Fi and simultaneously to the Internet through a wired connection, as shown in the figure below. This setup ensures that the advanced web-based code editor can be loaded from the Internet.
+While in Access Point Mode, be aware that the web-based editor will be a basic HTML textarea, not the advanced Visual Studio Code-like editor you will see if your computer can access the Internet. If you prefer to keep your ESP32 in Access Point Mode for development, it's recommended to use a computer that is connected to the ESP32 via Wi-Fi and simultaneously to the Internet through a wired connection, as shown in the figure below. This setup ensures that the advanced web-based code editor can be loaded from the Internet.
 
 .. figure:: img/Xedge32-IDE-Access-Point-Mode.svg
    :alt: Xedge32 IDE Access Point Mode
 
-   Figure 1: Loading the advanced code editor when in access point mode
+   Figure 1: Loading the advanced code editor when in Access Point Mode
 
 Switching to Station Mode
 ------------------------------------
@@ -59,6 +59,9 @@ Switching to Station Mode
    - If your computer supports mDNS, reconnect with the ESP32 by navigating to ``http://xedge32.local/`` or simply refresh the browser window.
    - If your computer does not support mDNS, find the ESP32's new IP address assigned by your router. This is typically found on the router's DHCP client list page, where the ESP32 should appear as ``xedge``.
 
+   **Note:** Upon switching from Access Point Mode to Station Mode, and if you are accessing the Xedge IDE via http://xedge32.local/. If your computer and the ESP32 are on the same network, when the ESP32 switches to AP Mode, the IDE will automatically reconnect to the ESP32. Initially, a 'disconnect' error will appear in the Xedge IDE console, followed by several 'reconnect' errors. After a short duration, a "connected" message will confirm successful reconnection.
+
+
 Station Mode Considerations
 ------------------------------------
 
@@ -82,10 +85,10 @@ By following the above instructions, you can easily browse to your your ESP32 de
 Switching Back to Access Point Mode
 ------------------------------------
 
-When in **Station Mode**, the ESP32 does not automatically revert to **Access Point Mode**, even when it cannot connect. This design is for security purposes. To manually switch back:
+**Important:** In Station Mode, after at least one successful Station Mode Mode connection, the ESP32 will not automatically switch back to Access Point Mode, even if it fails to establish a connection. This behavior is intentional and serves as a security measure. To revert to Access Point Mode manually:
 
 - In LuaShell32, execute the following command::
 
-    esp32.netconnect()
+    esp32.netconnect"wifi"
 
 This command will switch the ESP32 back to **Access Point Mode**.

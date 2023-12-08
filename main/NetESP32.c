@@ -301,7 +301,7 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
    {
       if(WIFI_EVENT_STA_CONNECTED == eventId)
       {
-         netExecXedgeEvent("wifi", baStrdup("up"), 0, 0);
+         netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("sta"), 0);
       }
       else if(WIFI_EVENT_STA_DISCONNECTED == eventId) 
       {
@@ -309,7 +309,7 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          HttpTrace_printf(9, "WiFi disconnect ev. %d\n", d->reason);
          if(gotIP)
          {
-            netExecXedgeEvent("wifi", baStrdup("down"), 0, 0);
+            netExecXedgeEvent("wifi", baStrdup("down"), baStrdup("sta"), 0);
          }
          char* param = (char*)baMalloc(20);
          if(param)
@@ -455,6 +455,7 @@ esp_err_t netWifiApStart(void)
    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
    ESP_ERROR_CHECK(esp_wifi_start());
               
+   netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("ap"), 0);
    netEventGotIP(IP_EVENT_STA_GOT_IP, ipInfo);
    
    return ESP_OK;          
@@ -471,6 +472,7 @@ static esp_err_t netWifiApStop(void)
   
    if(ap_netif != NULL) 
    {
+      netExecXedgeEvent("wifi", baStrdup("down"), baStrdup("ap"), 0);
       esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent);
       esp_wifi_disconnect();
       esp_wifi_stop();

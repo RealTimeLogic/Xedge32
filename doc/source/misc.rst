@@ -77,12 +77,12 @@ Note that this function takes some time to return.
 esp32.netconnect(network, cfg)
 --------------------------------
 
-Connect to a WiFi or wired network by providing the required configuration parameters. This function starts the connection phase as a background process and returns immediately. The connection status is printed in the :ref:`LuaShell32`. The ``cfg`` parameters are stored persistently in NVRAM if the ESP32 successfully connects to the network and the configuration parameters will be used to automatically connect to the network when the ESP32 restarts.
+Initiate a WiFi or wired network connection by supplying the necessary configuration parameters. This function initiates the connection process in the background and returns control immediately. The status of the connection is displayed in the :ref:`LuaShell32`. The ``cfg`` parameters are saved in NVRAM on a successful network connection. This enables the ESP32 to reconnect to the network automatically using these parameters upon restart. The device initially operates in Access Point Mode by default, with the SSID set to xedge32. The default SSID password is 12345678.
 
 - ``network``: a string that can be one of:
     * ``wifi``: Connect to a Wi-Fi network by providing the SSID and password
     * ``W5500``:  Connect to an Ethernet network via a W5500 chip.
-- ``cfg``: a required configuration table that must include:
+- ``cfg``: a configuration table that must include:
     * For WiFi networks:
         * ``ssid``: the WiFi network's SSID
         * ``pwd``: the WiFi network's password
@@ -95,6 +95,8 @@ Connect to a WiFi or wired network by providing the required configuration param
         * ``irq``: The GPIO pin number for the interrupt request signal of the W5500 chip.
         * ``freq``: The clock frequency (in Hz) of the SPI bus.
 
+    if ``cfg`` is not provided and device is in WiFi Station Mode, the device reverts back to Access Point mode.
+
 You can also call this function to disconnect from a network by not providing the ``cfg`` configuration table argument. For WiFi, you may call this function with new configuration options to switch to another network.
 
 .. code-block:: lua
@@ -105,6 +107,8 @@ You can also call this function to disconnect from a network by not providing th
    esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
    -- Example 3: Configuring Ethernet for LILYGO T-ETH-Lite
    esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
+   -- Example 4: Revert a device operating in Station Mode to its original Access Point Mode.
+   esp32.netconnect"wifi"
 
 esp32.sdcard(width)
 ---------------------------
@@ -124,6 +128,13 @@ Parameters:
 ~~~~~~~~~~~~~
 - **width**: "bus width", can be 1, 4, or 8.
 - **clk, cmd, d0-d7:**  Pin configuration parameters use the defaults for the CPU if not set.
+
+#. ``clk``: GPIO number for the SD card clock pin.
+#. ``cmd``: GPIO number for the SD card command pin.
+#. ``d0``: GPIO number for the SD card data pin 0.
+#. ``d1``: GPIO number for the SD card data pin 1 (when 4-bit wide bus).
+#. ``d2``: GPIO number for the SD card data pin 2 (when 4-bit wide bus).
+#. ``d3``: GPIO number for the SD card data pin 3 (when 4-bit wide bus).
 
 Default pins:
 ~~~~~~~~~~~~~~~~~~~~
@@ -160,6 +171,7 @@ The following example shows how to set the GPIO pins CLK, CMD, and D0 for a few 
 
    esp32.sdcard(1, 39, 38, 40) -- ESP32-S3-WROOM CAM Board
    esp32.sdcard(1,  7,  6,  5) -- Lilygo's T-ETH-Lite
+   esp32.sdcard(1,  7,  9,  8) -- XIAO ESP32S3 Sense
 
 .. _esp32-execute-label:
 
@@ -203,6 +215,7 @@ The specified ``callback`` function will be called when the network changes stat
   - **Arg1**: ``"up"``: Wi-Fi has transitioned from not connected to connected.
   - **Arg1**: ``"down"``: Wi-Fi has transitioned from connected to not connected.
   - **Arg1**: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
+  - **Arg2**: ``"ap" | "sta"``: Tells you Wi-Fi mode, which is Access Point Mode or Station Mode.
 
 
 - ``wip`` (WiFi IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the WiFi connection.
@@ -217,7 +230,7 @@ The specified ``callback`` function will be called when the network changes stat
   - **Arg2**: ``netmask``: The assigned network mask.
   - **Arg3**: ``gateway``: The assigned gateway.
 
-- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. This event is generated only once, specifically when the device initially receives the time from the network. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
+- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. This event is generated  when the device receives the time from the network. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
 
 
 Example code

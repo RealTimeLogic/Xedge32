@@ -3,6 +3,14 @@ Getting Started
 
 To start using Xedge, you need to upload the firmware onto an ESP32-S3 or an ESP32 with PSRAM (for example, the ESP32 WROVER). You can do this using a flashing tool or programming software. We suggested purchasing the new improved `ESP32-S3 <https://www.google.com/search?q=esp32-S3>`_ if you do not have a suitable ESP32.
 
+Web Installer
+~~~~~~~~~~~~~~
+
+For advanced installation options, refer to the instructions below. However, we **highly recommend** using the *user-friendly web-based installer*, which you can find on the `Xedge32 introduction page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_.
+
+Binaries or Source Code
+~~~~~~~~~~~~~~~~~~~~~~~~
+
 We offer two options for the firmware:
 
 1. Ready-to-use firmware binary files which you can directly upload onto your board.
@@ -58,27 +66,41 @@ Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedg
 6. Click the 3 dots (...) to browse to the bin files you downloaded.
 7. Select the following binary files and set the address accordingly:
 
-+-----------------------+-------------------+-------------------+
-| Binary File           |   ESP32 Address   | ESP32-S3 Address  |
-+=======================+===================+===================+
-| `bootloader.bin`      | `0x1000`          | `0x0`             |
-+-----------------------+-------------------+-------------------+
-| `partition_table.bin` | `0x8000`          | `0x8000`          |
-+-----------------------+-------------------+-------------------+
-| `xedge.bin`           | `0x10000`         | `0x20000`         |
-+-----------------------+-------------------+-------------------+
+   a. Option 1: When using the merged binary firmware file merged-xedge.bin
 
-8.  Click the three checkboxes to the left of the three bin files to select them.
-9.  Do not change any other values.
-10. Click the START button and wait for it to upload the bin files to your ESP32.
-11. When completed, open a terminal emulator such as Putty.
-12. You should see a terminal window with text being printed, as shown in the screenshot below.
-13. When you see `LuaShell32 ready` being printed, proceed by :ref:`configuring the ESP32 <configesp32>` as explained below.
+      +-----------------------+--------------+
+      | Binary File           |    Address   |
+      +=======================+==============+
+      | `merged-xedge.bin`    | `0x0`        |
+      +-----------------------+--------------+
+
+      Click the checkbox to the left of the binary file to select it.
+
+   b. Option 2: When using the three separate binary files
+   
+      +-----------------------+-------------------+-------------------+
+      | Binary File           |   ESP32 Address   | ESP32-S3 Address  |
+      +=======================+===================+===================+
+      | `bootloader.bin`      | `0x1000`          | `0x0`             |
+      +-----------------------+-------------------+-------------------+
+      | `partition_table.bin` | `0x8000`          | `0x8000`          |
+      +-----------------------+-------------------+-------------------+
+      | `xedge.bin`           | `0x10000`         | `0x20000`         |
+      +-----------------------+-------------------+-------------------+
+
+      Click the three checkboxes to the left of the three bin files to select them.
+
+8.  Do not change any other values.
+9. Click the START button and wait for it to upload the bin files to your ESP32.
+10. When completed, open a terminal emulator such as Putty.
+11. You should see a terminal window with text being printed, as shown in the screenshot below.
+12. When you see `LuaShell32 ready` being printed, proceed by :ref:`configuring the ESP32 <configesp32>` as explained below.
 
 .. image:: https://realtimelogic.com/images/Xedg32-Flash-Firmware.png
    :alt: Firmware Upload Tool
 
-In the screenshot above, the firmware tool is shown on the left and a Putty terminal connected to the device is shown on the right.
+The screenshot above displays the firmware tool on the left with three separate binary files selected, and on the right, it shows a Putty terminal connected to the device. Option one is more user-friendly as it employs a merged binary firmware file, combining the three separate files into one entity.
+
 
 **Potential Issues and Solutions:**
 
@@ -106,7 +128,13 @@ Upload the **ESP32** firmware:
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip
    unzip Xedge32-Firmware.zip
-   python -m esptool --chip esp32 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x10000 Xedge32-Firmware/xedge.bin
+   cd Xedge32-Firmware
+
+   # Use one of:
+
+   # python -m esptool --chip esp32 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x0 merged-xedge.bin
+
+   # python -m esptool --chip esp32 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 bootloader.bin 0x8000 partition-table.bin 0x10000 xedge.bin
 
 Upload the **ESP32-S3** firmware:
 
@@ -114,7 +142,14 @@ Upload the **ESP32-S3** firmware:
 
    wget https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip
    unzip Xedge32-S3-Firmware.zip
-   python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 Xedge32-Firmware/bootloader.bin 0x8000 Xedge32-Firmware/partition-table.bin 0x20000 Xedge32-Firmware/xedge.bin
+   cd Xedge32-Firmware
+
+   # Use one of:
+
+   # python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 merged-xedge.bin
+
+   # python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 bootloader.bin 0x8000 partition-table.bin 0x20000 xedge.bin
+
 
 .. _firmware-options:
 
@@ -124,11 +159,11 @@ For the ESP32-S3, we provide two firmware options
 .. image:: img/esp-s3-usb.jpg
    :align: right
 
-**xedge.bin**
+**xedge.bin (merged-xedge.bin)**
    - Tailored for boards like "xiao esp32-s3" with a single USB port.
    - This firmware activates the Xedge32 console :ref:`LuaShell32` through the USB port.
 
-**xedge-s0.bin**
+**xedge-s0.bin (merged-xedge-s0.bin)**
    - Ideal for boards that utilize serial UART0 for flashing or console logging. The USB to serial converter chip, such as CP210x or FTDI, can be integrated or external.
    - This firmware version initializes the Xedge32 console using :ref:`LuaShell32` via the USB-to-UART serial connection.
 
@@ -175,7 +210,10 @@ Once Xedge has successfully connected to your network, continue your journey by 
 Upgrading the Firmware
 ------------------------
 
-The ESP32-S3 pre-compiled firmware includes drag-and-drop firmware upgrades. When it is time to upgrade Xedge32, you can repeat the firmware installation process as outlined in this tutorial, or you can use the much simpler drag-and-drop feature. See the `drag-and-drop firmware upgrade info <https://www.linkedin.com/feed/update/urn:li:activity:7123087429762256896>`_ for details.
+The pre-compiled firmware for the ESP32-S3 features convenient drag-and-drop upgrades. To upgrade Xedge32, you have two options:
+
+1. Follow the detailed firmware installation process described in this tutorial.
+2. Opt for the more straightforward drag-and-drop method. For more information on the drag-and-drop upgrade, refer to the blogpost `drag-and-drop firmware upgrade <https://www.linkedin.com/feed/update/urn:li:activity:7123087429762256896>`_ for details. Note that when using the drag-and-drop method, **you must use 'xedge.bin' or 'xedge-s0.bin'** instead of the merged firmware file.
 
 
 Support and Discussions
