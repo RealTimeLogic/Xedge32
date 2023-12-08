@@ -49,11 +49,13 @@ Xedge ESP32
    :caption: Contents:
 
    source/GettingStarted
+   source/AccessPointMode.rst
    source/LuaShell32
    source/xedge
    source/ADC
    source/GPIO
    source/I2C
+   source/PCNT
    source/PWM
    source/UART
    source/BME280

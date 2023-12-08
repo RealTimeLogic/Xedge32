@@ -487,7 +487,7 @@ int lsdcard(lua_State* L)
             }
          }
          
-         return pushEspRetVal(L, err, 0);
+         return pushEspRetVal(L, err, 0, TRUE);
       }
       else
       {
@@ -501,7 +501,7 @@ int lsdcard(lua_State* L)
    return 1;
 }
 
-static void initComponents()
+static bool initComponents()
 {
    static Thread t;
    
@@ -514,11 +514,13 @@ static void initComponents()
       openSdCard(&cfg);
    }
    
-   netInit();
+   bool adapter = netInit();
 
    /* Using BAS thread porting API */
    Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
    Thread_start(&t);
+   
+   return adapter;
 }
 
 #if CONFIG_mDNS_ENABLED
@@ -543,8 +545,9 @@ void app_main(void)
    // Disable the esp log system.
    esp_log_level_set("*", ESP_LOG_ERROR);
    
-   initComponents();
+   bool adapter = initComponents();
    manageConsole(true);
+   
    for(int i = 0; i < 50 ; i++)
    {
       if(netGotIP()) break;
@@ -552,6 +555,18 @@ void app_main(void)
    }
    startMdnsService();
 
+   /**
+    * Installs the Wi-Fi in Access Point (AP) mode when no adapter is configured.
+    *
+    * Note: This function should be called after the BAS (Base Application Service)
+    * is running, as it utilizes the baMalloc function.
+    */
+
+   if(!adapter)
+   {
+      netWifiApStart();
+   }
+   
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
     * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.

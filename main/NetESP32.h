@@ -50,7 +50,7 @@ typedef struct
    int32_t phyMdcPin;         /**< Mdc pin of the internal PHY. */
 } netConfig_t;
 
-void netInit(void); 
+bool netInit(void); 
 esp_err_t netConnect(netConfig_t* cfg);
 esp_err_t netWifiConnect(char* ssid, char* password);
 esp_err_t netEthConnect(void);
@@ -63,6 +63,7 @@ void wifiScan(int print, lua_State* L,
                         const char* gcipher, int channel));
 void netWaitIP(void);   
 int netGotIP(void);
+esp_err_t netWifiApStart(void);
 
 int netIsAdapterSpi(char* adapter);
 int netIsAdapterRmii(char* adapter);
