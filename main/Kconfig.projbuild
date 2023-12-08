@@ -68,6 +68,48 @@ menu "Xedge config"
          help
              Set PHY address according your board schematic.
      
+      menu "Wifi AP"
+
+       config WIFI_AP_SSID
+           string "WiFi SSID"
+           default "xedge32"
+           help
+               SSID (network name) for to connect to.
+
+       config WIFI_AP_PASSWORD
+           string "WiFi Password"
+           default "12345678"
+           help
+               WiFi password (WPA or WPA2) minimun 8 characters.
+       config WIFI_AP_CHANNEL
+           int "WiFi Channel"
+           range 1 13
+           default 1
+           help
+               WiFi channel (network channel).
+
+       config WIFI_AP_MAX_STA_CONN
+           int "Maximal STA connections"
+           default 4
+           help
+               Max number of the STA connects to AP.
+      
+       menu "Network Settings"
+
+          config WIFI_AP_IP_ADDR
+              string "IP Address"
+              default "192.168.190.0"
+
+          config WIFI_AP_GATEWAY
+              string "Gateway"
+              default "192.168.190.0"
+
+          config WIFI_AP_NETMASK
+              string "Netmask"
+              default "255.0.0.0"
+
+       endmenu
+      endmenu
    endmenu
 
    menu "mDNS"

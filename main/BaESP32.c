@@ -603,7 +603,7 @@ static int ladc(lua_State* L)
    const char* aStr = balua_getStringField(L, 3, "attenuation", "11db");
    adc_atten_t atten = '0' == *aStr ? ADC_ATTEN_DB_0 :
       ('2' == *aStr ? ADC_ATTEN_DB_2_5 :
-       ('6' == *aStr ? ADC_ATTEN_DB_6 : ADC_ATTEN_DB_11));
+       ('6' == *aStr ? ADC_ATTEN_DB_6 : ADC_ATTEN_DB_12));
    int volt = balua_getBoolField(L, 3, "volt", FALSE);
    adc_bitwidth_t bitwidth = (adc_bitwidth_t)balua_getIntField(
       L, 3, "bitwidth", ADC_BITWIDTH_DEFAULT);

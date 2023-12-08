@@ -47,6 +47,7 @@ static spi_host_device_t spiHostId = 0;
 
 static esp_netif_t *wifi_netif = NULL;
 static esp_netif_t *eth_netif = NULL;
+static esp_netif_t *ap_netif = NULL;
 
 /* This buffer is used as the memory for the eventBrokerQueue, which
  * serves various messaging purposes, including sending messages from
@@ -244,6 +245,46 @@ static void onSntpSync(struct timeval *tv)
 }
 
 /**
+ * @brief Informs the BAS about the EVENT_GOT_IP event.
+ *
+ * This function is called when the ESP32 obtains an IP address, and it notifies
+ * the BAS by providing the event ID and network information.
+ *
+ * @param eventId The event ID (e.g., IP_EVENT_STA_GOT_IP for Wi-Fi).
+ * @param ipInfo Network information, including the obtained IP details.
+ */ 
+void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
+{
+   char* param1 = (char*)netCheckAlloc(baMalloc(16));
+   char* param2 = (char*)netCheckAlloc(baMalloc(16));
+   char* param3 = (char*)netCheckAlloc(baMalloc(16));
+   gotIP=TRUE;
+   basprintf(param1, IPSTR,IP2STR(&ipInfo.ip));
+   basprintf(param2, IPSTR,IP2STR(&ipInfo.netmask));
+   basprintf(param3, IPSTR,IP2STR(&ipInfo.gw));
+
+   if(esp_log_level_get("*") < ESP_LOG_INFO) 
+   {
+      HttpTrace_printf(0, "\033[32m\nip: %d.%d.%d.%d, mask: %d.%d.%d.%d, gw: %d.%d.%d.%d\033[0m\n", 
+                           IP2STR(&ipInfo.ip),
+                           IP2STR(&ipInfo.netmask),
+                           IP2STR(&ipInfo.gw));
+   }
+                        
+   if(IP_EVENT_STA_GOT_IP == eventId)
+   {
+      netExecXedgeEvent("wip", param1, param2, param3);
+   }
+   else
+   {
+      netExecXedgeEvent("eth", param1, param2, param3);
+   }
+
+   if(semGotIp)
+      xSemaphoreGive(semGotIp);
+}
+
+/**
  * @brief Callback function for network events.
  *        This function is the callback for the IP_EVENT_STA_GOT_IP event, 
  *        which is triggered when the ESP32 successfully obtains an IP address.
@@ -279,42 +320,28 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          gotIP=FALSE;
          esp_wifi_connect();
       }
+      else if(eventId == WIFI_EVENT_AP_STACONNECTED) 
+      {
+         wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) eventData;
+         HttpTrace_printf(9, "station"MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+      } 
+      else if (eventId == WIFI_EVENT_AP_STADISCONNECTED) 
+      {
+         wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) eventData;
+         HttpTrace_printf(9, "station"MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
+      } 
       else
+      {
          ESP_LOGD(TAG, "Non managed WiFi event %ld\n",eventId);
+      }
    }
    else if((IP_EVENT == eventBase) && ((IP_EVENT_STA_GOT_IP == eventId) || 
                                       (IP_EVENT_ETH_GOT_IP == eventId)) )
    {
       ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
-      char* param1 = (char*)netCheckAlloc(baMalloc(16));
-      char* param2 = (char*)netCheckAlloc(baMalloc(16));
-      char* param3 = (char*)netCheckAlloc(baMalloc(16));
-      gotIP=TRUE;
-      basprintf(param1, IPSTR,IP2STR(&event->ip_info.ip));
-      basprintf(param2, IPSTR,IP2STR(&event->ip_info.netmask));
-      basprintf(param3, IPSTR,IP2STR(&event->ip_info.gw));
-      
-      if(esp_log_level_get("*") < ESP_LOG_INFO) 
-      {
-         HttpTrace_printf(0, "\033[32m\nip: %d.%d.%d.%d, mask: %d.%d.%d.%d, gw: %d.%d.%d.%d\033[0m\n", 
-                              IP2STR(&event->ip_info.ip),
-                              IP2STR(&event->ip_info.netmask),
-                              IP2STR(&event->ip_info.gw));
-      }
-                           
-      if(IP_EVENT_STA_GOT_IP == eventId)
-      {
-         netExecXedgeEvent("wip", param1, param2, param3);
-      }
-      else
-      {
-         netExecXedgeEvent("eth", param1, param2, param3);
-      }
-      
-      HttpTrace_printf(9,"Interface \"%s\" up\n",
+      netEventGotIP(eventId, event->ip_info);
+      HttpTrace_printf(9, "Interface \"%s\" up\n",
                        esp_netif_get_desc(event->esp_netif));
-      if(semGotIp)
-         xSemaphoreGive(semGotIp);
    }
 }
 
@@ -364,6 +391,94 @@ static esp_err_t netWifiStop(void)
 
       esp_netif_destroy(wifi_netif);
       wifi_netif = NULL;
+   }
+
+   return ESP_OK;
+}
+
+/**
+ * @brief Initializes and starts the Wi-Fi network in Access Point (AP) mode.
+ *    
+ * @return ESP_OK if the Wi-Fi AP mode was successfully started.
+ */ 
+esp_err_t netWifiApStart(void)
+{
+   ESP_ERROR_CHECK(esp_netif_init());
+   ap_netif = esp_netif_create_default_wifi_ap();
+
+   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+   ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent, NULL));
+    
+   wifi_config_t wifi_config = 
+   {
+      .ap = 
+      {
+         .ssid = CONFIG_WIFI_AP_SSID,
+         .ssid_len = strlen(CONFIG_WIFI_AP_SSID),
+         .channel = CONFIG_WIFI_AP_CHANNEL,
+         .password = CONFIG_WIFI_AP_PASSWORD,
+         .max_connection = CONFIG_WIFI_AP_MAX_STA_CONN,
+#ifdef CONFIG_ESP_WIFI_SOFTAP_SAE_SUPPORT
+         .authmode = WIFI_AUTH_WPA3_PSK,
+         .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
+#else 
+         .authmode = WIFI_AUTH_WPA2_PSK,
+#endif
+         .pmf_cfg = 
+         {
+            .required = true,
+         },
+      },
+   };
+   
+   if(strlen(CONFIG_WIFI_AP_PASSWORD) == 0) 
+   {
+      wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+   }
+   
+   esp_netif_ip_info_t ipInfo = 
+   {
+      .ip = {esp_ip4addr_aton(CONFIG_WIFI_AP_IP_ADDR)},
+      .gw = {esp_ip4addr_aton(CONFIG_WIFI_AP_GATEWAY)},
+      .netmask = {esp_ip4addr_aton(CONFIG_WIFI_AP_NETMASK)},
+   };
+
+   printf("ap ip:%s, gw:%s, mask:%s\n", CONFIG_WIFI_AP_IP_ADDR, CONFIG_WIFI_AP_GATEWAY, CONFIG_WIFI_AP_NETMASK);
+   
+   esp_netif_dhcps_stop(ap_netif);
+   esp_netif_set_ip_info(ap_netif, &ipInfo);
+   esp_netif_dhcps_start(ap_netif);
+
+   ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+   ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+   ESP_ERROR_CHECK(esp_wifi_start());
+              
+   netEventGotIP(IP_EVENT_STA_GOT_IP, ipInfo);
+   
+   return ESP_OK;          
+}
+
+/**
+ * @brief Stops the Wi-Fi network in Access Point (AP) mode on the ESP32.
+ *
+ * @return ESP_OK if the Wi-Fi AP mode was successfully stopped.
+ */ 
+static esp_err_t netWifiApStop(void) 
+{
+   printf("Closing Wi-Fi AP connection\n");
+  
+   if(ap_netif != NULL) 
+   {
+      esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent);
+      esp_wifi_disconnect();
+      esp_wifi_stop();
+      ESP_ERROR_CHECK(esp_wifi_deinit());
+      ESP_ERROR_CHECK(esp_wifi_clear_default_wifi_driver_and_handlers(ap_netif));
+
+      esp_netif_destroy(ap_netif);
+      ap_netif = NULL;
    }
 
    return ESP_OK;
@@ -584,8 +699,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
       s_phy = esp_eth_phy_new_ip101(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif  
    }
    else if(!strcmp("RTL8201", cfg->adapter))
@@ -594,8 +709,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
       s_phy = esp_eth_phy_new_rtl8201(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("LAN87XX", cfg->adapter))
@@ -604,8 +719,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
       s_phy = esp_eth_phy_new_lan87xx(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("DP83848", cfg->adapter))
@@ -614,8 +729,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
       s_phy = esp_eth_phy_new_dp83848(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("KSZ80XX", cfg->adapter))
@@ -624,8 +739,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
       s_phy = esp_eth_phy_new_ksz80xx(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    /* dm9051 ethernet driver is based on spi driver */
@@ -640,8 +755,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       s_mac = esp_eth_mac_new_dm9051(&dm9051_config, &mac_config);
       s_phy = esp_eth_phy_new_dm9051(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_DM9051 undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_DM9051 undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    /* w5500 ethernet driver is based on spi driver */
@@ -656,8 +771,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       s_mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
       s_phy = esp_eth_phy_new_w5500(&phy_config);
 #else
-    ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_W5500 undef");
-    return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_W5500 undef");
+   return ESP_ERR_INVALID_ARG;  
 #endif 
    }
   
@@ -676,8 +791,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    {
       return err;
    }
-   
-   
+      
    if(netIsAdapterSpi(cfg->adapter))
    {
       netSetMac();
@@ -747,9 +861,9 @@ int netIsAdapterRmii(char* adapter)
  * @brief Initialize and start the network interfaces.
  *        If it the configuration has a valid adapter starts the appropriate network interface.
  *        Sets up SNTP (Simple Network TimeProtocol) configuration for time synchronization.
- * @return void.
+ * @return false if there are no configured adapters, otherwise true.
  */   
-void netInit(void) 
+bool netInit(void) 
 {
 netConfig_t cfg;
    
@@ -759,7 +873,7 @@ netConfig_t cfg;
    gpio_install_isr_service(0);
     
    cfgGetNet(&cfg);
-   
+  
    if(!strcmp("wifi", cfg.adapter))
    {   
       netWifiStart();
@@ -775,6 +889,8 @@ netConfig_t cfg;
    esp_sntp_setservername(0, "pool.ntp.org");
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
+   
+   return !strcmp("close", cfg.adapter) ? false : true;
 }
 
 /**
@@ -801,11 +917,22 @@ esp_err_t ret = ESP_OK;
          ESP_ERROR_CHECK(netEthStop());
       }   
    
-      return ESP_OK;
+      if(ap_netif == NULL)
+      {
+         ret = netWifiApStart();
+      }
+      
+      return ret;   
    }
    
    if(!strcmp("wifi", cfg->adapter))
    {
+      // Turn off AP when installed.
+      if(ap_netif != NULL)
+      {
+         ESP_ERROR_CHECK(netWifiApStop());
+      }
+      
       // Turn off ethernet when installed.
       if(eth_netif != NULL) 
       {
@@ -830,6 +957,10 @@ esp_err_t ret = ESP_OK;
       else if(eth_netif != NULL)
       {
          ESP_ERROR_CHECK(netEthStop());
+      } 
+      else if(ap_netif != NULL)
+      {
+         ESP_ERROR_CHECK(netWifiApStop());
       }
       
       ret = netEthStart(cfg);  
