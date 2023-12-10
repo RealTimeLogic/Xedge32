@@ -323,12 +323,12 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       else if(eventId == WIFI_EVENT_AP_STACONNECTED) 
       {
          wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) eventData;
-         HttpTrace_printf(9, "station"MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+         HttpTrace_printf(9, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
       } 
       else if (eventId == WIFI_EVENT_AP_STADISCONNECTED) 
       {
          wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) eventData;
-         HttpTrace_printf(9, "station"MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
+         HttpTrace_printf(9, "station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
       } 
       else
       {

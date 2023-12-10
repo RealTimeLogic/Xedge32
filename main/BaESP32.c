@@ -2188,7 +2188,10 @@ netConfig_t cfg = {0};
    {
       luaL_error(L,"Unknown adapter '%s'", cfg.adapter);
    }
- 
+   HttpTrace_printf(0, "\nExecuting network '%s' command\n",cfg.adapter);
+   ThreadMutex_release(soDispMutex);
+   Thread_sleep(1000);
+   ThreadMutex_set(soDispMutex);
    // Call the netConnect function and push the return value to the Lua stack.
    return pushEspRetVal(L, netConnect(&cfg), 0, TRUE);
 }
