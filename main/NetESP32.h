@@ -63,7 +63,7 @@ void wifiScan(int print, lua_State* L,
                         const char* gcipher, int channel));
 void netWaitIP(void);   
 int netGotIP(void);
-esp_err_t netWifiApStart(void);
+esp_err_t netWifiApStart(bool regHandler);
 
 int netIsAdapterSpi(char* adapter);
 int netIsAdapterRmii(char* adapter);

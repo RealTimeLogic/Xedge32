@@ -49,6 +49,8 @@ static esp_netif_t *wifi_netif = NULL;
 static esp_netif_t *eth_netif = NULL;
 static esp_netif_t *ap_netif = NULL;
 
+static esp_err_t netWifiStop(bool unregHandler);
+
 /* This buffer is used as the memory for the eventBrokerQueue, which
  * serves various messaging purposes, including sending messages from
  * interrupts. On an ESP32, this buffer requires the IRAM_ATTR
@@ -314,11 +316,26 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          char* param = (char*)baMalloc(20);
          if(param)
          {
-            basnprintf(param,20,"%d",d->reason);
+            basnprintf(param, 20, "%d", d->reason);
             netExecXedgeEvent("wifi", param, 0, 0);
          }
          gotIP=FALSE;
-         esp_wifi_connect();
+         
+         // If the reason is an invalid password (4-way handshake timeout),
+         // stop the WiFi in station mode and start the Access Point (AP) mode.
+         // This is typically done when the ESP32 fails to connect due to an incorrect password.
+         if(d->reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)
+         {
+            // Erase network configuration (SSID and password)
+            // to avoid attempting reconnection with invalid credentials.
+            cfgEraseNet();  
+            netWifiStop(false); 
+            netWifiApStart(false);  
+         }
+         else 
+         {
+            esp_wifi_connect();
+         }
       }
       else if(eventId == WIFI_EVENT_AP_STACONNECTED) 
       {
@@ -371,19 +388,24 @@ static esp_err_t netWifiStart(void)
 }
 
 /**
- * @brief Stop the wifi network on the ESP32.
+ * @brief Stop the WiFi network on the ESP32.
  *
- * @return ESP_OK if the wifi connection was stoped.
+ * @param[in] unregHandler If true, unregister event handlers for WIFI_EVENT and IP_EVENT.
+ *
+ * @return ESP_OK if the WiFi connection was stopped successfully.
  */
-static esp_err_t netWifiStop(void) 
+static esp_err_t netWifiStop(bool unregHandler) 
 {
    printf("Closing Wi-Fi connection\n");
   
    if(wifi_netif != NULL) 
    {
-      esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent);
-      esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &onNetEvent);
-
+      if(unregHandler)
+      {
+         esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent);
+         esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, &onNetEvent);
+      }
+      
       esp_wifi_disconnect();
       esp_wifi_stop();
       ESP_ERROR_CHECK(esp_wifi_deinit());
@@ -398,10 +420,12 @@ static esp_err_t netWifiStop(void)
 
 /**
  * @brief Initializes and starts the Wi-Fi network in Access Point (AP) mode.
- *    
+ *
+ * @param[in] regHandler If true, register an event handler for WIFI_EVENT.
+ *
  * @return ESP_OK if the Wi-Fi AP mode was successfully started.
  */ 
-esp_err_t netWifiApStart(void)
+esp_err_t netWifiApStart(bool regHandler)
 {
    ESP_ERROR_CHECK(esp_netif_init());
    ap_netif = esp_netif_create_default_wifi_ap();
@@ -409,7 +433,10 @@ esp_err_t netWifiApStart(void)
    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent, NULL));
+   if(regHandler)
+   {
+      ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent, NULL));
+   }
     
    wifi_config_t wifi_config = 
    {
@@ -911,7 +938,7 @@ esp_err_t ret = ESP_OK;
 
       if(wifi_netif != NULL) 
       {
-         ESP_ERROR_CHECK(netWifiStop());  
+         ESP_ERROR_CHECK(netWifiStop(true));  
       }
       
       if(eth_netif != NULL) 
@@ -921,7 +948,7 @@ esp_err_t ret = ESP_OK;
    
       if(ap_netif == NULL)
       {
-         ret = netWifiApStart();
+         ret = netWifiApStart(true);
       }
       
       return ret;   
@@ -954,7 +981,7 @@ esp_err_t ret = ESP_OK;
    {
       if(wifi_netif != NULL)
       {
-         ESP_ERROR_CHECK(netWifiStop());   
+         ESP_ERROR_CHECK(netWifiStop(true));   
       }
       else if(eth_netif != NULL)
       {
