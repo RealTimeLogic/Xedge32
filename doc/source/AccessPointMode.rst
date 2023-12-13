@@ -13,7 +13,7 @@ Connecting to Xedge32
 
 2. **Accessing the Web Interface**:
 
-   - Open a web browser and navigate to ``http://xedge32.local``. 
+   - Open a web browser and navigate to `http://xedge32.local <http://xedge32.local>`_. 
    - **Note**: If you're using a computer that does not support mDNS, you will not be able to access the URL ``http://xedge32.local``. Instead, use the IP address ``http://192.168.190.0``.
 
 3. **Navigating to Xedge32 IDE**:
