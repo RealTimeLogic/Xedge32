@@ -564,7 +564,7 @@ void app_main(void)
 
    if(!adapter)
    {
-      netWifiApStart();
+      netWifiApStart(true);
    }
    
    /*
