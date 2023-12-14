@@ -49,6 +49,9 @@ static esp_netif_t *wifi_netif = NULL;
 static esp_netif_t *eth_netif = NULL;
 static esp_netif_t *ap_netif = NULL;
 
+static bool netPowerUp = true;
+static uint8_t netWifiRetry = 0;
+ 
 static esp_err_t netWifiStop(bool unregHandler);
 
 /* This buffer is used as the memory for the eventBrokerQueue, which
@@ -320,15 +323,27 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
             netExecXedgeEvent("wifi", param, 0, 0);
          }
          gotIP=FALSE;
-         
-         // If the reason is an invalid password (4-way handshake timeout),
+
+         // Determine whether to start Access Point (AP) mode based on the disconnection reason and retry count.
+         bool startAPMode = false;
+         if(d->reason == WIFI_REASON_NO_AP_FOUND) 
+         {
+            // Increment retry count and check if it exceeds the threshold.
+            if(netWifiRetry++ > 4) 
+            {
+               // Start AP mode only if it's not during power-up.
+               startAPMode = !netPowerUp;
+            }
+         }
+            
+         // If the reason is an invalid password (4-way handshake timeout) or AP mode should be started,
          // stop the WiFi in station mode and start the Access Point (AP) mode.
-         // This is typically done when the ESP32 fails to connect due to an incorrect password.
-         if(d->reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)
+         // This is typically done when the ESP32 fails to connect due to an incorrect password or repeated failures.
+         if((d->reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT) || startAPMode)
          {
             // Erase network configuration (SSID and password)
             // to avoid attempting reconnection with invalid credentials.
-            cfgEraseNet();  
+            cfgEraseNet(); 
             netWifiStop(false); 
             netWifiApStart(false);  
          }
@@ -931,6 +946,10 @@ netConfig_t cfg;
 esp_err_t netConnect(netConfig_t* cfg)
 {
 esp_err_t ret = ESP_OK;
+
+   // Indicate that a new adapter network is established by command, and reset the retry connection counter.
+   netPowerUp = false;
+   netWifiRetry = 0;
 
    if(!strcmp("close", cfg->adapter))
    {
