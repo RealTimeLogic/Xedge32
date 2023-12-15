@@ -20,7 +20,7 @@ ideCfgCB.push(function (mlist) {
 <style>
   #FMWUpdate {width:100%;height:100%;background-color:rgba(0,0,0,0.5);padding:20px;}
   #FMWUpdate>div {aspect-ratio: 1/1;position: relative;width: auto;height: 100%;margin: 0 auto;} 
-  #fwguage>svg text {font-size: 70%; font-family: Arial;}
+  #fwguage>svg text {font-size:60%;font-family:Arial;}
   #fwdrop input {position: absolute;z-index:2;top:0;bottom:0;right:0;left:0;opacity:0;cursor:pointer;}
   #fwdrop>svg * {fill: #F8F8F8;}
   #fwdrop polygon, #fwdrop rect {transform-origin: center; transition: transform 0.2s ease-in-out;}
