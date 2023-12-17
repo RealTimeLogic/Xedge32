@@ -463,7 +463,7 @@ esp_err_t netWifiApStart(bool regHandler)
          .password = CONFIG_WIFI_AP_PASSWORD,
          .max_connection = CONFIG_WIFI_AP_MAX_STA_CONN,
 #ifdef CONFIG_ESP_WIFI_SOFTAP_SAE_SUPPORT
-         .authmode = WIFI_AUTH_WPA3_PSK,
+         .authmode = WIFI_AUTH_WPA2_WPA3_PSK, 
          .sae_pwe_h2e = WPA3_SAE_PWE_BOTH,
 #else 
          .authmode = WIFI_AUTH_WPA2_PSK,
