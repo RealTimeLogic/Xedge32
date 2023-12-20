@@ -9,7 +9,7 @@ Connecting to Xedge32
 
 1. **Connecting to the Access Point**:
 
-   - On your device, connect to the ``xedge32`` Wi-Fi network. The default password is 123445678 (can be changed).
+   - On your device, connect to the ``xedge32`` Wi-Fi network. The default password is 12345678 (can be changed).
 
 2. **Accessing the Web Interface**:
 

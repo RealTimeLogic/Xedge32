@@ -26,7 +26,7 @@ The following Linux commands show all steps required for installing the developm
 
 ```
    sudo apt -y update
-   sudo apt -y install git wget flex bison gperf python3 python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+   sudo apt -y install git wget zip flex bison gperf python3 python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
    cd
    # remove old installation, if any
@@ -36,6 +36,7 @@ The following Linux commands show all steps required for installing the developm
    mkdir esp
    cd esp
    git clone --recursive https://github.com/espressif/esp-idf.git
+   # Execute the 3 following lines if you plan on using the CAM plugin.
    cd esp-idf/components
    git clone https://github.com/espressif/esp32-camera.git
    cd ..
