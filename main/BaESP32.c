@@ -65,11 +65,14 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <driver/uart.h>
 #include <driver/ledc.h>
 #include <driver/pulse_cnt.h>
+#include <driver/rmt_tx.h>
+#include <driver/rmt_encoder.h>
 #include <esp_wifi.h>
 #include <esp_mac.h>
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
 #include <esp_ota_ops.h>
+
 #include "BaESP32.h"
 #include "CfgESP32.h"
 
@@ -215,7 +218,7 @@ void lInitConfigTable(lua_State* L, int ix)
       lua_settop(L,ix);
 }
 
-QueueHandle_t eventBrokerQueue;
+QueueHandle_t eventBrokerQueue; /* Initialized in NetESP32.c */
 
 /* This high-priority task waits for 'eventBrokerQueue' events and
  * dispatches them to a callback function running in the context of an
@@ -529,9 +532,10 @@ static IRAM_ATTR bool adcOvfInterruptHandler(
    adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
    void* pin)
 {
+   BaseType_t hwakeup = pdFALSE;
    EventBrokerQueueNode n = {.callback=adcOverflowCB,.arg.pin=(gpio_num_t)pin};
-   xQueueSendFromISR(eventBrokerQueue, &n, 0); /* Trigger adcEventCB() */
-   return true;
+   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup); /* Trigger adcEventCB() */
+   return hwakeup == pdTRUE;
 }
 
 
@@ -541,9 +545,10 @@ static IRAM_ATTR bool adcConvDoneInterruptHandler(
    adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
    void* pin)
 {
+   BaseType_t hwakeup = pdFALSE;
    EventBrokerQueueNode n = {.callback=adcEventCB,.arg.pin=(gpio_num_t)pin};
-   xQueueSendFromISR(eventBrokerQueue, &n, 0); /* Trigger adcEventCB() */
-   return true;
+   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup); /* Trigger adcEventCB() */
+   return hwakeup == pdTRUE;
 }
 
 
@@ -1455,16 +1460,16 @@ static void ledEventCB(EventBrokerCallbackArg arg)
 static IRAM_ATTR bool
 ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
 {
-    if(param->event == LEDC_FADE_END_EVT)
-    {
-       EventBrokerQueueNode n = {
-          .callback=ledEventCB,
-          .arg.pin=(gpio_num_t)arg
-       };
-       xQueueSendFromISR(eventBrokerQueue, &n, 0);
-       return TRUE;
-    }
-    return FALSE;
+   BaseType_t hwakeup = pdFALSE;
+   if(param->event == LEDC_FADE_END_EVT)
+   {
+      EventBrokerQueueNode n = {
+         .callback=ledEventCB,
+         .arg.pin=(gpio_num_t)arg
+      };
+      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+   }
+   return hwakeup == pdTRUE;
 }
 
 
@@ -1769,6 +1774,376 @@ static int li2cMaster(lua_State* L)
    i2cm->port = port;
    return 1;
 }
+
+/*********************************************************************
+ *********************************************************************
+                                  RMT
+ *********************************************************************
+ *********************************************************************/
+
+#define BARMTTX "RMTT"
+#define BARMTRX "RMTR"
+
+typedef struct
+{
+   rmt_channel_handle_t txChannel;
+   rmt_encoder_handle_t txEncoder;
+   BaBool enabled;
+   gpio_num_t pin;
+   int callbackRef;
+   int transQueueBufHead;
+   int transQueueBufTail;
+   int transQueueBufLen;
+   int transQueueBufRef[1]; /* Must be last */
+} LRmtTx;
+
+#define LRmtTx_getUD(L) (LRmtTx*)luaL_checkudata(L,1,BARMTTX)
+
+/* Note: does not pop the value */
+static lua_Integer LRmtTx_getIntAtIx(lua_State *L, int index, lua_Integer n)
+{
+   lua_rawgeti(L, index, n);
+   lua_Integer i=lua_tointeger(L, -1);
+   return i;
+}
+
+static int copyTuple2Symbol(lua_State *L, int index, rmt_symbol_word_t* symbol)
+{
+   index=lua_absindex(L, index);
+   symbol->level0=(uint16_t)LRmtTx_getIntAtIx(L,index,1);
+   symbol->duration0 = (uint16_t)LRmtTx_getIntAtIx(L, index, 2);
+   symbol->level1=(uint16_t)LRmtTx_getIntAtIx(L,index,3);
+   symbol->duration1 = (uint16_t)LRmtTx_getIntAtIx(L, index, 4);
+   lua_pop(L,4);
+   return !symbol->duration0 || !symbol->duration1 ? -1 : 0;
+}
+
+
+static LRmtTx* LRmtTx_checkUD(lua_State* L)
+{
+   LRmtTx* o = LRmtTx_getUD(L);
+   if( ! o->txChannel )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+
+static int LRmtTx_transmit(lua_State* L)
+{
+   LRmtTx* o = LRmtTx_checkUD(L);
+   if( ! o->enabled )
+   {
+      luaL_error(L,"Not enabled");
+   }
+   int nextTransQueueBufHead = o->transQueueBufHead+1;
+   if(nextTransQueueBufHead >= o->transQueueBufLen)
+      nextTransQueueBufHead=0;
+   if(nextTransQueueBufHead == o->transQueueBufTail)
+      luaL_error(L, "Transmit queue full");
+   luaL_checktype(L, 2, LUA_TTABLE);
+   luaL_checktype(L, 3, LUA_TTABLE);
+   rmt_transmit_config_t cfg = {
+      .loop_count = (int)balua_getIntField(L,2,"loop", 0),
+      .flags.eot_level = (uint32_t)balua_getIntField(L,2,"eot", 0),
+      .flags.queue_nonblocking = TRUE
+   };
+   lua_settop(L, 3);
+
+   /* Calculate rmt_symbol_word_t array length */
+   int bufLen=0;
+   for(int ix=1 ; ix <= lua_rawlen(L,3) ; ix++)
+   {
+      lua_geti(L,3,ix);
+      if(LUA_TTABLE != lua_type(L, -1))
+         luaL_error(L,"Index %d not a tuple",ix);
+      int tlen=(int)lua_rawlen(L, -1);
+      if(4 != tlen)
+      {
+        L_err:
+         luaL_error(L,"Invalid tuple at Index %d",ix);
+      }
+      lua_rawgeti(L, -1, 1);
+      if(LUA_TBOOLEAN == lua_type(L, -1))
+      {
+         lua_rawgeti(L, -2, 4);
+         if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
+         bufLen += (int)lua_rawlen(L,-1) * 8;
+         lua_pop(L,1);
+      }
+      else
+      {
+         bufLen++;
+      }
+      lua_pop(L,2);
+   }
+   baAssert(3 == lua_gettop(L));
+
+   /* Create the rmt_symbol_word_t array */
+   rmt_symbol_word_t* symbols = (rmt_symbol_word_t*)lua_newuserdatauv(
+      L,sizeof(rmt_symbol_word_t) * bufLen, 0);
+   rmt_symbol_word_t* symbolPtr = symbols;
+   for(int ix=1; ix <= lua_rawlen(L,3) ; ix++)
+   {
+      lua_geti(L,3,ix);
+      lua_rawgeti(L, -1, 1);
+      if(LUA_TBOOLEAN == lua_type(L, -1))
+      {
+         rmt_symbol_word_t lowBit,highBit;
+         int msb = lua_toboolean(L, -1);
+         lua_rawgeti(L, -2, 2);
+         if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
+         if(copyTuple2Symbol(L, -1, &lowBit)) goto L_err;
+         lua_rawgeti(L, -3, 3);
+         if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
+         if(copyTuple2Symbol(L, -1, &highBit)) goto L_err;
+         lua_rawgeti(L, -4, 4);
+         if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
+         for(int byteIx=1 ; byteIx <= lua_rawlen(L,-1) ; byteIx++)
+         {
+            uint8_t byte = (uint8_t)LRmtTx_getIntAtIx(L, -1, byteIx);
+            lua_pop(L,1);
+            if(msb)
+            {
+               for(unsigned int mask = 0x80 ; mask > 0 ; mask >>= 1)
+               {
+                  *symbolPtr = mask & byte ? highBit : lowBit;
+                  symbolPtr++;
+               }
+            }
+            else
+            {
+               for(unsigned int mask = 1 ; mask <= 0x80 ; mask <<= 1)
+               {
+                  *symbolPtr = mask & byte ? highBit : lowBit;
+                  symbolPtr++;
+               }
+            }
+         }
+         lua_pop(L,3);
+      }
+      else
+      {
+         if(copyTuple2Symbol(L, -2, symbolPtr)) goto L_err;
+         symbolPtr++;
+      }
+      lua_pop(L,2);
+   }
+   baAssert((symbolPtr - symbols) == bufLen);
+   esp_err_t status=rmt_transmit(
+      o->txChannel,o->txEncoder,symbols,sizeof(rmt_symbol_word_t)*bufLen,&cfg);
+   if(ESP_OK == status)
+   {
+      lua_pushvalue(L, 4); /* rmt_symbol_word_t array */
+      baAssert(LUA_TUSERDATA == lua_type(L, -1));
+      /* We must reference buffer used by rmt_transmit() to prevent GC
+       * since rmt_transmit() keeps a reference to the buffer and does
+       * not copy it. We release this buffer in
+       * LRmtTx_executeOnTxComplete() when the data has been
+       * transmitted.
+       */
+      o->transQueueBufRef[o->transQueueBufHead]=luaL_ref(L, LUA_REGISTRYINDEX);
+      o->transQueueBufHead = nextTransQueueBufHead;
+   }
+   return pushEspRetVal(L, status, "transmit", TRUE);
+}
+
+
+static int LRmtTx_enable(lua_State* L)
+{
+   LRmtTx* o = LRmtTx_checkUD(L);
+   int status;
+   if(o->enabled)
+   {
+      status=ESP_ERR_INVALID_ARG;
+   }
+   else
+   {
+      status=rmt_enable(o->txChannel);
+      if(ESP_OK == status)
+         o->enabled=TRUE;
+   }
+   return pushEspRetVal(L, status, "transmit", TRUE);
+}
+
+static int LRmtTx_disableAndReleaseBuf(LRmtTx* o,lua_State* L)
+{
+   int status=rmt_disable(o->txChannel);
+   int ix=o->transQueueBufTail;
+   while(ix != o->transQueueBufHead)
+   {
+      luaL_unref(L, LUA_REGISTRYINDEX, o->transQueueBufRef[ix]);
+      ix++;
+      if(ix >= o->transQueueBufLen)
+         ix=0;
+   }
+   o->transQueueBufHead=o->transQueueBufTail=0;
+   return status;
+}
+
+
+static int LRmtTx_disable(lua_State* L)
+{
+   int status;
+   LRmtTx* o = LRmtTx_checkUD(L);
+   if(o->enabled)
+   {
+      status=LRmtTx_disableAndReleaseBuf(o,L);
+      if(ESP_OK == status)
+         o->enabled=FALSE;
+   }
+   else
+   {
+      status=ESP_ERR_INVALID_ARG;
+   }
+   return pushEspRetVal(L,status,NULL,TRUE);
+}
+
+static void LRmtTx_del(LRmtTx* o, lua_State* L)
+{
+   if(o && o->txChannel)
+   {
+      LRmtTx_disableAndReleaseBuf(o,L);
+      rmt_del_encoder(o->txEncoder);
+      rmt_del_channel(o->txChannel);
+      o->txChannel=0;
+      activeGPOI[o->pin]=0;
+   }
+}
+
+
+static int LRmtTx_close(lua_State* L)
+{
+   LRmtTx_del(LRmtTx_getUD(L), L);
+   return 0;
+}
+
+
+/* This CB runs in the context of a thread in the LThreadMgr.
+ */
+static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   LRmtTx* o = (LRmtTx*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   if(o)
+   {
+      printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
+      baAssert(o->transQueueBufTail != o->transQueueBufHead);
+      lua_State* L = jb->Lt;
+      /* Release rmt_symbol_word_t array memory lock */
+      luaL_unref(L, LUA_REGISTRYINDEX, o->transQueueBufRef[o->transQueueBufTail]);
+      int next = o->transQueueBufTail+1;
+      if(next >= o->transQueueBufLen)
+         next=0;
+      o->transQueueBufTail = next;
+      if(o->callbackRef)
+      {
+         /* Push user's callback on the stack */
+         balua_wkPush(L, o->callbackRef);
+         if(LUA_OK != lua_pcall(L, 0, 0, msgh))
+            LRmtTx_del(o, L);
+      }
+   }
+}
+
+
+/* This CB runs in the context of the eventBrokerTask.
+ */
+static void LRmtTx_onTxComplete(EventBrokerCallbackArg arg)
+{
+   if(activeGPOI[arg.pin])
+      dispatchThreadJob(arg.pin, LRmtTx_executeOnTxComplete);
+}
+
+
+static bool IRAM_ATTR LRmtTx_interruptHandler(
+   rmt_channel_handle_t tx_chan, const rmt_tx_done_event_data_t *edata, void *arg)
+{
+   BaseType_t hwakeup = pdFALSE;
+   EventBrokerQueueNode n = {
+      .callback=LRmtTx_onTxComplete,
+      .arg.pin=(gpio_num_t)arg
+   };
+   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+   return hwakeup == pdTRUE;
+};
+
+
+static const luaL_Reg rmtLib[] = {
+   {"transmit", LRmtTx_transmit},
+   {"enable", LRmtTx_enable},
+   {"disable", LRmtTx_disable},
+   {"close", LRmtTx_close},
+   {"__close", LRmtTx_close},
+   {"__gc", LRmtTx_close},
+   {NULL, NULL}
+};
+
+
+static int LRmtTx_create(lua_State* L)
+{
+   luaL_checktype(L, 1, LUA_TTABLE);
+   rmt_tx_channel_config_t txCfg = {
+      .gpio_num = (uint32_t)balua_checkIntField(L,1,"gpio"),
+      .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
+      .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
+      .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
+      .trans_queue_depth = (uint32_t)balua_getIntField(L,1,"queue",4),
+      .intr_priority = (uint32_t)balua_getIntField(L,1,"priority",0),
+      .flags.invert_out=balua_getBoolField(L,1,"invert", FALSE),
+      .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
+      .flags.io_loop_back=balua_getBoolField(L,1,"loopback", FALSE),
+      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
+   };
+   if(txCfg.trans_queue_depth < 1)
+      return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"queue",TRUE);
+   if(txCfg.gpio_num < GPIO_NUM_0 || txCfg.gpio_num >= GPIO_NUM_MAX)
+      luaL_argerror(L, 1, "Invalid GPIO pin");
+   if(activeGPOI[txCfg.gpio_num])
+      throwPinInUse(L,txCfg.gpio_num);
+   LRmtTx* rmt = (LRmtTx*)lNewUdata(
+      L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtLib);
+   memset(rmt,0,sizeof(LRmtTx));
+   rmt->transQueueBufLen=txCfg.trans_queue_depth;
+   rmt->pin=txCfg.gpio_num;
+   esp_err_t status=rmt_new_tx_channel(&txCfg, &rmt->txChannel);
+   if(ESP_OK == status)
+   {
+      lua_getfield(L, 1, "dutycycle");
+      if(lua_isnumber(L, -1))
+      {
+         rmt_carrier_config_t cCfg = {
+            .duty_cycle = (float)lua_tonumber(L, -1),
+            .frequency_hz = (uint32_t)balua_checkIntField(L,1,"frequency"),
+            .flags.polarity_active_low = balua_getBoolField(L,1,"polaritylow", FALSE)
+         };
+         status=rmt_apply_carrier(rmt->txChannel, &cCfg);
+         if(ESP_OK != status)
+            goto L_err;
+      }
+      lua_pop(L,1);
+      rmt_tx_event_callbacks_t cb = {
+         .on_trans_done = LRmtTx_interruptHandler
+      };
+      status=rmt_tx_register_event_callbacks(rmt->txChannel, &cb, (void*)txCfg.gpio_num);
+      if(ESP_OK == status)
+      {
+         rmt_copy_encoder_config_t cfg={};
+         status=rmt_new_copy_encoder(&cfg, &rmt->txEncoder);
+         if(ESP_OK == status)
+         {
+            lua_getfield(L, 1, "callback");
+            if(lua_isfunction(L, -1))
+               rmt->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+            lua_pop(L,1);
+            activeGPOI[rmt->pin]=(LGPIO*)rmt;
+            return 1;
+         }
+      }
+     L_err:
+      rmt_del_channel(rmt->txChannel);
+   }
+   return pushEspRetVal(L,status,NULL,TRUE);
+}
+
 
 /*********************************************************************
  *********************************************************************
@@ -2456,6 +2831,7 @@ static const luaL_Reg esp32Lib[] = {
    {"execute", lexecute},
    {"sdcard", lsdcard},
    {"loglevel", lloglevel},
+   {"rmttx", LRmtTx_create},
 #if CONFIG_IDF_TARGET_ESP32S3
    {"ota",lota},
 #endif
