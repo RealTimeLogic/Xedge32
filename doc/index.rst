@@ -57,6 +57,7 @@ Xedge ESP32
    source/I2C
    source/PCNT
    source/PWM
+   source/RMT
    source/UART
    source/BME280
    source/cam
