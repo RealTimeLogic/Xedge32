@@ -66,6 +66,7 @@ https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 #include <driver/ledc.h>
 #include <driver/pulse_cnt.h>
 #include <driver/rmt_tx.h>
+#include <driver/rmt_rx.h>
 #include <driver/rmt_encoder.h>
 #include <esp_wifi.h>
 #include <esp_mac.h>
@@ -2025,7 +2026,7 @@ static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    LRmtTx* o = (LRmtTx*)activeGPOI[((GpioThreadJob*)jb)->pin];
    if(o)
    {
-      printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
+      //printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
       baAssert(o->transQueueBufTail != o->transQueueBufHead);
       lua_State* L = jb->Lt;
       /* Release rmt_symbol_word_t array memory lock */
@@ -2067,7 +2068,7 @@ static bool IRAM_ATTR LRmtTx_interruptHandler(
 };
 
 
-static const luaL_Reg rmtLib[] = {
+static const luaL_Reg rmtTxLib[] = {
    {"transmit", LRmtTx_transmit},
    {"enable", LRmtTx_enable},
    {"disable", LRmtTx_disable},
@@ -2100,7 +2101,7 @@ static int LRmtTx_create(lua_State* L)
    if(activeGPOI[txCfg.gpio_num])
       throwPinInUse(L,txCfg.gpio_num);
    LRmtTx* rmt = (LRmtTx*)lNewUdata(
-      L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtLib);
+      L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib);
    memset(rmt,0,sizeof(LRmtTx));
    rmt->transQueueBufLen=txCfg.trans_queue_depth;
    rmt->pin=txCfg.gpio_num;
@@ -2143,6 +2144,189 @@ static int LRmtTx_create(lua_State* L)
    }
    return pushEspRetVal(L,status,NULL,TRUE);
 }
+
+typedef struct
+{
+   rmt_channel_handle_t rxChannel;
+   gpio_num_t pin;
+   int callbackRef;
+   rmt_symbol_word_t* symBuf;
+   size_t receivedSymbols;
+   BaBool overflow;
+} LRmtRx;
+
+
+#define LRmtRx_getUD(L) (LRmtRx*)luaL_checkudata(L,1,BARMTRX)
+static LRmtRx* LRmtRx_checkUD(lua_State* L)
+{
+   LRmtRx* o = LRmtRx_getUD(L);
+   if( ! o->rxChannel )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+
+static void LRmtRx_del(lua_State* L, LRmtRx* o)
+{
+   if(o->rxChannel)
+   {
+      activeGPOI[o->pin]=0;
+      rmt_disable(o->rxChannel);
+      rmt_del_channel(o->rxChannel);
+      o->rxChannel=0;
+   }
+}
+
+
+/* This CB runs in the context of a thread in the LThreadMgr.
+ */
+static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   LRmtRx* o = (LRmtRx*)activeGPOI[0];
+   if(o && o->symBuf)
+   {
+      lua_State* L = jb->Lt;
+      rmt_symbol_word_t* symPtr=o->symBuf;
+      lua_createtable(L,0,o->receivedSymbols);
+      for(size_t ix=1 ; ix <= o->receivedSymbols; ix++,symPtr++)
+      {
+         lua_createtable(L,0,4);
+         lua_pushinteger(L,symPtr->level0); lua_rawseti(L,-2, 1);
+         lua_pushinteger(L,symPtr->duration0); lua_rawseti(L,-2, 2);
+         lua_pushinteger(L,symPtr->level1); lua_rawseti(L,-2, 3);
+         lua_pushinteger(L,symPtr->duration1); lua_rawseti(L,-2, 4);
+         lua_rawseti(L,-2, ix);
+      }
+      balua_wkPush(L, o->callbackRef);
+      lua_rotate(L, -2, 1);
+      lua_pushboolean(L, o->overflow);
+      if(LUA_OK != lua_pcall(L, 2, 0, msgh))
+         LRmtRx_del(L, o);
+      baFree(o->symBuf);
+      o->symBuf=0;
+   }
+}
+
+
+/* This CB runs in the context of the eventBrokerTask.
+ */
+static void LRmtRx_onRxComplete(EventBrokerCallbackArg arg)
+{
+   if(activeGPOI[arg.pin])
+      dispatchThreadJob(arg.pin, LRmtRx_executeOnRxComplete);
+}
+
+
+static bool IRAM_ATTR LRmtRx_interruptHandler(
+   rmt_channel_handle_t channel, const rmt_rx_done_event_data_t* edata, void* arg)
+{
+   BaseType_t hwakeup = pdFALSE;
+   LRmtRx* o = (LRmtRx*)activeGPOI[(gpio_num_t)arg];
+   if(o && o->symBuf)
+   {
+      EventBrokerQueueNode n = {
+         .callback=LRmtRx_onRxComplete,
+         .arg.pin=(gpio_num_t)arg
+      };
+      o->receivedSymbols=edata->num_symbols;
+      o->overflow = !edata->flags.is_last;
+      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+   }
+   return hwakeup == pdTRUE;
+}
+
+
+static int LRmtRx_receive(lua_State* L)
+{
+   esp_err_t status;
+   LRmtRx* o = LRmtRx_checkUD(L);
+   if(o->symBuf)
+      luaL_error(L,"Busy");
+   rmt_receive_config_t cfg = {
+      .signal_range_min_ns = (uint32_t)balua_checkIntField(L,2,"min"),
+      .signal_range_max_ns = (uint32_t)balua_checkIntField(L,2,"max"),
+   };
+   size_t symSize = (size_t)balua_getIntField(L,2,"len",512) * sizeof(rmt_symbol_word_t);
+   o->symBuf = (rmt_symbol_word_t*)baLMalloc(L, symSize);
+   if(o->symBuf)
+   {
+      status=rmt_receive(o->rxChannel, o->symBuf, symSize, &cfg);
+      if(ESP_OK != status)
+      {
+         baFree(o->symBuf);
+         o->symBuf=0;
+      }
+   }
+   else
+      status=ESP_ERR_NO_MEM;
+   return pushEspRetVal(L,status, NULL, TRUE);
+
+}
+
+
+static int LRmtRx_close(lua_State* L)
+{
+   LRmtRx* o = LRmtRx_getUD(L);
+   if(o)
+      LRmtRx_del(L,o);
+   return 0;
+}
+
+
+
+static const luaL_Reg rmtRxLib[] = {
+   {"receive", LRmtRx_receive},
+   {"close", LRmtRx_close},
+   {"__close", LRmtRx_close},
+   {"__gc", LRmtRx_close},
+   {NULL, NULL}
+};
+
+
+static int LRmtRx_create(lua_State* L)
+{
+   luaL_checktype(L, 1, LUA_TTABLE);
+   rmt_rx_channel_config_t cfg = {
+      .gpio_num = (uint32_t)balua_checkIntField(L,1,"gpio"),
+      .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
+      .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
+      .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
+      .intr_priority = (uint32_t)balua_getIntField(L,1,"priority",0),
+      .flags.invert_in=balua_getBoolField(L,1,"invert", FALSE),
+      .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
+   };
+   if(cfg.gpio_num < GPIO_NUM_0 || cfg.gpio_num >= GPIO_NUM_MAX)
+      luaL_argerror(L, 1, "Invalid GPIO pin");
+   if(activeGPOI[cfg.gpio_num])
+      throwPinInUse(L,cfg.gpio_num);
+   LRmtRx* rmt = (LRmtRx*)lNewUdata(L,sizeof(LRmtRx),BARMTRX,rmtRxLib);
+   memset(rmt,0,sizeof(LRmtRx));
+   rmt->pin=cfg.gpio_num;
+   lua_getfield(L, 1, "callback");
+   if(!lua_isfunction(L, -1))
+      luaL_error(L,"Callback required");
+   rmt->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+   lua_pop(L,1);
+   esp_err_t status=rmt_new_rx_channel(&cfg, &rmt->rxChannel);
+   if(ESP_OK == status)
+   {
+      rmt_rx_event_callbacks_t cbs = {
+         .on_recv_done = LRmtRx_interruptHandler,
+      };
+      status=rmt_rx_register_event_callbacks(rmt->rxChannel, &cbs, (void*)cfg.gpio_num);
+      if(ESP_OK == status)
+      {
+         status=rmt_enable(rmt->rxChannel);
+         if(ESP_OK == status)
+         {
+            activeGPOI[rmt->pin]=(LGPIO*)rmt;
+            return 1;
+         }
+      }
+   }
+   return pushEspRetVal(L,status,NULL,TRUE);
+}
+
 
 
 /*********************************************************************
@@ -2832,6 +3016,7 @@ static const luaL_Reg esp32Lib[] = {
    {"sdcard", lsdcard},
    {"loglevel", lloglevel},
    {"rmttx", LRmtTx_create},
+   {"rmtrx", LRmtRx_create},
 #if CONFIG_IDF_TARGET_ESP32S3
    {"ota",lota},
 #endif
