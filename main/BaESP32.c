@@ -177,7 +177,7 @@ void* lNewUdata(lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
       */
       lua_pushvalue(L, -1); /* Copy meta */
       lua_setfield(L, -2, "__index"); /* meta.__index=meta */
-      /* set all function in meta: for-loop -> meta[fname]=f */
+      /* set all functions in meta: for-loop -> meta[fname]=f */
       luaL_setfuncs(L,l,0);
    }
    lua_setmetatable(L, -2); /*  setmetatable(userdata, table) */
@@ -1785,8 +1785,16 @@ static int li2cMaster(lua_State* L)
 #define BARMTTX "RMTT"
 #define BARMTRX "RMTR"
 
+struct LRmtTx;
+
 typedef struct
 {
+   struct LRmtTx* tx;
+} LRmtBase;
+
+typedef struct LRmtTx
+{
+   LRmtBase super;
    rmt_channel_handle_t txChannel;
    rmt_encoder_handle_t txEncoder;
    BaBool enabled;
@@ -1798,7 +1806,37 @@ typedef struct
    int transQueueBufRef[1]; /* Must be last */
 } LRmtTx;
 
+
+typedef struct
+{
+   LRmtBase super;
+   rmt_channel_handle_t rxChannel;
+   gpio_num_t pin;
+   int callbackRef;
+   rmt_symbol_word_t* symBuf;
+   size_t receivedSymbols;
+   BaBool overflow;
+} LRmtRx;
+
+
 #define LRmtTx_getUD(L) (LRmtTx*)luaL_checkudata(L,1,BARMTTX)
+#define LRmtRx_getUD(L) (LRmtRx*)luaL_checkudata(L,1,BARMTRX)
+
+static LRmtTx* LRmtTx_checkUD(lua_State* L)
+{
+   LRmtTx* o = LRmtTx_getUD(L);
+   if( ! o->txChannel )
+      luaL_error(L,"CLOSED");
+   return o;
+}
+
+static LRmtRx* LRmtRx_checkUD(lua_State* L)
+{
+   LRmtRx* o = LRmtRx_getUD(L);
+   if( ! o->rxChannel )
+      luaL_error(L,"CLOSED");
+   return o;
+}
 
 /* Note: does not pop the value */
 static lua_Integer LRmtTx_getIntAtIx(lua_State *L, int index, lua_Integer n)
@@ -1817,15 +1855,6 @@ static int copyTuple2Symbol(lua_State *L, int index, rmt_symbol_word_t* symbol)
    symbol->duration1 = (uint16_t)LRmtTx_getIntAtIx(L, index, 4);
    lua_pop(L,4);
    return !symbol->duration0 || !symbol->duration1 ? -1 : 0;
-}
-
-
-static LRmtTx* LRmtTx_checkUD(lua_State* L)
-{
-   LRmtTx* o = LRmtTx_getUD(L);
-   if( ! o->txChannel )
-      luaL_error(L,"CLOSED");
-   return o;
 }
 
 
@@ -1963,8 +1992,9 @@ static int LRmtTx_enable(lua_State* L)
       if(ESP_OK == status)
          o->enabled=TRUE;
    }
-   return pushEspRetVal(L, status, "transmit", TRUE);
+   return pushEspRetVal(L, status, NULL, TRUE);
 }
+
 
 static int LRmtTx_disableAndReleaseBuf(LRmtTx* o,lua_State* L)
 {
@@ -2023,9 +2053,10 @@ static int LRmtTx_close(lua_State* L)
  */
 static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtTx* o = (LRmtTx*)activeGPOI[((GpioThreadJob*)jb)->pin];
-   if(o)
+   LRmtBase* base = (LRmtBase*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   if(base && base->tx)
    {
+      LRmtTx* o = base->tx;
       //printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
       baAssert(o->transQueueBufTail != o->transQueueBufHead);
       lua_State* L = jb->Lt;
@@ -2088,24 +2119,38 @@ static int LRmtTx_create(lua_State* L)
       .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
       .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
       .trans_queue_depth = (uint32_t)balua_getIntField(L,1,"queue",4),
-      .intr_priority = (uint32_t)balua_getIntField(L,1,"priority",0),
+      .intr_priority = (int)balua_getIntField(L,1,"priority",0),
       .flags.invert_out=balua_getBoolField(L,1,"invert", FALSE),
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
-      .flags.io_loop_back=balua_getBoolField(L,1,"loopback", FALSE),
       .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
    };
    if(txCfg.trans_queue_depth < 1)
       return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"queue",TRUE);
    if(txCfg.gpio_num < GPIO_NUM_0 || txCfg.gpio_num >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid GPIO pin");
-   if(activeGPOI[txCfg.gpio_num])
-      throwPinInUse(L,txCfg.gpio_num);
-   LRmtTx* rmt = (LRmtTx*)lNewUdata(
+   bool hasRx = LUA_TUSERDATA == lua_type(L, 2);
+   LRmtTx* tx = (LRmtTx*)lNewUdata(
       L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib);
-   memset(rmt,0,sizeof(LRmtTx));
-   rmt->transQueueBufLen=txCfg.trans_queue_depth;
-   rmt->pin=txCfg.gpio_num;
-   esp_err_t status=rmt_new_tx_channel(&txCfg, &rmt->txChannel);
+   memset(tx,0,sizeof(LRmtTx));
+   ((LRmtBase*)tx)->tx=tx;
+   if(activeGPOI[txCfg.gpio_num])
+   {
+      if(hasRx)
+      {
+         LRmtRx* rx = (LRmtRx*)luaL_checkudata(L,2,BARMTRX);
+         if((LRmtRx*)activeGPOI[txCfg.gpio_num] == rx && rx->rxChannel)
+         {
+            ((LRmtBase*)rx)->tx=tx;
+            txCfg.flags.io_loop_back=TRUE;
+            goto L_ok;
+         }
+      }
+      throwPinInUse(L,txCfg.gpio_num);
+   }
+  L_ok:
+   tx->transQueueBufLen=txCfg.trans_queue_depth;
+   tx->pin=txCfg.gpio_num;
+   esp_err_t status=rmt_new_tx_channel(&txCfg, &tx->txChannel);
    if(ESP_OK == status)
    {
       lua_getfield(L, 1, "dutycycle");
@@ -2116,7 +2161,7 @@ static int LRmtTx_create(lua_State* L)
             .frequency_hz = (uint32_t)balua_checkIntField(L,1,"frequency"),
             .flags.polarity_active_low = balua_getBoolField(L,1,"polaritylow", FALSE)
          };
-         status=rmt_apply_carrier(rmt->txChannel, &cCfg);
+         status=rmt_apply_carrier(tx->txChannel, &cCfg);
          if(ESP_OK != status)
             goto L_err;
       }
@@ -2124,47 +2169,27 @@ static int LRmtTx_create(lua_State* L)
       rmt_tx_event_callbacks_t cb = {
          .on_trans_done = LRmtTx_interruptHandler
       };
-      status=rmt_tx_register_event_callbacks(rmt->txChannel, &cb, (void*)txCfg.gpio_num);
+      status=rmt_tx_register_event_callbacks(tx->txChannel, &cb, (void*)txCfg.gpio_num);
       if(ESP_OK == status)
       {
          rmt_copy_encoder_config_t cfg={};
-         status=rmt_new_copy_encoder(&cfg, &rmt->txEncoder);
+         status=rmt_new_copy_encoder(&cfg, &tx->txEncoder);
          if(ESP_OK == status)
          {
             lua_getfield(L, 1, "callback");
             if(lua_isfunction(L, -1))
-               rmt->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+               tx->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
             lua_pop(L,1);
-            activeGPOI[rmt->pin]=(LGPIO*)rmt;
+            if( ! hasRx )
+               activeGPOI[tx->pin]=(LGPIO*)tx;
             return 1;
          }
       }
      L_err:
-      rmt_del_channel(rmt->txChannel);
+      rmt_del_channel(tx->txChannel);
    }
    return pushEspRetVal(L,status,NULL,TRUE);
 }
-
-typedef struct
-{
-   rmt_channel_handle_t rxChannel;
-   gpio_num_t pin;
-   int callbackRef;
-   rmt_symbol_word_t* symBuf;
-   size_t receivedSymbols;
-   BaBool overflow;
-} LRmtRx;
-
-
-#define LRmtRx_getUD(L) (LRmtRx*)luaL_checkudata(L,1,BARMTRX)
-static LRmtRx* LRmtRx_checkUD(lua_State* L)
-{
-   LRmtRx* o = LRmtRx_getUD(L);
-   if( ! o->rxChannel )
-      luaL_error(L,"CLOSED");
-   return o;
-}
-
 
 static void LRmtRx_del(lua_State* L, LRmtRx* o)
 {
@@ -2174,6 +2199,7 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
       rmt_disable(o->rxChannel);
       rmt_del_channel(o->rxChannel);
       o->rxChannel=0;
+      LRmtTx_del(((LRmtBase*)o)->tx, L);
    }
 }
 
@@ -2182,7 +2208,7 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
  */
 static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtRx* o = (LRmtRx*)activeGPOI[0];
+   LRmtRx* o = (LRmtRx*)activeGPOI[((GpioThreadJob*)jb)->pin];
    if(o && o->symBuf)
    {
       lua_State* L = jb->Lt;
@@ -2291,7 +2317,7 @@ static int LRmtRx_create(lua_State* L)
       .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
       .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
       .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
-      .intr_priority = (uint32_t)balua_getIntField(L,1,"priority",0),
+      .intr_priority = (int)balua_getIntField(L,1,"priority",0),
       .flags.invert_in=balua_getBoolField(L,1,"invert", FALSE),
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
    };
@@ -2299,27 +2325,27 @@ static int LRmtRx_create(lua_State* L)
       luaL_argerror(L, 1, "Invalid GPIO pin");
    if(activeGPOI[cfg.gpio_num])
       throwPinInUse(L,cfg.gpio_num);
-   LRmtRx* rmt = (LRmtRx*)lNewUdata(L,sizeof(LRmtRx),BARMTRX,rmtRxLib);
-   memset(rmt,0,sizeof(LRmtRx));
-   rmt->pin=cfg.gpio_num;
+   LRmtRx* rx = (LRmtRx*)lNewUdata(L,sizeof(LRmtRx),BARMTRX,rmtRxLib);
+   memset(rx,0,sizeof(LRmtRx));
+   rx->pin=cfg.gpio_num;
    lua_getfield(L, 1, "callback");
    if(!lua_isfunction(L, -1))
       luaL_error(L,"Callback required");
-   rmt->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+   rx->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
    lua_pop(L,1);
-   esp_err_t status=rmt_new_rx_channel(&cfg, &rmt->rxChannel);
+   esp_err_t status=rmt_new_rx_channel(&cfg, &rx->rxChannel);
    if(ESP_OK == status)
    {
       rmt_rx_event_callbacks_t cbs = {
          .on_recv_done = LRmtRx_interruptHandler,
       };
-      status=rmt_rx_register_event_callbacks(rmt->rxChannel, &cbs, (void*)cfg.gpio_num);
+      status=rmt_rx_register_event_callbacks(rx->rxChannel, &cbs, (void*)cfg.gpio_num);
       if(ESP_OK == status)
       {
-         status=rmt_enable(rmt->rxChannel);
+         status=rmt_enable(rx->rxChannel);
          if(ESP_OK == status)
          {
-            activeGPOI[rmt->pin]=(LGPIO*)rmt;
+            activeGPOI[rx->pin]=(LGPIO*)rx;
             return 1;
          }
       }
