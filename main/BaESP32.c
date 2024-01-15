@@ -1792,9 +1792,25 @@ typedef struct
    struct LRmtTx* tx;
 } LRmtBase;
 
+typedef struct
+{
+   LRmtBase super;
+   rmt_receive_config_t cfg;
+   rmt_channel_handle_t rxChannel;
+   gpio_num_t pin;
+   int callbackRef;
+   rmt_symbol_word_t* symBuf;
+   size_t symSize;
+   size_t receivedSymbols;
+   BaBool overflow;
+   BaBool pendingReceive;
+} LRmtRx;
+
+
 typedef struct LRmtTx
 {
    LRmtBase super;
+   LRmtRx* rx; /* Set when linked on the same GPIO */
    rmt_channel_handle_t txChannel;
    rmt_encoder_handle_t txEncoder;
    BaBool enabled;
@@ -1806,18 +1822,7 @@ typedef struct LRmtTx
    int transQueueBufRef[1]; /* Must be last */
 } LRmtTx;
 
-
-typedef struct
-{
-   LRmtBase super;
-   rmt_channel_handle_t rxChannel;
-   gpio_num_t pin;
-   int callbackRef;
-   rmt_symbol_word_t* symBuf;
-   size_t receivedSymbols;
-   BaBool overflow;
-} LRmtRx;
-
+static void LRmtRx_onRxComplete(EventBrokerCallbackArg arg);
 
 #define LRmtTx_getUD(L) (LRmtTx*)luaL_checkudata(L,1,BARMTTX)
 #define LRmtRx_getUD(L) (LRmtRx*)luaL_checkudata(L,1,BARMTRX)
@@ -1846,7 +1851,7 @@ static lua_Integer LRmtTx_getIntAtIx(lua_State *L, int index, lua_Integer n)
    return i;
 }
 
-static int copyTuple2Symbol(lua_State *L, int index, rmt_symbol_word_t* symbol)
+static void copyTuple2Symbol(lua_State *L, int index, rmt_symbol_word_t* symbol)
 {
    index=lua_absindex(L, index);
    symbol->level0=(uint16_t)LRmtTx_getIntAtIx(L,index,1);
@@ -1854,7 +1859,6 @@ static int copyTuple2Symbol(lua_State *L, int index, rmt_symbol_word_t* symbol)
    symbol->level1=(uint16_t)LRmtTx_getIntAtIx(L,index,3);
    symbol->duration1 = (uint16_t)LRmtTx_getIntAtIx(L, index, 4);
    lua_pop(L,4);
-   return !symbol->duration0 || !symbol->duration1 ? -1 : 0;
 }
 
 
@@ -1922,10 +1926,10 @@ static int LRmtTx_transmit(lua_State* L)
          int msb = lua_toboolean(L, -1);
          lua_rawgeti(L, -2, 2);
          if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
-         if(copyTuple2Symbol(L, -1, &lowBit)) goto L_err;
+         copyTuple2Symbol(L, -1, &lowBit);
          lua_rawgeti(L, -3, 3);
          if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
-         if(copyTuple2Symbol(L, -1, &highBit)) goto L_err;
+         copyTuple2Symbol(L, -1, &highBit);
          lua_rawgeti(L, -4, 4);
          if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
          for(int byteIx=1 ; byteIx <= lua_rawlen(L,-1) ; byteIx++)
@@ -1953,7 +1957,7 @@ static int LRmtTx_transmit(lua_State* L)
       }
       else
       {
-         if(copyTuple2Symbol(L, -2, symbolPtr)) goto L_err;
+         copyTuple2Symbol(L, -2, symbolPtr);
          symbolPtr++;
       }
       lua_pop(L,2);
@@ -2031,13 +2035,17 @@ static int LRmtTx_disable(lua_State* L)
 
 static void LRmtTx_del(LRmtTx* o, lua_State* L)
 {
-   if(o && o->txChannel)
+   if(o)
    {
-      LRmtTx_disableAndReleaseBuf(o,L);
-      rmt_del_encoder(o->txEncoder);
-      rmt_del_channel(o->txChannel);
-      o->txChannel=0;
-      activeGPOI[o->pin]=0;
+      if(o->txChannel)
+      {
+         LRmtTx_disableAndReleaseBuf(o,L);
+         rmt_del_encoder(o->txEncoder);
+         rmt_del_channel(o->txChannel);
+         o->txChannel=0;
+         activeGPOI[o->pin]=0;
+      }
+      o->rx=NULL;
    }
 }
 
@@ -2090,11 +2098,32 @@ static bool IRAM_ATTR LRmtTx_interruptHandler(
    rmt_channel_handle_t tx_chan, const rmt_tx_done_event_data_t *edata, void *arg)
 {
    BaseType_t hwakeup = pdFALSE;
-   EventBrokerQueueNode n = {
-      .callback=LRmtTx_onTxComplete,
-      .arg.pin=(gpio_num_t)arg
-   };
-   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+   LRmtBase* base = (LRmtBase*)activeGPOI[(gpio_num_t)arg];
+   if(base && base->tx)
+   {
+      LRmtRx* rx = base->tx->rx;
+      if(rx && rx->pendingReceive)
+      {
+         if(ESP_OK != rmt_receive(rx->rxChannel,rx->symBuf,rx->symSize,&rx->cfg))
+         {
+            /* Should not be possible, but if it happens, signal error
+             * to RX callback as follows:
+             */
+            EventBrokerQueueNode n = {
+               .callback=LRmtRx_onRxComplete,
+               .arg.pin=(gpio_num_t)arg
+            };
+            rx->receivedSymbols=0;
+            rx->overflow = TRUE;
+            xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+         }
+      }
+      EventBrokerQueueNode n = {
+         .callback=LRmtTx_onTxComplete,
+         .arg.pin=(gpio_num_t)arg
+      };
+      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+   }
    return hwakeup == pdTRUE;
 };
 
@@ -2128,6 +2157,7 @@ static int LRmtTx_create(lua_State* L)
       return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"queue",TRUE);
    if(txCfg.gpio_num < GPIO_NUM_0 || txCfg.gpio_num >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid GPIO pin");
+   LRmtRx* rx=NULL;
    bool hasRx = LUA_TUSERDATA == lua_type(L, 2);
    LRmtTx* tx = (LRmtTx*)lNewUdata(
       L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib);
@@ -2137,7 +2167,7 @@ static int LRmtTx_create(lua_State* L)
    {
       if(hasRx)
       {
-         LRmtRx* rx = (LRmtRx*)luaL_checkudata(L,2,BARMTRX);
+         rx = (LRmtRx*)luaL_checkudata(L,2,BARMTRX);
          if((LRmtRx*)activeGPOI[txCfg.gpio_num] == rx && rx->rxChannel)
          {
             ((LRmtBase*)rx)->tx=tx;
@@ -2180,7 +2210,9 @@ static int LRmtTx_create(lua_State* L)
             if(lua_isfunction(L, -1))
                tx->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
             lua_pop(L,1);
-            if( ! hasRx )
+            if(rx)
+               tx->rx=rx;
+            else
                activeGPOI[tx->pin]=(LGPIO*)tx;
             return 1;
          }
@@ -2230,6 +2262,7 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          LRmtRx_del(L, o);
       baFree(o->symBuf);
       o->symBuf=0;
+      o->pendingReceive=o->overflow=FALSE;
    }
 }
 
@@ -2268,19 +2301,27 @@ static int LRmtRx_receive(lua_State* L)
    LRmtRx* o = LRmtRx_checkUD(L);
    if(o->symBuf)
       luaL_error(L,"Busy");
-   rmt_receive_config_t cfg = {
-      .signal_range_min_ns = (uint32_t)balua_checkIntField(L,2,"min"),
-      .signal_range_max_ns = (uint32_t)balua_checkIntField(L,2,"max"),
-   };
-   size_t symSize = (size_t)balua_getIntField(L,2,"len",512) * sizeof(rmt_symbol_word_t);
-   o->symBuf = (rmt_symbol_word_t*)baLMalloc(L, symSize);
+   memset(&o->cfg, 0 , sizeof(o->cfg));
+   o->cfg.signal_range_min_ns = (uint32_t)balua_checkIntField(L,2,"min");
+   o->cfg.signal_range_max_ns = (uint32_t)balua_checkIntField(L,2,"max");
+   o->symSize = (size_t)balua_getIntField(L,2,"len",512) * sizeof(rmt_symbol_word_t);
+   o->symBuf = (rmt_symbol_word_t*)baLMalloc(L, o->symSize);
    if(o->symBuf)
    {
-      status=rmt_receive(o->rxChannel, o->symBuf, symSize, &cfg);
-      if(ESP_OK != status)
+       /* if tx and rx linked */
+      if(((LRmtBase*)o)->tx && balua_optboolean(L, 3, TRUE))
       {
-         baFree(o->symBuf);
-         o->symBuf=0;
+         status=ESP_OK;
+         o->pendingReceive=TRUE;
+      }
+      else
+      {
+         status=rmt_receive(o->rxChannel, o->symBuf, o->symSize, &o->cfg);
+         if(ESP_OK != status)
+         {
+            baFree(o->symBuf);
+            o->symBuf=0;
+         }
       }
    }
    else

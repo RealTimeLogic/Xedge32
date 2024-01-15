@@ -102,7 +102,6 @@ esp32.rmttx(cfg)
    - ``queue`` (optional, default 4): Sets the depth of the internal transaction queue. A deeper queue allows more transactions to be prepared in the backlog.
    - ``invert`` (optional, default false): Decides whether to invert the RMT signal before sending it to the GPIO pad.
    - ``DMA`` (optional, default false): Enables the DMA backend for the channel, offloading a significant workload from the CPU.
-   - ``loopback`` (optional, default false): Enables input and output on the channel's GPIO, allowing for loopback when the same GPIO is bound to a TX and RX channel.
    - ``opendrain`` (optional, default false): Configures the GPIO pad in open-drain mode.
    - ``callback`` (optional): The function to be called when the transmission completes.
 
