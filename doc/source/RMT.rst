@@ -87,11 +87,12 @@ For example, to send data using a frequency of 100,000,000 Hz, the structure wou
 RMT TX API
 -----------
 
-esp32.rmttx(cfg)
-~~~~~~~~~~~~~~~~~
+esp32.rmttx(cfg [,rx])
+~~~~~~~~~~~~~~~~~~~~~~~
    This function initializes and returns a new RMT TX (Remote Control Module Transmission) instance for transmitting signals. It requires a configuration table, `cfg`, with various options that configure the RMT instance.
 
    :param table cfg: Configuration options for the RMT transmitter.
+   :param RMT-RX rx: An RX instance can be provided to create a bi-directional bus (e.g., 1-wire). For this to work, the GPIO pin must be the same for the RX and TX instances.
    :return: RMT TX instance. The instance is in a disabled state and must be enabled before being used.
 
    **Configuration Options (cfg)**
@@ -113,7 +114,7 @@ esp32.rmttx(cfg)
    - ``frequency`` : Sets the carrier frequency in Hertz (Hz).
    - ``polaritylow`` : Determines the carrier polarity, i.e., on which level the carrier is applied.
 
-Object Methods
+TX Object Methods
 ~~~~~~~~~~~~~~~~~
 
 The RMT TX instance provides several methods for managing the transmission channel and sending data.
@@ -128,15 +129,19 @@ The RMT TX instance provides several methods for managing the transmission chann
 
 .. method:: rmttx:transmit(cfg, symbols)
 
-   Initiates the transmission of signals defined by RMT symbols.
+   Initiates the transmission of signals defined by RMT-symbols.
 
    :param table cfg: Configuration options for the transmission process.
-   :param table symbols: An array of RMT symbols or bytes to transmit.
+   :param table symbols: An array of RMT-symbols or bytes to transmit.
 
    The `cfg` table may include the following options:
 
    - **loop** (optional, default 0): Sets the number of transmission loops. A value of -1 indicates an infinite loop, which will require `rmttx:disable()` to be called to stop the transmission.
    - **eot** (optional, default 0): Determines the output level when transmission is complete or stopped.
+
+.. method:: rmttx:close()
+
+   Closes and releases the RMT TX channel
 
    Example:
 
@@ -215,3 +220,68 @@ Key elements of the play() Function:
 - **Synchronization with Transmit Callback:** After transmitting a note, the coroutine yields (temporarily halts its execution). It resumes only when the transmit callback function is triggered, signaling the completion of the note's playback. This mechanism ensures that each note is played for its full duration before moving on to the next one.
 
 The orchestration of the `play()` function with the RMT TX API's transmit callback creates an accurate rendition of the musical Score. The coroutine yields after sending each note, allowing the hardware to complete the transmission of the RMT symbol representing the note. Once the transmission is complete and the callback function is invoked, the coroutine resumes, proceeding to the next note in the Score.
+
+
+RMT RX API
+-----------
+
+esp32.rmtrx(cfg)
+~~~~~~~~~~~~~~~~~
+
+**Function Overview:**
+``esp32.rmtrx(cfg)`` This function initializes and returns a new RMT RX instance for receiving RMT-symbols. The function requires a configuration table, cfg, with various options for configuring the RMT RX instance.
+
+**Parameters:**
+   :param table cfg: This parameter is a configuration table comprising various required and optional options.
+   :return: RMT TX instance. 
+
+**Configuration Options (cfg):**
+
+1. **gpio (required)**: 
+   - Specifies the GPIO pin number used for signal reception.
+
+2. **resolution (required)**: 
+   - Determines the resolution of the internal tick counter. The RMT signal's timing parameter is calculated based on this resolution.
+
+3. **mem (optional, default: 64)**: 
+   - Has a different meaning based on whether DMA is enabled or not. If DMA is enabled, this field controls the size of the internal DMA buffer. If DMA is not used, it controls the size of the dedicated memory block owned by the channel.
+
+4. **invert (optional, default: false)**: 
+   - When set to true, inverts the input signals prior to processing by the RMT receiver.
+
+5. **DMA (optional, default: false)**: 
+   - Activates the DMA backend for the channel, significantly reducing CPU workload.
+
+6. **callback (required)**: 
+   - Designates a function to be called upon the completion of reception.
+   - **Function Structure**: 
+   ``function callback(symbols, overflow)``
+
+      - **symbols**: A list of RMT-symbols.
+      - **overflow**: Indicates whether the receive buffer overflowed. Refer to the ``rmtrx:receive`` method for details on setting the receive buffer size.
+
+RX Object Methods
+~~~~~~~~~~~~~~~~~
+
+The RMT RX instance provides one method for activating the reception of RMT symbols.
+
+.. method:: rmtrx:receive(cfg [,defer])
+
+   The function initiates a new receive job and then returns.
+
+   - **Parameters:**
+     - **cfg (table, required)**: A configuration table that includes required and optional settings.
+     - **defer (boolean, optional)**: This parameter comes into play when an RX and TX instance are linked to the same GPIO pin number. 
+
+           - **Default (true)**: RMT-symbol reception is deferred until the TX instance has transmitted all symbols.
+           - **False**: RMT-symbol reception is activated immediately, causing transmitted symbols to be included in the received symbols.
+
+   **Configuration Options (cfg):**
+
+     - **min (required)**: Specifies the minimum valid pulse duration in nanoseconds for either high or low logic levels. Pulses shorter than this are considered glitches and ignored.
+     - **max (required)**: Determines the maximum valid pulse duration for high or low logic levels. Pulses longer than this are treated as a Stop Signal, triggering an immediate receive-complete event.
+     - **len (optional, default 512)**: Sets the length of the receive buffers in terms of RMT-symbols.
+
+.. method:: rmtrx:close()
+
+   Closes and releases the RMT RX channel
