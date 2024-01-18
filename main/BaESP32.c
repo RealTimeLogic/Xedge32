@@ -2231,6 +2231,8 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
       rmt_disable(o->rxChannel);
       rmt_del_channel(o->rxChannel);
       o->rxChannel=0;
+      if(o->symBuf)
+         baFree(o->symBuf);
       LRmtTx_del(((LRmtBase*)o)->tx, L);
    }
 }
@@ -2305,11 +2307,12 @@ static int LRmtRx_receive(lua_State* L)
    o->cfg.signal_range_min_ns = (uint32_t)balua_checkIntField(L,2,"min");
    o->cfg.signal_range_max_ns = (uint32_t)balua_checkIntField(L,2,"max");
    o->symSize = (size_t)balua_getIntField(L,2,"len",512) * sizeof(rmt_symbol_word_t);
+   BaBool defer = balua_getBoolField(L,2,"defer", FALSE);
    o->symBuf = (rmt_symbol_word_t*)baLMalloc(L, o->symSize);
    if(o->symBuf)
    {
        /* if tx and rx linked */
-      if(((LRmtBase*)o)->tx && balua_optboolean(L, 3, TRUE))
+      if(((LRmtBase*)o)->tx && defer)
       {
          status=ESP_OK;
          o->pendingReceive=TRUE;
