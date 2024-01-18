@@ -2258,11 +2258,11 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
       balua_wkPush(L, o->callbackRef);
       lua_rotate(L, -2, 1);
       lua_pushboolean(L, o->overflow);
-      if(LUA_OK != lua_pcall(L, 2, 0, msgh))
-         LRmtRx_del(L, o);
       baFree(o->symBuf);
       o->symBuf=0;
       o->pendingReceive=o->overflow=FALSE;
+      if(LUA_OK != lua_pcall(L, 2, 0, msgh))
+         LRmtRx_del(L, o);
    }
 }
 
