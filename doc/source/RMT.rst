@@ -13,7 +13,7 @@ Application Examples
 
 The RMT module is not limited to infrared signals; it has a broad range of applications, including:
 
-- **One-Wire Communication:** Often used in temperature sensors and other simple digital sensors, one-wire communication can be implemented using the RMT module, allowing for precise timing and reliable data transfer.
+- **1-Wire Communication:** Often used in temperature sensors and other simple digital sensors, 1-wire communication can be implemented using the RMT module, allowing for precise timing and reliable data transfer.
 
 - **Addressable LED Strips:** The precise timing control offered by the RMT module makes it ideal for controlling addressable LED strips, such as the popular WS2812B. Users can create complex lighting effects with accurate color representation and timing.
 
@@ -54,7 +54,7 @@ The above represents a Lua table consisting of four elements in a sequence. This
 Lua RMT Byte Encoding
 -----------------------
 
-In many one-wire protocols, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4μs) followed by a long low pulse (e.g., 0.85μs). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8μs) followed by a short low pulse (e.g., 0.45μs).
+In many 1-wire protocols, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4μs) followed by a long low pulse (e.g., 0.85μs). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8μs) followed by a short low pulse (e.g., 0.45μs).
 
 To implement this in Lua, create the following structure:
 
@@ -145,13 +145,12 @@ The RMT TX instance provides several methods for managing the transmission chann
 
    Example:
 
-Example
+TX Example
 ~~~~~~~~~~~~~~~~~
 
 The following Lua script shows how to use the RMT TX API to play a musical score, specifically Beethoven's "Ode to Joy". Each note in the score is represented by a frequency (in Hertz) and duration (in milliseconds), forming a simple melody. The score table below has been copied from the C code example `Musical Buzzer <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/rmt/musical_buzzer>`_.
 
 .. code-block:: lua
-
 
     local score = { -- Beethoven's Ode to joy
         {740, 400}, {740, 600}, {784, 400}, {880, 400},
@@ -265,23 +264,134 @@ RX Object Methods
 
 The RMT RX instance provides one method for activating the reception of RMT symbols.
 
-.. method:: rmtrx:receive(cfg [,defer])
+.. method:: rmtrx:receive(cfg)
 
    The function initiates a new receive job and then returns.
 
    - **Parameters:**
      - **cfg (table, required)**: A configuration table that includes required and optional settings.
-     - **defer (boolean, optional)**: This parameter comes into play when an RX and TX instance are linked to the same GPIO pin number. 
-
-           - **Default (true)**: RMT-symbol reception is deferred until the TX instance has transmitted all symbols.
-           - **False**: RMT-symbol reception is activated immediately, causing transmitted symbols to be included in the received symbols.
 
    **Configuration Options (cfg):**
 
      - **min (required)**: Specifies the minimum valid pulse duration in nanoseconds for either high or low logic levels. Pulses shorter than this are considered glitches and ignored.
      - **max (required)**: Determines the maximum valid pulse duration for high or low logic levels. Pulses longer than this are treated as a Stop Signal, triggering an immediate receive-complete event.
      - **len (optional, default 512)**: Sets the length of the receive buffers in terms of RMT-symbols.
+     - **defer (optional, boolean false)**: This parameter comes into play when an RX and TX instance are linked to the same GPIO pin number. 
+
+           - **false**: RMT-symbol reception is activated immediately, causing transmitted symbols to be included in the received symbols.
+           - **true**: RMT-symbol reception is deferred until the TX instance has transmitted all symbols.
 
 .. method:: rmtrx:close()
 
    Closes and releases the RMT RX channel
+
+RX Example: 1-Wire Reading Temperature
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The example below shows how to implement the 1-wire protocol for reading temperature from a DS18B20 sensor. To understand this example, you must have some understanding of the 1-Wire protocol. The 1-Wire protocol is a communication method designed for minimal wiring, typically involving just a single data wire plus ground. 
+
+Communication begins with a 'bus reset', which entails pulling the data line low for at least 480 microseconds. This signals the connected sensors to initiate communication, and in response, these sensors pull the bus low for a brief period.
+
+During data transmission, timing is critical: to send a 'bit 0', the line is held low for about 60 microseconds, while for a 'bit 1', it is held low for approximately 6 microseconds. These specific durations are crucial as they allow sensors on the bus to differentiate between the two binary states accurately, ensuring precise data communication.
+
+In the decodeBytes function, the application of this timing principle is evident. This function receives an array of RMT symbols and iterates through them, decoding each received bit. A bit is identified as binary 1 if the data line has been held low for less than 16 microseconds and as binary 0 if it is held low for longer. Each bit is then shifted into a byte using little-endian bit notation. Once a full byte is decoded, it is added to an array, which is then returned by the function.
+
+The core of the implementation resides in the readTemp function, which encompasses the inner function tempThread. This internal function executes as a Lua coroutine, a feature that simplifies coding of the event-based nature of this example by making the code sequential. In this implementation, the coroutine actively manages 1-wire data transmission and then pauses, awaiting the RX event callback to reactivate it.
+
+The coroutine enters a waiting state using coroutine.yield(). It remains in this state until the RX event callback invokes coroutine.resume(). Notice how the RMT-symbol argument from the RX event callback is passed directly to coroutine.resume(). This argument is then conveniently received by the coroutine when coroutine.yield() returns. This mechanism ensures a straightforward handover of event data to the sequential code.
+
+
+.. code-block:: lua
+  :linenos:
+
+    local tInsert=table.insert
+    local cResume,cYield=coroutine.resume,coroutine.yield
+    
+    local function decodeBytes(symbols)
+       local mask,byte,t=1,0,{}
+       for i,sym in ipairs(symbols) do
+          -- sym[2] is the duration low level
+          if sym[2] <= 15 then byte = byte | mask end
+          mask = mask << 1
+          if 256 == mask then
+             tInsert(t,byte)
+             mask,byte = 1,0
+          end
+       end
+       return t
+    end
+    
+    local function readTemp(gpio,callback)
+       local coro
+       local function tempThread()
+          local txCfg={eot=1}
+          local rx <close> = esp32.rmtrx{
+             gpio=gpio,
+             resolution=1000000,
+             callback=function(symbols) cResume(coro,symbols) end
+          }
+          local tx <close> = esp32.rmttx({
+             gpio=gpio,
+             opendrain=true,
+             resolution=1000000,
+          },rx) -- Second arg. Link RX and TX
+    
+          local function busReset()
+             rx:receive{min=2000,max=480*2*1000}
+             tx:transmit(txCfg, { {0,480,1,70} })
+             local symbols=cYield()
+             if #symbols < 2 then
+                callback(nil,"No sensors connected")
+             end
+             return #symbols < 2 -- true means failed
+          end
+    
+          local function sendCommand(cmd)
+             rx:receive{min=900,max=70*1000}
+             tx:transmit(txCfg, {
+                            {
+                               false,
+                               {0,60,1,2}, -- binary 0
+                               {0,6,1,56}, -- binary 1
+                               cmd
+                            }
+                         })
+             return cYield()
+          end
+    
+          local function readBytes(len)
+             local t={}
+             for i=1,len do tInsert(t,0xFF) end
+             return sendCommand(t)
+          end
+    
+          tx:enable()
+          -- release the HW by sending a special RMT symbol
+          tx:transmit(txCfg, { {1,1,1,0} })
+          if busReset() then return end -- failed
+          -- Skip rom, Start temp measurement
+          sendCommand{0xCC,0x44}
+          ba.timer(function() cResume(coro) end):set(1000,true)
+          cYield() -- wait for timer (temperature conversion to finish)
+          if busReset() then return end -- failed
+          -- Skip rom, read scratchpad
+          sendCommand{0xCC,0xBE}
+          local data=decodeBytes(readBytes(2))
+          local raw = (data[2] << 8) + data[1]
+          callback(raw * 0.0625)
+       end
+       coro = coroutine.create(tempThread)
+       cResume(coro) -- Start
+    end
+    
+    readTemp(1, function(temp,err) trace(temp,err) end)
+
+The tempThread function initiates its process by creating RX and TX instances on the same GPIO port, which is required for 1-wire communication. When using 1-wire, a special HW reset is necessary to make the Esp32's RMT HW counters work correctly. This command is sent on line 64.
+
+Within the tempThread coroutine, two 1-wire commands are transmitted: 0x44 to start the temperature reading and 0xBE to read the scratchpad - a register where the temperature sensor stores its measurements. Notice the one-second delay, managed by the timer, between these two commands, a required pause allowing the sensor to complete the temperature measurement. A long duration is required when powering the sensor using parasitic power mode.
+
+Both commands commence with 0xCC, informing the sensor to bypass sensor addressing. This approach implies that only one 1-wire sensor can be connected to the bus.
+
+When the code initiates TX, the RX callback is activated when the data has been transmitted. See method rmtrx:receive() and the "defer "option for details. The coroutine uses this event to resume from coroutine.yield(). However, the received data is generally not used, with the exception of the code on line 73. 
+
+After issuing the 0x44 command to read the temperature, the sensor responds by sending data over the bus. However, each bit transfer must be initiated by the master, in this case, the ESP32. If you look at the readBytes function at line 56, you'll notice that it takes the number of bytes to receive, creates an array of 0xFF with this length, and calls sendCommand. Remember, sending a one bit involves pulling the bus low for a brief period, which in turn prompts the sensor to transmit each bit. If the sensor intends to send a zero bit, it maintains the bus in a low state for an extended duration. Consequently, the RX callback receives the symbols transmitted by the ESP32, but these are formatted by the sensor, resulting in the accurate reception of the temperature as a 16-bit value.
