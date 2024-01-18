@@ -19,7 +19,7 @@ The RMT module is not limited to infrared signals; it has a broad range of appli
 
 .. _rmt-symbol-layout:
 
-RMT Symbol Layout
+RMT-Symbol Layout
 ------------------
 
 The RMT hardware defines data according to its unique RMT-symbol pattern. An RMT-symbol encodes the duration and level of a digital signal pulse, which are critical for accurate signal generation and reception.
@@ -54,7 +54,7 @@ The above represents a Lua table consisting of four elements in a sequence. This
 Lua RMT Byte Encoding
 -----------------------
 
-In many 1-wire protocols, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4μs) followed by a long low pulse (e.g., 0.85μs). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8μs) followed by a short low pulse (e.g., 0.45μs).
+In many protocols, including 1-wire, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4μs) followed by a long low pulse (e.g., 0.85μs). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8μs) followed by a short low pulse (e.g., 0.45μs).
 
 To implement this in Lua, create the following structure:
 
@@ -76,7 +76,7 @@ For example, to send data using a frequency of 100,000,000 Hz, the structure wou
      -- Send the most significant bit first.
      true,
      -- RMT-symbol for bit 0: high for 0.4μs, low for 0.85μs.
-     {0, 400, 1, 850},
+     {1, 400, 0, 850},
      -- RMT-symbol for bit 1: high for 0.8μs, low for 0.45μs.
      {1, 800, 0, 450},
      -- Data to send: three bytes (0x00, 0x55, 0xFF).
@@ -218,7 +218,7 @@ Key elements of the play() Function:
 
 - **Synchronization with Transmit Callback:** After transmitting a note, the coroutine yields (temporarily halts its execution). It resumes only when the transmit callback function is triggered, signaling the completion of the note's playback. This mechanism ensures that each note is played for its full duration before moving on to the next one.
 
-The orchestration of the `play()` function with the RMT TX API's transmit callback creates an accurate rendition of the musical Score. The coroutine yields after sending each note, allowing the hardware to complete the transmission of the RMT symbol representing the note. Once the transmission is complete and the callback function is invoked, the coroutine resumes, proceeding to the next note in the Score.
+The orchestration of the `play()` function with the RMT TX API's transmit callback creates an accurate rendition of the musical Score. The coroutine yields after sending each note, allowing the hardware to complete the transmission of the RMT-symbol representing the note. Once the transmission is complete and the callback function is invoked, the coroutine resumes, proceeding to the next note in the Score.
 
 
 RMT RX API
@@ -227,8 +227,7 @@ RMT RX API
 esp32.rmtrx(cfg)
 ~~~~~~~~~~~~~~~~~
 
-**Function Overview:**
-``esp32.rmtrx(cfg)`` This function initializes and returns a new RMT RX instance for receiving RMT-symbols. The function requires a configuration table, cfg, with various options for configuring the RMT RX instance.
+This function initializes and returns a new RMT RX instance for receiving RMT-symbols. The function requires a configuration table, cfg, with various options for configuring the RMT RX instance.
 
 **Parameters:**
    :param table cfg: This parameter is a configuration table comprising various required and optional options.
@@ -262,7 +261,7 @@ esp32.rmtrx(cfg)
 RX Object Methods
 ~~~~~~~~~~~~~~~~~
 
-The RMT RX instance provides one method for activating the reception of RMT symbols.
+The RMT RX instance provides one method for activating the reception of RMT-symbols.
 
 .. method:: rmtrx:receive(cfg)
 
@@ -275,7 +274,7 @@ The RMT RX instance provides one method for activating the reception of RMT symb
 
      - **min (required)**: Specifies the minimum valid pulse duration in nanoseconds for either high or low logic levels. Pulses shorter than this are considered glitches and ignored.
      - **max (required)**: Determines the maximum valid pulse duration for high or low logic levels. Pulses longer than this are treated as a Stop Signal, triggering an immediate receive-complete event.
-     - **len (optional, default 512)**: Sets the length of the receive buffers in terms of RMT-symbols.
+     - **len (optional, default 512)**: Sets the length of the receive buffer in terms of RMT-symbols.
      - **defer (optional, boolean false)**: This parameter comes into play when an RX and TX instance are linked to the same GPIO pin number. 
 
            - **false**: RMT-symbol reception is activated immediately, causing transmitted symbols to be included in the received symbols.
@@ -294,7 +293,7 @@ Communication begins with a 'bus reset', which entails pulling the data line low
 
 During data transmission, timing is critical: to send a 'bit 0', the line is held low for about 60 microseconds, while for a 'bit 1', it is held low for approximately 6 microseconds. These specific durations are crucial as they allow sensors on the bus to differentiate between the two binary states accurately, ensuring precise data communication.
 
-In the decodeBytes function, the application of this timing principle is evident. This function receives an array of RMT symbols and iterates through them, decoding each received bit. A bit is identified as binary 1 if the data line has been held low for less than 16 microseconds and as binary 0 if it is held low for longer. Each bit is then shifted into a byte using little-endian bit notation. Once a full byte is decoded, it is added to an array, which is then returned by the function.
+In the decodeBytes function, the application of this timing principle is evident. This function receives an array of RMT-symbols and iterates through them, decoding each received bit. A bit is identified as binary 1 if the data line has been held low for less than 16 microseconds and as binary 0 if it is held low for longer. Each bit is then shifted into a byte using little-endian bit notation. Once a full byte is decoded, it is added to an array, which is then returned by the function.
 
 The core of the implementation resides in the readTemp function, which encompasses the inner function tempThread. This internal function executes as a Lua coroutine, a feature that simplifies coding of the event-based nature of this example by making the code sequential. In this implementation, the coroutine actively manages 1-wire data transmission and then pauses, awaiting the RX event callback to reactivate it.
 
@@ -350,7 +349,7 @@ The coroutine enters a waiting state using coroutine.yield(). It remains in this
              rx:receive{min=900,max=70*1000}
              tx:transmit(txCfg, {
                             {
-                               false,
+                               false, -- least significant first
                                {0,60,1,2}, -- binary 0
                                {0,6,1,56}, -- binary 1
                                cmd
@@ -366,7 +365,7 @@ The coroutine enters a waiting state using coroutine.yield(). It remains in this
           end
     
           tx:enable()
-          -- release the HW by sending a special RMT symbol
+          -- release the HW by sending a special RMT-symbol
           tx:transmit(txCfg, { {1,1,1,0} })
           if busReset() then return end -- failed
           -- Skip rom, Start temp measurement
