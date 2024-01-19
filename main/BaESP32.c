@@ -2247,6 +2247,8 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    {
       lua_State* L = jb->Lt;
       rmt_symbol_word_t* symPtr=o->symBuf;
+      // Prevent GC from calling LRmtRx_close, thus terminating this object.
+      lua_gc(L,LUA_GCSTOP);
       lua_createtable(L,0,o->receivedSymbols);
       for(size_t ix=1 ; ix <= o->receivedSymbols; ix++,symPtr++)
       {
@@ -2263,6 +2265,7 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
       baFree(o->symBuf);
       o->symBuf=0;
       o->pendingReceive=o->overflow=FALSE;
+      lua_gc(L,LUA_GCRESTART);
       if(LUA_OK != lua_pcall(L, 2, 0, msgh))
          LRmtRx_del(L, o);
    }
