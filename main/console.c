@@ -9,10 +9,12 @@
 #include <string.h>
 #include "esp_system.h"
 #include "esp_vfs_dev.h"
-#include "driver/uart.h"
 #include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
+#include "driver/uart.h"
+#include "driver/uart_vfs.h"
 #include "linenoise/linenoise.h"
-#include "esp_vfs_usb_serial_jtag.h"
+#include "esp_console.h"
 
 void manageConsole(bool start)
 {
@@ -28,15 +30,16 @@ void manageConsole(bool start)
    mainTaskHandle = xTaskGetCurrentTaskHandle();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
+   esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-   esp_vfs_dev_uart_port_set_rx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CR);
+   uart_vfs_dev_port_set_rx_line_endings(hw_config.channel, ESP_LINE_ENDINGS_CR);
    /* Move the caret to the beginning of the next line on '\n' */
-   esp_vfs_dev_uart_port_set_tx_line_endings(CONFIG_ESP_CONSOLE_UART_NUM, ESP_LINE_ENDINGS_CRLF);
+   uart_vfs_dev_port_set_tx_line_endings(hw_config.channel, ESP_LINE_ENDINGS_CRLF);
    /* Configure UART. Note that REF_TICK is used so that the baud rate remains
     * correct while APB frequency is changing in light sleep mode.
     */
    const uart_config_t uart_config = {
-      .baud_rate = CONFIG_ESP_CONSOLE_UART_BAUDRATE,
+      .baud_rate = hw_config.baud_rate,
       .data_bits = UART_DATA_8_BITS,
       .parity = UART_PARITY_DISABLE,
       .stop_bits = UART_STOP_BITS_1,
@@ -49,18 +52,21 @@ void manageConsole(bool start)
    /* Drain stdout before reconfiguring it */
    fflush(stdout);
    fsync(fileno(stdout));
-   
-   /* Install UART driver for interrupt-driven reads and writes */
-   ESP_ERROR_CHECK( uart_driver_install(CONFIG_ESP_CONSOLE_UART_NUM, 256, 0, 0, NULL, 0) );
-   ESP_ERROR_CHECK( uart_param_config(CONFIG_ESP_CONSOLE_UART_NUM, &uart_config) );
-   /* Tell VFS to use UART driver */
-   esp_vfs_dev_uart_use_driver(CONFIG_ESP_CONSOLE_UART_NUM);
 
+   /* Install UART driver for interrupt-driven reads and writes */
+   ESP_ERROR_CHECK( uart_driver_install(hw_config.channel, 256, 0, 0, NULL, 0) );
+   ESP_ERROR_CHECK(uart_param_config(hw_config.channel, &uart_config));
+   ESP_ERROR_CHECK(uart_set_pin(hw_config.channel, hw_config.tx_gpio_num, hw_config.rx_gpio_num, -1, -1));
+   
+   /* Tell VFS to use UART driver */
+   uart_vfs_dev_use_driver(hw_config.channel);
+   
 #elif defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
    /* Minicom, screen, idf_monitor send CR when ENTER key is pressed */
-   esp_vfs_dev_usb_serial_jtag_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+   usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+   
    /* Move the caret to the beginning of the next line on '\n' */
-   esp_vfs_dev_usb_serial_jtag_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+   usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
 
    /* Enable blocking mode on stdin and stdout */
    fcntl(fileno(stdout), F_SETFL, 0);
@@ -72,7 +78,7 @@ void manageConsole(bool start)
    ESP_ERROR_CHECK( usb_serial_jtag_driver_install(&usb_serial_jtag_config) );
    
    /* Tell vfs to use usb-serial-jtag driver */
-   esp_vfs_usb_serial_jtag_use_driver();
+   usb_serial_jtag_vfs_use_driver();
 #else
    #error Unsupported console type
 #endif
