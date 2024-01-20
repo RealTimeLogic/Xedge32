@@ -4,7 +4,7 @@
 Xedge32 Introduction
 =======================
 
-:ref:`Xedge32` is `Xedge <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_ with a peripheral Lua API designed for the ESP32. Xedge is a Lua REPL designed for edge devices and powered by the `Barracuda App Server library <https://github.com/RealTimeLogic/BAS>`_.
+:ref:`Xedge32` is `Xedge <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_ with a peripheral Lua API designed for the ESP32. Xedge is a Lua REPL designed for edge devices and powered by an `advanced IoT toolkit <https://realtimelogic.com/products/barracuda-application-server/>`_.
 
 
 .. image:: https://realtimelogic.com/GZ/images/BAS-ESP32.svg
@@ -20,11 +20,20 @@ Xedge32 leverages the high-level Lua language. Lua's learning curve is considera
 
 **Xedge vs. Xedge32**
 
-This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the `Barracuda App Server API <https://realtimelogic.com/ba/doc/>`_ and the generic `Xedge documentation <../doc/?url=Xedge.html>`_.
+This documentation exclusively covers Xedge32 specific features, the ESP32 peripheral Lua API, and how to use Xedge on the ESP32. If you are looking for documentation on network-related and other APIs provided by the Barracuda App Server development foundation, please refer to the Barracuda App Server API and the generic Xedge documentation.
 
-Note that the ESP32 LUA API, provided by Xedge32, currently exports a subset of the ESP-IDF C peripheral API to Lua.
+Xedge32 APIs
+--------------
 
+#. The ESP32 peripheral APIs found here (Xedge32 specific API)
+#. `Xedge documentation <../doc/?url=Xedge.html>`_ (generic API)
+#. `Barracuda App Server's Lua API </ba/doc/?url=lua.html>`_
+#. `IoT Protocols </ba/doc/?url=IoT.html>`_
 
+**API Key Points:**
+
+#. Xedge32's ESP32 LUA API offers a selected range of the `ESP-IDF C peripheral APIs <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/>`_ adapted for Lua.
+#. Out of the box, Xedge32 grants access only to the Lua APIs from the Barracuda App Server. For full access to the C APIs, developers need to `compile and extend Xedge32 <https://github.com/RealTimeLogic/Xedge32>`_, an option for those with C experience.
 
 
 Interrupts
