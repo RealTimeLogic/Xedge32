@@ -1,4 +1,4 @@
-CONFIG_APP_PROJECT_VER="1.7"
+CONFIG_APP_PROJECT_VER="1.8"
 CONFIG_APP_PROJECT_VER_FROM_CONFIG=y
 
 # Watchdog does not work when server is idle.

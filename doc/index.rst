@@ -26,9 +26,9 @@ Xedge32 APIs
 --------------
 
 #. The ESP32 peripheral APIs found here (Xedge32 specific API)
-#. `Xedge documentation <../doc/?url=Xedge.html>`_ (generic API)
-#. `Barracuda App Server's Lua API </ba/doc/?url=lua.html>`_
-#. `IoT Protocols </ba/doc/?url=IoT.html>`_
+#. `Xedge documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_ (generic API)
+#. `Barracuda App Server's Lua API <https://realtimelogic.com/ba/doc/?url=lua.html>`_
+#. `IoT Protocols <https://realtimelogic.com/ba/doc/?url=IoT.html>`_
 
 **API Key Points:**
 
@@ -62,15 +62,16 @@ Xedge ESP32
    source/LuaShell32
    source/xedge
    source/ADC
+   source/cam
    source/GPIO
    source/I2C
    source/PCNT
    source/PWM
    source/RMT
    source/UART
-   source/BME280
-   source/cam
    source/misc
+   source/BME280
+   source/tutorials
    source/license
 
 

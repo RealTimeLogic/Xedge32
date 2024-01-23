@@ -3,6 +3,9 @@ BME280 Module
 
 This module provides an easy-to-use interface for communicating with the BME280 chip, a popular environmental sensor that measures temperature, humidity, and pressure.
 
+.. note:: The Lua module is included in the Xedge32 firmware but may be removed in later versions and provided as a separate module.
+
+
 The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor communicates with the ESP32 using the :ref:`I2C interface <I2C API>`. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/Xedge-ESP32/blob/master/Lua-Examples/.lua/bme280.lua>`_ for details.
 
 Usage
@@ -68,15 +71,9 @@ Here's an example of how to use the ``bme280`` module:
 
 This example creates a new BME280 object, reads the temperature, humidity, and pressure from the sensor, and stores the values in the ``temp``, ``hum``, and ``pres`` variables. Note that we've assumed that the I2C port, address, SDA, and SCL pins are specified as local variables. You may need to adjust these variables to fit your specific use case.
 
-MQTT Sparkplug Enabled Weather Station
+Online Examples
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-The MQTT Sparkplug Enabled Weather Station example available on `GitHub <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug>`_ is a ready-to-run example that demonstrates the power and capabilities of MQTT Sparkplug. One of the key components used in this example is the BME280 Lua module.
-
-The example code demonstrates how to use the BME280 Lua module to read environmental data from the BME280 chip and publish it to an MQTT broker using the Sparkplug protocol. This data can then be consumed by other Sparkplug-enabled devices or applications.
-
-.. image:: https://realtimelogic.com/images/ESP32WeatherStationEoN.jpg
-   :alt: MQTT Sparkplug Enabled Weather Station
-
+- `bme280.xlua <https://github.com/RealTimeLogic/LSP-Examples/blob/master/ESP32/bme280.xlua>`_
+- `Weather Station <https://github.com/surfskidude/weather-station>`_
 

@@ -1,7 +1,7 @@
 License
 ========
 
-Xedge32 is constructed utilizing components from the Barracuda App Server's amalgamated C Code Library. This library is available under two types of licenses:
+Xedge32 is constructed utilizing components from the `Barracuda App Server's amalgamated C Code Library <https://github.com/RealTimeLogic/BAS>`_. This library is available under two types of licenses:
 
    1. The open-source General Public License (GPL)
    2. A commercial license
