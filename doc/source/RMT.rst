@@ -41,12 +41,12 @@ Each RMT-symbol is divided into two pairs of these values, allowing a single RMT
 Lua RMT-Symbol
 ----------------
 
-An *RMT-symbol* encapsulates the timing information for a digital signal. It is a composite of four values: two for the signal's logic level and two for the duration of these levels. The frequency at which the RMT module is configured determines a tick's duration. For a frequency of 1MHz, each tick translates to one microsecond because there are 1 million microseconds (μs) in a second. As an example, a waveform that remains high for 350μs followed by a low period of 800μs can be represented by the following RMT-symbol:
+An *RMT-symbol* encapsulates the timing information for a digital signal. It is a composite of four values: two for the signal's logic level and two for the duration of these levels. The frequency at which the RMT module is configured determines a tick's duration. For a frequency of 1MHz, each tick translates to one microsecond because there are 1 million microseconds (us) in a second. As an example, a waveform that remains high for 350us followed by a low period of 800us can be represented by the following RMT-symbol:
 
 .. code-block:: lua
 
     {
-      1, 350, 0, 800  -- High for 350μs, then Low for 800μs
+      1, 350, 0, 800  -- High for 350us, then Low for 800us
     }
 
 The above represents a Lua table consisting of four elements in a sequence. This table is a simple array where each element is indexed numerically, starting with 1.
@@ -54,7 +54,7 @@ The above represents a Lua table consisting of four elements in a sequence. This
 Lua RMT Byte Encoding
 -----------------------
 
-In many protocols, including 1-wire, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4μs) followed by a long low pulse (e.g., 0.85μs). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8μs) followed by a short low pulse (e.g., 0.45μs).
+In many protocols, including 1-wire, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4us) followed by a long low pulse (e.g., 0.85us). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8us) followed by a short low pulse (e.g., 0.45us).
 
 To implement this in Lua, create the following structure:
 
@@ -68,18 +68,17 @@ To implement this in Lua, create the following structure:
      { array of byte values } -- Array of data to be transmitted.
    }
 
-For example, to send data using a frequency of 100,000,000 Hz, the structure would look like this:
+For example, to send data using a frequency of 10,000,000 Hz, the structure would look like this:
 
 .. code-block:: lua
 
    {
      -- Send the most significant bit first.
      true,
-     -- RMT-symbol for bit 0: high for 0.4μs, low for 0.85μs.
-     {1, 400, 0, 850},
-     -- RMT-symbol for bit 1: high for 0.8μs, low for 0.45μs.
-     {1, 800, 0, 450},
-     -- Data to send: three bytes (0x00, 0x55, 0xFF).
+     -- RMT-symbol for bit 0: high for 0.4us, low for 0.8us.
+     {1, 4, 0, 8},
+     -- RMT-symbol for bit 1: high for 0.8us, low for 0.4us.
+     {1, 8, 0, 4},
      { 0x00, 0x55, 0xFF }
    }
 
@@ -111,7 +110,7 @@ esp32.rmttx(cfg [,rx])
    For applications requiring carrier modulation, the following additional parameters can be set:
 
    - ``dutycycle`` : Sets the carrier duty cycle.
-   - ``frequency`` : Sets the carrier frequency in Hertz (Hz).
+   - ``frequency`` : Sets the carrier frequency in Hertz (Hz). Max frequency is 80000000.
    - ``polaritylow`` : Determines the carrier polarity, i.e., on which level the carrier is applied.
 
 TX Object Methods
@@ -145,8 +144,11 @@ The RMT TX instance provides several methods for managing the transmission chann
 
    Example:
 
-TX Example
+TX Examples
 ~~~~~~~~~~~~~~~~~
+
+Musical Score Example:
+************************
 
 The following Lua script shows how to use the RMT TX API to play a musical score, specifically Beethoven's "Ode to Joy". Each note in the score is represented by a frequency (in Hertz) and duration (in milliseconds), forming a simple melody. The score table below has been copied from the C code example `Musical Buzzer <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/rmt/musical_buzzer>`_.
 
@@ -219,6 +221,90 @@ Key elements of the play() Function:
 - **Synchronization with Transmit Callback:** After transmitting a note, the coroutine yields (temporarily halts its execution). It resumes only when the transmit callback function is triggered, signaling the completion of the note's playback. This mechanism ensures that each note is played for its full duration before moving on to the next one.
 
 The orchestration of the `play()` function with the RMT TX API's transmit callback creates an accurate rendition of the musical Score. The coroutine yields after sending each note, allowing the hardware to complete the transmission of the RMT-symbol representing the note. Once the transmission is complete and the callback function is invoked, the coroutine resumes, proceeding to the next note in the Score.
+
+WS2812B LED strip Example:
+***************************
+
+The following fully functional example can be run as an xlua file. The example sets a random color combination for a WS2812B LED Strip. 
+
+- ``local leds = 10``: Sets the number of LEDs on the strip to 10. Change this value to reflect the number of LEDs on your specific LED strip.
+- ``local gpioPin = 1``: Defines the GPIO pin on the ESP32 to which the LED strip's data line is connected.
+
+.. code-block:: lua
+
+    local leds=10
+    local gpioPin=1
+    local rmt,err
+    
+    local data={}
+    for i=1,leds*3 do
+       table.insert(data,ba.rnd(0,0xFF))
+    end
+    
+    local function transmit()
+       rmt:transmit({},{
+          {
+             true, -- Send the most significant bit first.
+             -- RMT-symbol for bit 0: high for 0.4us, low for 0.8us.
+             {1, 4, 0, 8},
+             -- RMT-symbol for bit 1: high for 0.8us, low for 0.4us.
+             {1, 8, 0, 4},
+             data -- Data to send; data length is 3 x LEDs, each LED uses 24 bits.
+          },
+          {0,150,0,150} -- Reset: low for 30 us
+       })
+    end
+    
+    rmt,err=esp32.rmttx{
+       gpio=gpioPin,
+       resolution=10000000, -- 10Mhz, each tick is 0.1us
+       callback=function() -- On TX done callback
+          -- Change color values
+          for i=1,#data do
+             local c = data[i]
+             c=c+1
+             if c > 0xFF then c=0 end
+             data[i]=c
+          end
+          transmit()
+       end
+    }
+    if rmt then
+       rmt:enable()
+       transmit()
+    end
+    
+    function onunload()
+       trace"Stopping wled"
+       if rmt then rmt:close() end
+    end
+
+Preparing Color Data
+#####################
+
+- A table ``data = {}`` is created to hold the color data for each LED.
+- A loop iterates through each LED's color component (Red, Green, Blue): ``for i = 1, leds * 3 do``.
+- Random color values are generated and inserted into the ``data`` table: ``table.insert(data, ba.rnd(0, 0xFF))``.
+
+Transmit Function
+##################
+
+- The ``transmit`` function sends data to the LEDs using the RMT module.
+- The RMT module's ``transmit`` function includes a configuration for the timing of bits 0 and 1. See a WS2812B datasheet for more information on the values.
+- A reset sequence ``{0, 150, 0, 150}`` is included, ensuring the LED strip is reset for 30us and ready to receive new data.
+
+Initializing the RMT Module
+############################
+
+- The RMT module is initialized with the specified GPIO pin and timing resolution: ``esp32.rmttx{...}``.
+- The callback function updates the color data and calls the transmit function, causing a continuous cyclical dynamic lighting effect.
+- The script checks if the RMT module is successfully initialized and initiates the cyclical sequence by calling the ``transmit`` function. Each time a transmission completes, the ``TX callback`` function initiates a new transmission with new color values.
+
+Clean-Up Function
+##################
+When the xlua file is stopped or re-started, the previous version will not automatically stop unless we call the rmt:close() method. Function ``onunload`` handles this condition.
+
+
 
 
 RMT RX API

@@ -2066,20 +2066,22 @@ static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    {
       LRmtTx* o = base->tx;
       //printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
-      baAssert(o->transQueueBufTail != o->transQueueBufHead);
-      lua_State* L = jb->Lt;
-      /* Release rmt_symbol_word_t array memory lock */
-      luaL_unref(L, LUA_REGISTRYINDEX, o->transQueueBufRef[o->transQueueBufTail]);
-      int next = o->transQueueBufTail+1;
-      if(next >= o->transQueueBufLen)
-         next=0;
-      o->transQueueBufTail = next;
-      if(o->callbackRef)
+      if(o->transQueueBufTail != o->transQueueBufHead) /* not empty */
       {
-         /* Push user's callback on the stack */
-         balua_wkPush(L, o->callbackRef);
-         if(LUA_OK != lua_pcall(L, 0, 0, msgh))
-            LRmtTx_del(o, L);
+         lua_State* L = jb->Lt;
+         /* Release rmt_symbol_word_t array memory lock */
+         luaL_unref(L, LUA_REGISTRYINDEX, o->transQueueBufRef[o->transQueueBufTail]);
+         int next = o->transQueueBufTail+1;
+         if(next >= o->transQueueBufLen)
+            next=0;
+         o->transQueueBufTail = next;
+         if(o->callbackRef)
+         {
+            /* Push user's callback on the stack */
+            balua_wkPush(L, o->callbackRef);
+            if(LUA_OK != lua_pcall(L, 0, 0, msgh))
+               LRmtTx_del(o, L);
+         }
       }
    }
 }
@@ -2153,6 +2155,9 @@ static int LRmtTx_create(lua_State* L)
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
       .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
    };
+   /* fixme: analyze this; ESP-IDF assert rmt_ll_tx_set_channel_clock_div if larger */
+   if(txCfg.resolution_hz > 80000000)
+      return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"resolution",TRUE);
    if(txCfg.trans_queue_depth < 1)
       return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"queue",TRUE);
    if(txCfg.gpio_num < GPIO_NUM_0 || txCfg.gpio_num >= GPIO_NUM_MAX)
