@@ -71,6 +71,7 @@ Xedge ESP32
    source/UART
    source/misc
    source/BME280
+   source/RTU
    source/tutorials
    source/license
 

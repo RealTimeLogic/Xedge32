@@ -49,12 +49,13 @@ The selected task calls executeLuaLedEventCB, which in turn calls the
 Lua callback function. This Lua function runs in the context of the
 LThreadMgr task.
 
-LThreadMgr concept:
-https://realtimelogic.com/ba/doc/en/C/reference/html/md_en_C_md_LuaBindings.html#fullsolution
-LThreadMgr API:
-https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadJob.html
-Introductory example:
-https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
+LThreadMgr Documentation:
+  LThreadMgr concept:
+    https://realtimelogic.com/ba/doc/en/C/reference/html/md_en_C_md_LuaBindings.html#fullsolution
+  LThreadMgr API:
+    https://realtimelogic.com/ba/doc/en/C/reference/html/structThreadJob.html
+  Introductory example:
+    https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 */ 
 
 #include <esp_adc/adc_oneshot.h>
@@ -2421,7 +2422,6 @@ typedef struct {
    uart_port_t port;
    int patternLen;
    int callbackRef;
-   int jobInQueue;
    TaskHandle_t uartTaskHandle;
 } LUart;
 
@@ -2432,8 +2432,7 @@ typedef struct {
    uart_event_type_t etype;
 } LUartJob;
 
-
-static int Uart_lclose(lua_State* L);
+static int Uart_close(LUart* o);
 
 
 /* This function runs in the context of a thread in the LThreadMgr.
@@ -2443,8 +2442,6 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    luaL_Buffer lb;
    char* buf;
    int len=0;
-   int lArgs=0;
-
    LUartJob* ujob=(LUartJob*)jb;
    LUart* lu = ujob->lu;
    lua_State* L = jb->Lt;
@@ -2469,10 +2466,19 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          lua_pushnil(L);
          lua_pushstring(L, emsg);
          luaStatus=lua_pcall(L, 2, 0, msgh);
+         switch(ujob->etype)
+         {
+            case UART_BUFFER_FULL:
+            case UART_FIFO_OVF:
+            case UART_FRAME_ERR:
+            case UART_PARITY_ERR:
+               uart_flush_input(lu->port);
+            default:
+         }
          break; /* End fall through */
 
       case UART_PATTERN_DET:
-         if(lu->patternLen)
+         if(lu->patternLen && lu->port < UART_NUM_MAX)
          {
             len = uart_pattern_pop_pos(lu->port);
             if(len > 0)
@@ -2481,36 +2487,55 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
                buf = luaL_prepbuffsize(&lb, len);
                uart_read_bytes(lu->port, buf, len, 0);
                luaL_pushresultsize(&lb, len);
-               lArgs=1;
-               len=lu->patternLen;
+               /* Discard pattern */
+               luaL_buffinit(L, &lb);
+               buf = luaL_prepbuffsize(&lb, lu->patternLen);
+               uart_read_bytes(lu->port, buf, lu->patternLen, 0);
+               luaL_pushresultsize(&lb, 0);
+               lua_pop(L,1);
+               goto L_execLua;
             }
-            else
-               len=0;
+            if(len < 0)
+            {
+               uart_flush_input(lu->port);
+               lua_pushnil(L);
+               lua_pushliteral(L, "overflow");
+               luaStatus=lua_pcall(L, 2, 0, msgh);
+               break;
+            }
+            break;
          }
          /* Fall through */
       case UART_DATA:
-         if(0 == len)
+         size_t size;
+         if(lu->port < UART_NUM_MAX)
          {
-            size_t size;
-            ECHK(uart_get_buffered_data_len(lu->port, &size));
+            uart_get_buffered_data_len(lu->port, &size);
             len=(int)size;
-         }
-         if(len > 0)
-         {
-            luaL_buffinit(L, &lb);
-            buf = luaL_prepbuffsize(&lb, len);
-            uart_read_bytes(lu->port, buf, len, 0);
-            luaL_pushresultsize(&lb, len);
-            luaStatus=lua_pcall(L, lArgs+1, 0, msgh);
+            if(len > 0)
+            {
+               luaL_buffinit(L, &lb);
+               buf = luaL_prepbuffsize(&lb, len);
+               uart_read_bytes(lu->port, buf, len, 0);
+               luaL_pushresultsize(&lb, len);
+              L_execLua:
+               lua_pushboolean(L,UART_PATTERN_DET == ujob->etype);
+               luaStatus=lua_pcall(L, 2, 0, msgh);
+            }
+            else
+            {
+               lua_pushnil(L);
+               lua_pushliteral(L, "IO err");
+               luaStatus=lua_pcall(L, 2, 0, msgh);
+            }
          }
          break;
 
       default:
    }
-   lu->jobInQueue=FALSE;
    if(LUA_OK != luaStatus)
    {
-      Uart_lclose(L);
+      Uart_close(lu);
    }
 }
 
@@ -2526,32 +2551,19 @@ static void uartTask(void *param)
       uart_event_t event;
       if(xQueueReceive(lu->uartQueue, &event, portMAX_DELAY))
       {
-         switch(event.type)
+         LUartJob* ujob=(LUartJob*)ThreadJob_lcreate(
+            sizeof(LUartJob),executeLuaUartCB);
+         if( ! ujob )
+            baFatalE(FE_MALLOC,0);
+         ujob->lu=lu;
+         ujob->etype = event.type;
+         ThreadMutex_set(soDispMutex);
+         LThreadMgr_run(&ltMgr, (ThreadJob*)ujob);
+         ThreadMutex_release(soDispMutex);
+         if(UART_BUFFER_FULL == event.type || UART_FIFO_OVF == event.type)
          {
-            case UART_DATA: if(lu->jobInQueue) break;
-            case UART_BREAK:
-            case UART_DATA_BREAK:
-            case UART_BUFFER_FULL:
-            case UART_FIFO_OVF:
-            case UART_FRAME_ERR:
-            case UART_PARITY_ERR:
-            case UART_PATTERN_DET:
-               LUartJob* ujob=(LUartJob*)ThreadJob_lcreate(
-                  sizeof(LUartJob),executeLuaUartCB);
-               if( ! ujob )
-                  baFatalE(FE_MALLOC,0);
-               ujob->lu=lu;
-               ujob->etype = event.type;
-               ThreadMutex_set(soDispMutex);
-               lu->jobInQueue=TRUE;
-               LThreadMgr_run(&ltMgr, (ThreadJob*)ujob);
-               ThreadMutex_release(soDispMutex);
-               if(UART_BUFFER_FULL == event.type || UART_FIFO_OVF == event.type)
-               {
-                  uart_flush_input(lu->port);
-                  xQueueReset(lu->uartQueue);
-               }
-            default:
+            uart_flush_input(lu->port);
+            xQueueReset(lu->uartQueue);
          }
       }
    }
@@ -2578,6 +2590,8 @@ static int Uart_read(lua_State* L)
 {
    size_t size;
    LUart* o = Uart_checkUD(L);
+   if(o->callbackRef)
+      return luaL_error(L,"RX callback");
    lua_Integer msSec = luaL_optinteger(L, 2, 0);
    ECHK(uart_get_buffered_data_len(o->port,&size));
    if(size || msSec)
@@ -2614,11 +2628,17 @@ static int Uart_write(lua_State* L)
    return 0;
 }
 
-
-/* uart:close() */
-static int Uart_lclose(lua_State* L)
+/* uart:txsize(data) */
+static int Uart_txsize(lua_State* L)
 {
-   LUart* o = Uart_getUD(L);
+   size_t size;
+   uart_get_tx_buffer_free_size(Uart_checkUD(L)->port, &size);
+   lua_pushinteger(L,size);
+   return 1;
+}
+
+static int Uart_close(LUart* o)
+{
    if(o->port < UART_NUM_MAX)
    {
       uart_driver_delete(o->port);
@@ -2629,10 +2649,18 @@ static int Uart_lclose(lua_State* L)
    return 0;
 }
 
+/* uart:close() */
+static int Uart_lclose(lua_State* L)
+{
+   Uart_close(Uart_getUD(L));
+   return 0;
+}
+
 
 static const luaL_Reg uartObjLib[] = {
    {"read", Uart_read},
    {"write", Uart_write},
+   {"txsize",Uart_txsize},
    {"close", Uart_lclose},
    {"__close", Uart_lclose},
    {"__gc", Uart_lclose},
@@ -2661,11 +2689,12 @@ static int luart(lua_State* L)
    int stopbits = (int)balua_getIntField(L, 2, "stopbits", 1);
    const char* parity = balua_getStringField(L, 2, "parity", 0);
    const char* flowctrl = balua_getStringField(L, 2, "flowctrl", 0);
+   int rs485 = balua_getBoolField(L, 2, "rs485", FALSE);
 
    /* The following is used if pattern enabled */
    const char* pattern = balua_getStringField(L, 2, "pattern", 0);
    int maxlen = (int)balua_getIntField(L, 2, "maxlen", 0);
-   int chr_tout = (int)balua_getIntField(L, 2, "timeout", 9);
+   int chr_tout = (int)balua_getIntField(L, 2, "timeout", 0);
    int pre_idle = (int)balua_getIntField(L, 2, "preidle", 0);
    int post_idle = (int)balua_getIntField(L, 2, "postidle", 0);
 
@@ -2699,12 +2728,36 @@ static int luart(lua_State* L)
       uart_driver_delete(port);
       throwInvArg(L,"setpin");
    }
-   if(hasCB && pattern)
+   if(rs485)
+      uart_set_mode(port, UART_MODE_RS485_HALF_DUPLEX);
+   if(hasCB)
    {
-      uart_enable_pattern_det_baud_intr(
-         port,pattern[0],(uint8_t)strlen(pattern),chr_tout,pre_idle,post_idle);
-      if(maxlen)
-         uart_pattern_queue_reset(port, maxlen);
+      if(pattern)
+      {
+         if(ESP_OK != uart_enable_pattern_det_baud_intr(
+               port,pattern[0],(uint8_t)strlen(pattern),chr_tout,pre_idle,post_idle))
+         {
+            uart_driver_delete(port);
+            throwInvArg(L,"pattern");
+         }
+         if(maxlen)
+         {
+            esp_err_t status=uart_pattern_queue_reset(port, maxlen);
+            if(ESP_OK != status)
+            {
+               uart_driver_delete(port);
+               return pushEspRetVal(L, status, "queue_reset", TRUE);
+            }
+         }
+      }
+      else if(chr_tout > 0)
+      {
+         if(ESP_OK != uart_set_rx_timeout(port, chr_tout))
+         {
+            uart_driver_delete(port);
+            throwInvArg(L,"timeout");
+         }
+      }
    }
    LUart* lu = (LUart*)lNewUdata(L, sizeof(LUart), BALUART, uartObjLib);
    lu->port=port;
@@ -2968,6 +3021,43 @@ static int lexecute(lua_State* L)
 }
 
 
+static int lCRC(lua_State* L)
+{
+   const char* type = luaL_checkstring(L,1);
+   size_t size;
+   const uint8_t* data = (const uint8_t*)luaL_checklstring(L,2,&size);
+   if( ! strcmp("modbus", type) )
+   {
+      uint16_t crc = 0xFFFF; // Initial CRC value
+      for(size_t i = 0; i < size; ++i)
+      {
+         crc ^= data[i]; // XOR byte into least significant byte of crc
+         for (int j = 0; j < 8; j++)
+         { // Loop over each bit
+            if ((crc & 0x0001) != 0)
+            { // If the LSB is set
+               crc >>= 1; // Shift right and XOR with polynomial
+               crc ^= 0xA001;
+            }
+            else
+            {
+               crc >>= 1; // Just shift right
+            }
+         }
+      }
+      if(lua_isnumber(L,3))
+      {
+         lua_pushboolean(L,luaL_checkinteger(L, 3) == crc);
+      }
+      else
+      {
+         lua_pushinteger(L,crc);
+      }
+      return 1;
+   }
+   return throwInvArg(L,"type");  
+}
+
 
 /*********************************************************************
  *********************************************************************
@@ -3090,6 +3180,7 @@ static const luaL_Reg esp32Lib[] = {
    {"netconnect", lnetconnect},
    {"apinfo", lapinfo},
    {"mac", lmac},
+   {"crc",lCRC},
    {"execute", lexecute},
    {"sdcard", lsdcard},
    {"loglevel", lloglevel},

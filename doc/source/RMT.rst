@@ -232,8 +232,8 @@ The following fully functional example can be run as an xlua file. The example s
 
 .. code-block:: lua
 
-    local leds=10
-    local gpioPin=1
+    local leds=1 -- Set to the number of LED's e.g. 30
+    local gpioPin=48 -- pin 48 works with the one LED on ESP32-S3-WROOM
     local rmt,err
     
     local data={}
@@ -276,7 +276,13 @@ The following fully functional example can be run as an xlua file. The example s
     
     function onunload()
        trace"Stopping wled"
-       if rmt then rmt:close() end
+       if rmt then
+          -- Turn off all LEDS
+          for i=1,#data do data[i]=0 end
+          transmit()
+          -- Set to func that closes RMT after turning LEDs off
+          transmit=function() rmt:close() end
+       end
     end
 
 Preparing Color Data
