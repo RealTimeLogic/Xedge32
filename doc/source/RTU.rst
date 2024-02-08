@@ -1,5 +1,5 @@
-Modbus RTU
-=============
+Modbus RTU Module
+====================
 
 This Lua module extends the functionality of the Barracuda App Server's Modbus TCP Client by adding support for RTU (RS-232 and RS-485) communication. Essentially, it acts as a driver that enables the Modbus TCP Client to operate as a Modbus RTU Client. This module uses the :ref:`uart-api`.
 

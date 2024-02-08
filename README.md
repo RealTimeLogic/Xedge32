@@ -1,6 +1,6 @@
 # Xedge32
 
-### (Xedge for ESP32)
+### (Xedge Lua IDE and REPL for ESP32)
 
 Looking to turn your ESP32 into a powerful Edge Controller or IoT
 Gateway? Look no further than Xedge32! This incredible development
@@ -11,14 +11,18 @@ programming language for children! With Xedge32, you can easily unlock
 the full potential of your ESP32 and create advanced IoT solutions
 that will impress even the most tech-savvy enthusiasts.
 
-![ESP32 Edge Controller](https://realtimelogic.com/GZ/images/Xedge32.svg)
+![ESP32 Edge Controller](https://realtimelogic.com/images/xedge/v1/Xedge.png)
 
-## Documentation, Binaries, and Getting Started Guide
+## Getting Started
 
-You do not need to compile Xedge32. Compiling Xedge32 is for C code experts. For a quick Xedge32 introduction and pre-compiled firmware download instructions, visit the [Xedge32 introduction page](https://realtimelogic.com/downloads/bas/ESP32/).
+You do not need to compile Xedge32. Compiling Xedge32 is for C code experts.
+
+* [Download the Xedge32 Firmware](https://realtimelogic.com/downloads/bas/ESP32/)
+* [Xedge32 Tutorials](https://realtimelogic.com/xedge32-tutorials/)
+* [Xedge32 South Bridge API](https://realtimelogic.com/ba/ESP32/)
 
 
-## Compiling The Code
+## Compiling The C Code (for experts)
 
 To compile the source code, you must use the latest ESP-IDF, which can be found on [GitHub](https://github.com/espressif/esp-idf).
 

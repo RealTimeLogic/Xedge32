@@ -1,15 +1,24 @@
 Getting Started
 ================
 
-To start using Xedge, you need to upload the firmware onto an ESP32-S3 or an ESP32 with PSRAM (for example, the ESP32 WROVER). You can do this using a flashing tool or programming software. We suggested purchasing the new improved `ESP32-S3 <https://www.google.com/search?q=esp32-S3>`_ if you do not have a suitable ESP32.
+To start using Xedge, you need to upload the firmware onto an ESP32-S3 or an ESP32 with PSRAM (for example, the ESP32 WROVER). Before you begin, ensure your ESP32 device meets the following requirements for the pre-compiled firmware:
 
-Web Installer
-~~~~~~~~~~~~~~
+- **Standard ESP32**: Requires a minimum of 4MB flash memory and 4MB RAM.
+- **ESP32-S3 Variant**: Requires a minimum of 8MB flash memory and 8MB RAM, but comes with additional features.
 
-For advanced installation options, refer to the instructions below. However, we **highly recommend** using the *user-friendly web-based installer*, which you can find on the `Xedge32 introduction page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_.
 
-Binaries or Source Code
-~~~~~~~~~~~~~~~~~~~~~~~~
+First Time Installers
+----------------------
+
+We suggest using the user-friendly web-based installer available on the `Xedge32 introduction page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_ for a straightforward installation process. Please consult the advanced installation instructions below if you require more detailed customization.
+
+OTA Upgrade
+------------
+
+For users with Xedge32 already installed on an ESP32-S3 device, take advantage of the `integrated Xedge32 OTA Upgrade Manager <https://youtu.be/GHBcjeO-Yhc>`_ for a seamless update experience. Begin by downloading the latest `ESP32-S3 firmware zip file <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_. Once downloaded, extract the contents of the ZIP file. Then, simply drag and drop the xedge.bin or xedge-s0.bin firmware file onto the Upgrade Manager's user interface to commence the upgrade process.
+
+Advanced Installation/Upgrade
+---------------------------------
 
 We offer two options for the firmware:
 
@@ -26,24 +35,12 @@ We offer two options for the firmware:
 
 
 Firmware Option 1: Use Pre-Compiled Firmware
----------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The firmware binaries can be uploaded using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
 
-ESP32 Pre-Compiled Firmware Requirements
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Before you begin, ensure your ESP32 device meets the following requirements for the pre-compiled firmware:
-
-- **Standard ESP32**: Requires a minimum of 4MB flash memory and 4MB RAM.
-- **ESP32-S3 Variant**: Requires a minimum of 8MB flash memory and 8MB RAM, but comes with additional features:
-
-  - **OPC UA Plugin**: This is included by default, offering advanced communication capabilities.
-  - **Over-The-Air (OTA) Updates**: Enables easy firmware upgrades.
-
-
 Windows Graphical Installer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. raw:: html
 
@@ -110,7 +107,8 @@ The screenshot above displays the firmware tool on the left with three separate 
 
 
 Linux, Mac, and Windows using the command line tool `esptool`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 
 The following examples show how to use Linux. The commands are similar for Mac and Windows.
 
@@ -154,7 +152,7 @@ Upload the **ESP32-S3** firmware:
 .. _firmware-options:
 
 For the ESP32-S3, we provide two firmware options
--------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. image:: img/esp-s3-usb.jpg
    :align: right
@@ -172,7 +170,7 @@ For the ESP32-S3, we provide two firmware options
 
 
 Firmware Option 2: Compile The Code
--------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 See the `GitHub Repository <https://github.com/RealTimeLogic/Xedge-ESP32>`_ for details.
 
@@ -207,13 +205,13 @@ Next Step
 Once Xedge has successfully connected to your network, continue your journey by exploring our guide on how to use :ref:`Xedge32` .
 
 
-Upgrading the Firmware
-------------------------
+Firmware Upgrade Options
+-------------------------
 
 The pre-compiled firmware for the ESP32-S3 features convenient drag-and-drop upgrades. To upgrade Xedge32, you have two options:
 
-1. Follow the detailed firmware installation process described in this tutorial.
-2. Opt for the more straightforward drag-and-drop method. For more information on the drag-and-drop upgrade, refer to the blogpost `drag-and-drop firmware upgrade <https://www.linkedin.com/feed/update/urn:li:activity:7123087429762256896>`_ for details. Note that when using the drag-and-drop method, **you must use 'xedge.bin' or 'xedge-s0.bin'** instead of the merged firmware file.
+1. Follow the detailed firmware installation process described in this tutorial, but only upload xedge.bin or xedge-s0.bin.
+2. Opt for the more straightforward drag-and-drop method as previosly explained.
 
 
 Support and Discussions
