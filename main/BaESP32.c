@@ -1576,6 +1576,8 @@ typedef struct
    uint8_t* recbuf;
    size_t recblen;
    i2c_port_t port;
+   gpio_num_t sda;
+   gpio_num_t scl;
    uint8_t direction;
 } LI2CMaster;
 
@@ -1731,6 +1733,8 @@ static int I2CMaster_close(lua_State* L)
    lua_pushboolean(L, i2cm->port >= 0); 
    if(i2cm->port >= 0)
    {
+      activeGPOI[i2cm->sda]=0;
+      activeGPOI[i2cm->scl]=0;
       if(i2cm->cmd)
          i2c_cmd_link_delete(i2cm->cmd);
       if(i2cm->recbuf)
@@ -1769,10 +1773,18 @@ static int li2cMaster(lua_State* L)
       .scl_pullup_en = GPIO_PULLUP_ENABLE,
       .master.clk_speed = luaL_checkinteger(L, 4) /* speed */
    };
+   if(activeGPOI[i2cConfig.sda_io_num])
+      throwPinInUse(L,i2cConfig.sda_io_num);
+   if(activeGPOI[i2cConfig.scl_io_num])
+      throwPinInUse(L,i2cConfig.scl_io_num);
    i2c_param_config(port, &i2cConfig);
    i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
    LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(
       L,sizeof(LI2CMaster),BAI2CMASTER,i2cMasterLib);
+   i2cm->sda = i2cConfig.sda_io_num;
+   i2cm->scl = i2cConfig.scl_io_num;
+   activeGPOI[i2cm->sda]=(LGPIO*)i2cm;
+   activeGPOI[i2cm->scl]=(LGPIO*)i2cm;
    i2cm->port = port;
    return 1;
 }
