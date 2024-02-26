@@ -41,10 +41,9 @@ The following Linux commands show all steps required for installing the developm
    cd ..
    source esp-idf/export.sh
 
-   # Download and update Xedge32
-   git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
+   # Download Xedge32
+   git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
-   git submodule update --init --remote
 
    # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
    chmod +x BuildESP32ResourceFile.sh
