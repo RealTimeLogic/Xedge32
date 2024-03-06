@@ -20,7 +20,7 @@ function commands.uploadfw(cmd)
    cmd:allow{"PUT"}
    local fn = cmd:header"X-File-Name"
    if not fn then cmd:senderror(400) cmd:abort() end
-   local n,ext=fn:match"(.-)%.(zip)$"
+   local n,ext=fn:match"(.-)%.([^%./]+)$"
    if not n or not ext then cmd:senderror(400,"Invalid file name") cmd:abort() end
    ext=ext:lower()
    if "zip" == ext then
