@@ -73,6 +73,7 @@ Xedge ESP32
    source/BME280
    source/RTU
    source/tutorials
+   source/applications.rst
    source/license
 
 
