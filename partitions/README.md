@@ -7,25 +7,24 @@ The Partitions Generator Utility is used during manufacturing to write various r
 
 Prerequisites
 -------------
-Ensure that the files for applications/configurations/certificates are copied to the 'partitions/storage' folder, and the connection parameters are set in the 'partitions/nvs_xedge_values.csv' file.
+Ensure that the files for applications/configurations/certificates are copied to the **partitions/storage** folder, and the connection parameters are set in the **partitions/nvs_xedge_values.csv** file.
 
 Usage
 -----
 
-This tool provides the opportunity to use the stock xedge32 firmware and generate/write the binary images of the FAT and NVS by console commands. Additionally, it can generate/flash the FAT and NVS images with the firmware and bootloader when executing the "idf.py build flash" commands.
+This tool provides the opportunity to use the stock **Xedge32** firmware and generate/write the binary images of the FAT and NVS by console commands. Additionally, it can generate/flash the FAT and NVS images with the firmware and bootloader when executing the **idf.py build flash** commands.
 
 1. **Integrated Usage with CMakeLists.txt:**
-   - Modify the main `CMakeLists.txt` to use the macros `fatfs_create_spiflash_image` and `nvs_create_partition_image` with `FLASH_IN_PROJECT` to automate the generation of binary files and include them in the `idf.py flash` command.
+   - Modify the main `CMakeLists.txt` to use the macros **fatfs_create_spiflash_image** and **nvs_create_partition_image** with **FLASH_IN_PROJECT** to automate the generation of binary files and include them in the **idf.py flash** command.
    
 2. **Manual Usage:**
-   - Generate the files separately and flash them to the ESP32 using the `esp_tool.py` utility provided by Espressif.
+   - Generate the files separately and flash them to the ESP32 using the **esp_tool.py** utility provided by Espressif.
 
 Running the Utility for NVS Manually
 ------------------------------------
-Before running the utility manually, ensure that you have modified the connection parameters in the `nvs_xedge_values.csv` file.
+Before running the utility manually, ensure that you have modified the connection parameters in the **nvs_xedge_values.csv** file.
 
 For example, for Wi-Fi, you need to modify the parameter like this:
-
 
 ```
 netAdapter,data,string,"wifi"
