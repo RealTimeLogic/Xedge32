@@ -27,10 +27,12 @@ Before running the utility manually, ensure that you have modified the connectio
 
 For example, for Wi-Fi, you need to modify the parameter like this:
 
+
+```
 netAdapter,data,string,"wifi"
 netSsid,data,string,"provider"
 netPassword,data,string,"password"
-
+```
 
 **Usage**::
 
