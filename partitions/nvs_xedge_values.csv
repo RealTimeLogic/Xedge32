@@ -1,0 +1,17 @@
+# Sample csv file
+key,type,encoding,value
+xedge,namespace,,
+netAdapter,data,string,"close"
+netSsid,data,string,""
+netPassword,data,string,""
+netSpiHostId,data,i32,2
+netSpiClk,data,i32,-1
+netSpiMosi,data,i32,-1
+netSpiMiso,data,i32,-1
+netSpiCs,data,i32,-1
+netSpiIrq,data,i32,-1
+netSpiFreq,data,i32,40000000
+netPhyRst,data,i32,-1
+netPhyMdio,data,i32,-1
+netPhyMdc,data,i32,-1
+

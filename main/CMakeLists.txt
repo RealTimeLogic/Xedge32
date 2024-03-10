@@ -16,3 +16,14 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -DBA_ESP32 -DBA_FREERTOS -DBA_LW
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
 #  generates faulty BAS binary code without this setting.
 target_compile_options(${COMPONENT_LIB} PRIVATE  -fno-inline-small-functions -Wno-char-subscripts -Wno-implicit-fallthrough -Wno-attributes)
+
+# Create a FATFS image from the contents of the 'partitions/storage' directory
+# that fits the partition named 'storage'. FLASH_IN_PROJECT indicates that
+# the generated image should be flashed when the entire project is flashed to
+# the target with 'idf.py -p PORT flash'.
+fatfs_create_spiflash_image(storage ../partitions/storage FLASH_IN_PROJECT PRESERVE_TIME)
+
+# Generate NVS partition binary from 'nvs_xedge_values.cvs' file that contains 
+# Key-value pairs. FLASH_IN_PROJECT indicates that the generated image should be 
+# flashed when the entire project is flashed to the target with 'idf.py -p PORT flash'.
+nvs_create_partition_image(nvs ../partitions/nvs_xedge_values.csv FLASH_IN_PROJECT)
