@@ -7,7 +7,6 @@ The Partitions Generator Utility is used during manufacturing to write various r
 
 Prerequisites
 -------------
-
 Ensure that the files for applications/configurations/certificates are copied to the 'partitions/storage' folder, and the connection parameters are set in the 'partitions/nvs_xedge_values.csv' file.
 
 Usage
