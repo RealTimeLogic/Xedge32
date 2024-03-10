@@ -3,7 +3,7 @@ Partitions Generator Utility
 
 Introduction
 ------------
-The Partitions Generator Utility is used during manufacturing to write various resources such as LUA applications, configurations, certificates, and network connection parameters to flash memory. It is based on two tools provided by Espressif: [fatfsgen.py](https://github.com/espressif/esp-idf/blob/v5.2.1/components/fatfs/fatfsgen.py) for generating the FAT image and [nvs_partition_gen.py](https://github.com/espressif/esp-idf/blob/v5.2.1/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py) for generating the NVS partition binary file.
+The Partitions Generator Utility is used during manufacturing to write various resources such as LUA applications, configurations, certificates, and network connection parameters to flash memory. It is based on two tools provided by Espressif: [fatfsgen.py](https://github.com/espressif/esp-idf/blob/master/components/fatfs/fatfsgen.py) for generating the FAT image and [nvs_partition_gen.py](https://github.com/espressif/esp-idf/blob/master/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py) for generating the NVS partition binary file.
 
 Prerequisites
 -------------
