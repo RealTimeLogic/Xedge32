@@ -10,7 +10,7 @@ Prerequisites
 Ensure that the files for applications/configurations/certificates are copied to the 'partitions/storage' folder, and the connection parameters are set in the 'partitions/nvs_xedge_values.csv' file.
 
 Usage
-~~~~~
+-----
 
 This tool provides the opportunity to use the stock xedge32 firmware and generate/write the binary images of the FAT and NVS by console commands. Additionally, it can generate/flash the FAT and NVS images with the firmware and bootloader when executing the "idf.py build flash" commands.
 
