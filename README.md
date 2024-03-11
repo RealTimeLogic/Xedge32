@@ -72,3 +72,6 @@ To upload the firmware to your ESP32, follow these steps:
    - WSL: idf.py -p /dev/ttyS4 -b 115200 flash monitor
 
 
+## Embedding Lua Apps and configuring NVS
+
+Lua apps and the Xedge configuration file can be embedded in the firmware binary using `fatfsgen.py` and  `nvs_partition_gen.py`. See the [Partitions Generator Utility](partitions/README.md) readme file for details.
