@@ -193,7 +193,7 @@ Commands:
 .. code-block:: lua
 
    esp32.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
-   esp32.execute"restart" -- Navigate to http://myesp.local after restarting
+   esp32.execute"restart" -- Navigate to http://myesp.local after restart
 
 
 
@@ -278,8 +278,8 @@ Xedge32 supports Over-The-Air (OTA) firmware update core functionality through t
 - **Without Arguments**: Returns the current firmware version as a table.
 - **With "begin" Argument**: Returns an OTA firmware upgrade object.
 
-Examples
-~~~~~~~~~
+OTA Examples
+~~~~~~~~~~~~~
 
 Retrieve the current firmware version:
 
