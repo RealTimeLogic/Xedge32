@@ -59,7 +59,7 @@ ideCfgCB.push(function (mlist) {
     sendCmd("getfwver", (rsp) => {
       if (!rsp.projectname) logR(rsp.err);
       else {
-	logR('\nDrag and drop an application (zip file) or\nDrag and drop a valid firmware file to upload, flash, and restart device!\n');
+	logR('\nDrag and drop an <a target="_blank" href="https://realtimelogic.com/articles/Mastering-Xedge-Application-Deployment-From-Installation-to-Creation">application (zip file)</a> or\nDrag and drop a <a target="_blank" href="https://realtimelogic.com/ba/ESP32/source/GettingStarted.html#ota-upgrade">valid firmware file</a> to upload, flash, and restart device!\n');
 	log("Current Firmware\nName: \t\t" + rsp.projectname + "\nVersion: \t" + rsp.version + "\nTime: \t\t" + rsp.time + "\nDate: \t\t" + rsp.date + "\nIDF: \t\t" + rsp.idfver + "\n");
 	$('head').append(`
 <style>
