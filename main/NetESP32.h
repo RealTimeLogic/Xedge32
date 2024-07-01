@@ -61,6 +61,18 @@ void wifiScan(int print, lua_State* L,
               void (*cb)(lua_State* L, const uint8_t* ssid, int rssi,
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel));
+
+/**
+ * @brief Enumeration for AP mode states.
+ * 
+ * This enumeration defines the possible states for the Access Point (AP) mode.
+ */
+typedef enum {
+    AP_MODE_DISABLED,        /**< AP mode is disabled, by default. */
+    AP_MODE_ENABLED,         /**< AP mode is enabled. */
+    AP_MODE_USER_REQUESTED   /**< AP mode is explicitly requested by the user. */
+} ap_mode_t;
+
 void netWaitIP(void);   
 int netGotIP(void);
 esp_err_t netWifiApStart(bool regHandler);
