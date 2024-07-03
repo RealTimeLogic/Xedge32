@@ -264,7 +264,7 @@ Connection
 
 Connect the ESP development board and the rotary encoder as follows:
 
-.. code-block::
+.. code-block:: text
 
     +--------+              +---------------------------------+
     |        |              |                                 |

@@ -1,0 +1,30 @@
+--[[
+
+This Lua script creates a new blinking LED timer coroutine each time it runs.
+Click the refresh button to create a new.
+
+The timer object is free-floating since we are not referencing
+(anchoring) the object. The created timer(s) will eventually be
+collected by the Lua garbage collector.
+
+Online timer example with documentation: https://tutorial.realtimelogic.com/Lua-Coroutines.lsp
+Scroll down to Creating a Timer in Coroutine Mode
+
+Timer documentation:
+https://realtimelogic.com/ba/doc/?url=lua.html#ba_timer
+
+The example uses GPIO #4. Connect an LED between GPIO 4 and ground.
+--]]
+
+local function blink()
+    local pin = esp32.gpio(4,"OUT")
+   while true do
+      trace"blink"
+      pin:value(true)
+      coroutine.yield(true) -- Sleep
+      pin:value(false)
+      coroutine.yield(true) -- Sleep
+   end
+end
+ba.timer(blink):set(1000)
+

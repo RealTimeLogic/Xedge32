@@ -193,7 +193,7 @@ Commands:
 .. code-block:: lua
 
    esp32.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
-   esp32.execute"restart" -- Navigate to http://myesp.local after restarting
+   esp32.execute"restart" -- Navigate to http://myesp.local after restart
 
 
 
@@ -269,3 +269,50 @@ Note
 
 All arguments provided by C-code-generated-events are represented as Lua strings, including numbers.
 
+
+Xedge32 OTA
+------------
+
+Xedge32 supports Over-The-Air (OTA) firmware update core functionality through the ``esp32.ota`` function.
+
+- **Without Arguments**: Returns the current firmware version as a table.
+- **With "begin" Argument**: Returns an OTA firmware upgrade object.
+
+OTA Examples
+~~~~~~~~~~~~~
+
+Retrieve the current firmware version:
+
+.. code-block:: lua
+
+    local ver = esp32.ota()
+    for k,v in pairs(ver) do trace(k,v) end
+
+Initiate an OTA firmware upgrade:
+
+.. code-block:: lua
+
+    local ota, err = esp32.ota"begin"
+
+OTA Object Member Methods
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The OTA object provides methods to manage the firmware upgrade process:
+
+- **write(data)**: Write firmware data. Keep calling this function until all firmware data has been passed to the write method. Returns ``true`` on success, or ``nil, error`` on failure or data inconsistency.
+
+  .. code-block:: lua
+
+      local ok, err = ota:write(data)
+
+- **commit()**: Commits the written firmware data. Returns ``true`` on success, or ``nil, error`` if the firmware is not accepted.
+
+  .. code-block:: lua
+
+      local ok, err = ota:commit()
+
+- **abort()**: Aborts the upgrade process.
+
+  .. code-block:: lua
+
+      ota:abort()

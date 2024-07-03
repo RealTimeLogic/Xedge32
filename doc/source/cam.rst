@@ -1,5 +1,5 @@
-ESP32 Camera Driver Interface
-==============================
+Camera API
+===========
 
 Xedge32 features the ESP32 Camera Driver and a Lua interface to this driver. To use the camera API, follow these steps:
 

@@ -21,6 +21,7 @@ project = 'Xedge32'
 copyright = '2023, RTL'
 author = 'RTL'
 
+"master_doc = 'index'"
 
 # -- General configuration ---------------------------------------------------
 
