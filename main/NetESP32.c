@@ -49,7 +49,8 @@ static esp_netif_t *wifi_netif = NULL;
 static esp_netif_t *eth_netif = NULL;
 static esp_netif_t *ap_netif = NULL;
 
-static bool netPowerUp = true;
+// At power-up, the Access Point (AP) mode is disabled.
+static ap_mode_t apMode = AP_MODE_DISABLED;
 static uint8_t netWifiRetry = 0;
  
 static esp_err_t netWifiStop(bool unregHandler);
@@ -307,6 +308,9 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       if(WIFI_EVENT_STA_CONNECTED == eventId)
       {
          netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("sta"), 0);
+         
+         // Disable AP mode upon successful Wi-Fi connection.
+         apMode = AP_MODE_DISABLED;
       }
       else if(WIFI_EVENT_STA_DISCONNECTED == eventId) 
       {
@@ -324,22 +328,29 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          }
          gotIP=FALSE;
 
-         // Determine whether to start Access Point (AP) mode based on the disconnection reason and retry count.
-         bool startAPMode = false;
-         if(d->reason == WIFI_REASON_NO_AP_FOUND) 
-         {
-            // Increment retry count and check if it exceeds the threshold.
-            if(netWifiRetry++ > 4) 
+         // Check if AP mode was user-requested and manage transitions accordingly
+         if(apMode == AP_MODE_USER_REQUESTED)
+         {   
+            // Handle the case where ESP32 could not find the configured access point.
+            if(d->reason == WIFI_REASON_NO_AP_FOUND) 
             {
-               // Start AP mode only if it's not during power-up.
-               startAPMode = !netPowerUp;
+               // Increment retry count and check if it exceeds the threshold.
+               if(netWifiRetry++ > 4) 
+               {
+                  apMode = AP_MODE_ENABLED;
+               }
+            }
+         
+            // Handle 4-way handshake timeout (often due to incorrect password)
+            if(d->reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT)
+            {
+               apMode = AP_MODE_ENABLED;
             }
          }
-            
-         // If the reason is an invalid password (4-way handshake timeout) or AP mode should be started,
-         // stop the WiFi in station mode and start the Access Point (AP) mode.
-         // This is typically done when the ESP32 fails to connect due to an incorrect password or repeated failures.
-         if((d->reason == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT) || startAPMode)
+         
+         // The AP mode is set to enabled only if it was explicitly requested by the user, 
+         // ensuring the system doesn't switch to AP mode due to transient errors unless specifically instructed
+         if(apMode == AP_MODE_ENABLED)
          {
             // Erase network configuration (SSID and password)
             // to avoid attempting reconnection with invalid credentials.
@@ -357,7 +368,7 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) eventData;
          HttpTrace_printf(9, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
       } 
-      else if (eventId == WIFI_EVENT_AP_STADISCONNECTED) 
+      else if(eventId == WIFI_EVENT_AP_STADISCONNECTED) 
       {
          wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) eventData;
          HttpTrace_printf(9, "station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
@@ -541,25 +552,25 @@ static esp_err_t netWifiApStop(void)
  */
 static esp_err_t netEthStop(void)
 {
-    printf("Closing Ethernet connection\n");
+   printf("Closing Ethernet connection\n");
 #ifdef CONFIG_ETH_ENABLED    
-    if((eth_netif != NULL) && (s_eth_handle != NULL)) 
-    {
-       ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
-       ESP_ERROR_CHECK(esp_eth_stop(s_eth_handle));
-       ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
-       s_eth_glue = NULL;
+   if((eth_netif != NULL) && (s_eth_handle != NULL)) 
+   {
+      ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
+      ESP_ERROR_CHECK(esp_eth_stop(s_eth_handle));
+      ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
+      s_eth_glue = NULL;
        
-       vTaskDelay(pdMS_TO_TICKS(100));
-       ESP_ERROR_CHECK(esp_eth_driver_uninstall(s_eth_handle));
-       s_eth_handle = NULL;
-       ESP_ERROR_CHECK(s_phy->del(s_phy));
-       ESP_ERROR_CHECK(s_mac->del(s_mac));
+      vTaskDelay(pdMS_TO_TICKS(100));
+      ESP_ERROR_CHECK(esp_eth_driver_uninstall(s_eth_handle));
+      s_eth_handle = NULL;
+      ESP_ERROR_CHECK(s_phy->del(s_phy));
+      ESP_ERROR_CHECK(s_mac->del(s_mac));
 
-       esp_netif_destroy(eth_netif);
-       eth_netif = NULL;
+      esp_netif_destroy(eth_netif);
+      eth_netif = NULL;
       
-       spi_bus_free(spiHostId);  
+      spi_bus_free(spiHostId);  
    }
 #endif   
    return ESP_OK;
@@ -621,7 +632,7 @@ uint8_t mac[6];  // Array to store the MAC address
 
    // Read the MAC address of the ESP32's internal Ethernet MAC
    esp_err_t err = esp_read_mac(mac, ESP_MAC_ETH);  
-   if (err == ESP_OK) 
+   if(err == ESP_OK) 
    {
       // If the MAC address is successfully obtained, set it using esp_eth_ioctl
       err = esp_eth_ioctl(s_eth_handle, ETH_CMD_S_MAC_ADDR, mac);
@@ -947,8 +958,8 @@ esp_err_t netConnect(netConfig_t* cfg)
 {
 esp_err_t ret = ESP_OK;
 
-   // Indicate that a new adapter network is established by command, and reset the retry connection counter.
-   netPowerUp = false;
+   // Set the state to revert to AP mode if the Wi-Fi network is not found or connection fails.
+   apMode = AP_MODE_USER_REQUESTED;
    netWifiRetry = 0;
 
    if(!strcmp("close", cfg->adapter))
@@ -1022,6 +1033,10 @@ esp_err_t ret = ESP_OK;
    if(ESP_OK == ret)
    {
       cfgSetNet(cfg);
+   }
+   else
+   {
+      apMode = AP_MODE_DISABLED;
    }
           
    return ret;
