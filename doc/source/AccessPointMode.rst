@@ -23,7 +23,7 @@ Connecting to Xedge32
 Access Point Mode Considerations
 ------------------------------------
 
-While in Access Point Mode, be aware that the web-based editor will be a basic HTML textarea, not the advanced Visual Studio Code-like editor you will see if your computer can access the Internet. If you prefer to keep your ESP32 in Access Point Mode for development, it's recommended to use a computer that is connected to the ESP32 via Wi-Fi and simultaneously to the Internet through a wired connection, as shown in the figure below. This setup ensures that the advanced web-based code editor can be loaded from the Internet.
+While in Access Point Mode, be aware that the web-based editor will be a basic HTML textarea, not the advanced `Visual Studio Code-like editor <https://realtimelogic.com/ba/doc/en/Xedge.html#monaco>`_ you will see if your computer can access the Internet. If you prefer to keep your ESP32 in Access Point Mode for development, it's recommended to use a computer that is connected to the ESP32 via Wi-Fi and simultaneously to the Internet through a wired connection, as shown in the figure below. This setup ensures that the advanced web-based code editor can be loaded from the Internet.
 
 .. figure:: img/Xedge32-IDE-Access-Point-Mode.svg
    :alt: Xedge32 IDE Access Point Mode
