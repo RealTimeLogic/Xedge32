@@ -17,6 +17,9 @@ You do not need to compile Xedge32. Compiling Xedge32 is for C code experts.
 
 ## Compiling The C Code (for experts)
 
+
+> Check out the tutorial [Rapid Firmware Development with the Barracuda App Server](https://realtimelogic.com/articles/Rapid-Firmware-Development-with-the-Barracuda-App-Server) for a quick overview on how to compile Xedge32. The tutorial also demonstrates how to replace the integrated IDE with a custom IoT application.
+
 To compile the source code, you must use the latest ESP-IDF, which can be found on [GitHub](https://github.com/espressif/esp-idf).
 
 The following Linux commands show all steps required for installing the development tools, downloading the required source code, and compiling the code:
