@@ -112,6 +112,63 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 }
 
 
+/* Do we have the partition where we save the xedge configuration file?
+ */
+static const esp_partition_t* openXCfgPartition()
+{
+   const esp_partition_t* xcfgPart=esp_partition_find_first(
+      ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY,"xcfg");
+   if(xcfgPart)
+      return xcfgPart;
+   ESP_LOGE(TAG,"xcfg partition not found!\n");
+   return 0;
+}
+
+
+/* Read or write the xedge.conf file. Called from Lua: Xedge .config
+ */
+static int xedgeCfgFile(lua_State* L)
+{
+   esp_err_t err;
+   const esp_partition_t* xcfgPart=openXCfgPartition();
+   if(xcfgPart)
+   {
+      uint8_t* data;
+      size_t size;
+      if(lua_isstring(L, 1)) /* Write */
+      {
+         uint8_t* data =(uint8_t*)lua_tolstring(L, 1, &size);
+         if(ESP_OK == (err=esp_partition_erase_range(xcfgPart, 0, xcfgPart->size)) &&
+            ESP_OK == (err=esp_partition_write(xcfgPart, 0, &size, sizeof(size))) &&
+            ESP_OK == (err=esp_partition_write(xcfgPart, sizeof(size), data, size)))
+         {
+            lua_pushboolean(L, TRUE);
+            return 1;
+         }
+      }
+      else  /* Read */
+      {
+         if(ESP_OK == (err=esp_partition_read(xcfgPart, 0, &size, sizeof(size))))
+         {
+            if(0 == size || size > (xcfgPart->size - sizeof(size)))
+               return 0; /* No data. Assume first time access. */
+            luaL_Buffer b;
+            data = (uint8_t*)luaL_buffinitsize(L,&b,size+1);
+            if(ESP_OK == (err=esp_partition_read(xcfgPart, sizeof(size), data, size)))
+            {
+               luaL_addsize(&b, size);
+               luaL_pushresult(&b);
+               return 1;
+            }
+         }
+      }
+   }
+   else
+      err=ESP_ERR_NOT_FOUND;
+   return pushEspRetVal(L, err, "xcfg partition", FALSE);
+}
+
+
 /* xedge.c calls this function. We use it to register the auto
  * generated bindings and the bindings in installESP32Libs.
 */
@@ -219,6 +276,8 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
 #endif
    lua_pushlstring(L,(char*)keyBuf,sizeof(keyBuf));
    aux->initXedge(L, aux->initXedgeFuncRef); /* Send pm key to Lua code */
+
+   aux->xedgeCfgFile = openXCfgPartition() ? xedgeCfgFile : 0;
 
    /* We return when we get an IP address, thus preventing the
     * Barracuda App Server from starting until the network is ready.

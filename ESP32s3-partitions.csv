@@ -5,4 +5,4 @@ phy_init, data, phy,     ,         0x1000,
 ota_0,    app,  ota_0,   ,         0x310000,
 ota_1,    app,  ota_1,   ,         0x310000,
 storage,  data, fat,     ,         0x1B5000,
-
+xcfg,      data,fat,     ,        0x8000,
