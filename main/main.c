@@ -274,9 +274,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    if(fp)
       fp->closeFp(fp);
 #endif
-   lua_pushlstring(L,(char*)keyBuf,sizeof(keyBuf));
-   aux->initXedge(L, aux->initXedgeFuncRef); /* Send pm key to Lua code */
-
+   aux->addSecret(aux, keyBuf,sizeof(keyBuf)); /* Send device key to Lua code */
    aux->xedgeCfgFile = openXCfgPartition() ? xedgeCfgFile : 0;
 
    /* We return when we get an IP address, thus preventing the
