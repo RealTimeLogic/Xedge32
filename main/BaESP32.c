@@ -62,7 +62,6 @@ LThreadMgr Documentation:
 #include <esp_adc/adc_continuous.h>
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
-//#include <driver/i2c.h>
 #include "driver/i2c_master.h"
 #include "driver/i2c_types.h"
 #include <driver/uart.h>
