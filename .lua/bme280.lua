@@ -49,13 +49,7 @@ local btac=ba.bytearray.create
 
 local function read(self,regAddr,len)
    local i2cm=self.i2cm
-   i2cm:start()
-   i2cm:address(self.address, "WRITE")
-   i2cm:write(regAddr)
-   i2cm:start()
-   i2cm:address(self.address, "READ")
-   i2cm:read(len)
-   local x,err=i2cm:commit()
+   local x,err=i2cm:readRegister(self.address, regAddr, len)
    if not x then trace("read failed",err) end
    return x,err
 end
@@ -68,11 +62,10 @@ end
 
 local function write(self,regAddr,data)
    local i2cm=self.i2cm
-   i2cm:start()
-   i2cm:address(self.address, "WRITE")
-   i2cm:write(regAddr)
-   i2cm:write(data)
-   local x,err=i2cm:commit()
+    -- Convert `regAddr` to a single-byte string and concatenate with `data`
+   local writeBuffer = string.char(regAddr) .. string.char(data)
+   -- Send the combined buffer in a single transaction
+   local x, err = i2cm:write(self.address, writeBuffer)
    if not x then trace("write failed",err) end
    return x,err
 end
@@ -301,9 +294,9 @@ local function bme280(port, address, sda, scl, settings)
    settings = settings or {}
    settings.tempCorrection = settings.tempCorrection or 0.0
    local i2cm = esp32.i2cmaster(port, sda, scl, settings.speed or 100000)
-   i2cm:start()
-   i2cm:address(address, "WRITE")
-   if not i2cm:commit() then
+   --Search the device in the bus.
+   if not i2cm:probe(address) then
+      i2cm:close()
       return nil,"BME280 not connected or wrong address"
    end
    local self={i2cm=i2cm, address=address, settings=settings, t_fine=0}
