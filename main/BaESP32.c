@@ -1803,7 +1803,7 @@ static int I2CMaster_read(lua_State* L)
    return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
- /* i2cm:readRegister(address, register, len, [timeout])
+ /* i2cm:readfrom(address, register, len, [timeout])
  * Lua API: Reads data from a specific register on the I2C device.
  * 
  * This function sends a write command to specify the register, followed immediately by a read command 
@@ -1819,7 +1819,7 @@ static int I2CMaster_read(lua_State* L)
  * Returns:
  *   Lua string with the data read, or nil and error code if unsuccessful.
  */
-static int I2CMaster_readRegister(lua_State* L)
+static int I2CMaster_readfrom(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
@@ -1893,7 +1893,7 @@ static int I2CMaster_close(lua_State* L)
 
 static const luaL_Reg i2cMasterLib[] = {
    {"probe", I2CMaster_probe},
-   {"readRegister", I2CMaster_readRegister},
+   {"readfrom", I2CMaster_readfrom},
    {"write", I2CMaster_write},
    {"read", I2CMaster_read},   
    {"close", I2CMaster_close},

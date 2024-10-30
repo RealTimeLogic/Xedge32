@@ -49,7 +49,7 @@ local btac=ba.bytearray.create
 
 local function read(self,regAddr,len)
    local i2cm=self.i2cm
-   local x,err=i2cm:readRegister(self.address, regAddr, len)
+   local x,err=i2cm:readfrom(self.address, regAddr, len)
    if not x then trace("read failed",err) end
    return x,err
 end
