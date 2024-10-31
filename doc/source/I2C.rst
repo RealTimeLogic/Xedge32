@@ -1,8 +1,19 @@
 I2C API
 ========================
 
-To use the I2C API, begin by creating an I2C object through a call to ``esp32.i2cmaster``,, where you specify the I2C port, SDA GPIO, SCL GPIO, and the desired I2C speed. Next, start the I2C communication sequence by calling ``i2cm:start``, followed by ``i2cm:address`` to specify the address of the I2C device you want to communicate with. You can then proceed to call ``i2cm:write`` and/or ``i2c:read`` as needed. Finally, end the sequence by calling ``i2cm:commit`` to commit the I2C transaction.
+To use the I2C API, begin by creating an I2C master object with ``esp32.i2cmaster``, specifying the I2C port, SDA GPIO, SCL GPIO, and desired communication speed. This bus-based API allows for direct interactions with I2C devices using simplified methods:
 
+**Device Check:** Use ``i2cm:probe`` to check for the presence of an I2C device at a specific address.
+
+**Data Transactions:**
+
+   **Write Data:** Use  ``i2cm:write`` to send data directly to the I2C device.
+
+   **Read Data:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
+
+   **Read from Device:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
+
+**Close Connection:** When finished, release the I2C bus by calling  ``i2cm:close``.
 
 esp32.i2cmaster
 ----------------
@@ -16,85 +27,101 @@ Create an I2C master object.
 
 **Parameters:**
 
-- ``port`` (``int``): I2C port number - e.g. 0
-- ``pinSDA`` (``int``): the GPIO number used for the I2C Serial Data 
-- ``pinSCL`` (``int``): the GPIO number used for the I2C Serial Clock
-- ``speed`` (``int``): the clock speed
+- **port** (``int``): I2C port number - e.g. 0
+- **pinSDA** (``int``): the GPIO number used for the I2C Serial Data 
+- **pinSCL** (``int``): the GPIO number used for the I2C Serial Clock
+- **speed** (``int``): the clock speed
 
-I2C object methods
+I2C Object Methods
 ------------------
 
-i2cm:start()
-~~~~~~~~~~~~~~~~
+i2cm:probe(address, [timeout])
+------------------------------
 
-    Start a new command sequence (new job).
+Probes a device at the specified address to check its connection.
 
-i2cm:address(addr, direction, [,ack])
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Add an address message to the I2C job.
+**Parameters:**
 
-    **Parameters:**
+- **address** (``int``): The I2C device address
+- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
-    - ``addr`` (``int``): the slave’s I2C address
-    - ``direction`` (``string``): ``READ`` or ``WRITE``
-    - ``ack`` (``bool``, optional): the I2C ack, defaults to ``true``
+**Returns**:
+- ``true`` if the device responds, otherwise ``false``.
 
-i2cm:write(data [,ack])
-~~~~~~~~~~~~~~~~~~~~~~~~
+i2cm:readfrom(address, register, len, [timeout])
+------------------------------------------------
+Reads data from a specified register on the I2C device. This method does not send a stop condition between the write and read operations, ensuring a repeated start.
 
-    Add a write message to the I2C job.
+**Parameters:**
+- **address** (``int``): I2C device address
+- **register** (``int``): Register address to read from
+- **len** (``int``): Number of bytes to read
+- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
-    **Parameters:**
+**Returns**:
+- The ``x, err``, where x is true for a successful and the response data for a read operation
 
-    - ``data`` (``string``): the data to write
-    - ``ack`` (``bool``, optional): the I2C ack, defaults to ``true``
+i2cm:write(address, data, [timeout])
+------------------------------------
+Writes data to the specified I2C device.
 
-i2cm:read(len [, acktype])
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**Parameters:**
+- **address** (``int``): I2C device address
+- **data** (``string`` or ``int``): Data to write, as a single byte or string
+- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
-    Read data from the I2C job.
+**Returns**:
+- ``True`` for a successful write operation.
 
-    **Parameters:**
+i2cm:read(address, len, [timeout])
+----------------------------------
+Read from Device: For a simpler read operation that does not require a specific register, use i2cm:read to retrieve data.
 
-    - ``len`` (``int``): how much data to read
-    - ``acktype`` (``string``, optional): is one of ``ACK`` | ``NACK`` | ``LASTNACK``, and defaults to ``NACK``
+**Parameters:**
+  - **address** (``int``): I2C device address
+  - **len** (``int``): Number of bytes to read
+  - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
-i2cm:commit([timeout])
-~~~~~~~~~~~~~~~~~~~~~~~
+**Returns**:
+- The ``x, err``, where x is true for a successful and the response data for a read operation
 
-Commit the job and wait for a response. The default time is 500ms. Method commit returns ``x,err``, where x is true for a successful write operation and the response data for a read operation.
+
+i2cm:close()
+------------
+Closes the I2C connection and releases allocated resources for the device.
+
+**Returns**:
+- ``True`` for a successful close operation.
 
 I2C Example
 ------------------
 
 The following example shows the read and write functions in the :ref:`BME280 Lua Module <BME280 Module>`. Variable regAddr is the register to read in the BME280 chip.
 
-
 .. code-block:: lua
 
-    local function read(i2cm,regAddr,len)
-       i2cm:start()
-       i2cm:address(self.address, "WRITE")
-       i2cm:write(regAddr)
-       i2cm:start() -- Repeated Start Condition
-       i2cm:address(self.address, "READ")
-       i2cm:read(len)
-       local x,err=i2cm:commit()
-       if not x then trace("read failed",err) end
-       return x,err
-    end
-    
-    local function write(i2cm,regAddr,data)
-       i2cm:start()
-       i2cm:address(self.address, "WRITE")
-       i2cm:write(regAddr)
-       i2cm:write(data)
-       local x,err=i2cm:commit()
-       if not x then trace("write failed",err) end
-       return x,err
-    end
-    
-    local function bme280(port, address, sda, scl, settings)
-       i2cm = esp32.i2cmaster(port, sda, scl, settings.speed or 100000)
-       ......
-    end
+	-- Initialize the I2C master
+	local i2cm = esp32.i2cmaster(0, 21, 22, 400000)  -- Port 0, SDA on GPIO 21, SCL on GPIO 22, Speed 400kHz
+
+	-- Probe the device at address 0x76
+	local found = i2cm:probe(0x76)
+	if found then
+	    print("Device found at address 0x76")
+	else
+	    print("Device not found")
+	end
+
+	-- Write a value to a register
+	i2cm:write(0x76, "\xF4\x27")  -- Write 0x27 to register 0xF4 at address 0x76
+
+	-- Read multiple bytes from a specific register
+	local data = i2cm:readfrom(0x76, 0xF7, 8)  -- Read 8 bytes from register 0xF7 at address 0x76
+	print("Data read from register:", data)
+
+	-- Perform a simple read from the device without specifying a register
+	local simple_data = i2cm:read(0x76, 4)  -- Read 4 bytes directly from address 0x76
+	print("Simple data read:", simple_data)
+
+	-- Close the I2C connection when done
+	i2cm:close()
+
