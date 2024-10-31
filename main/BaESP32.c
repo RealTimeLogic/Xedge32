@@ -62,7 +62,8 @@ LThreadMgr Documentation:
 #include <esp_adc/adc_continuous.h>
 #include <esp_adc/adc_cali.h>
 #include <esp_adc/adc_cali_scheme.h>
-#include <driver/i2c.h>
+#include "driver/i2c_master.h"
+#include "driver/i2c_types.h"
 #include <driver/uart.h>
 #include <driver/ledc.h>
 #include <driver/pulse_cnt.h>
@@ -1567,226 +1568,403 @@ static int lLedTimer(lua_State* L)
  *********************************************************************
  *********************************************************************/
 
+#define BAI2CMASTER "I2CMASTER"         // Lua I2C master userdata type
 
-#define BAI2CMASTER "I2CMASTER"
-
+// Struct to store I2C configurations, buffers, and handles
 typedef struct
 {
-   i2c_cmd_handle_t cmd;
-   uint8_t* recbuf;
-   size_t recblen;
-   i2c_port_t port;
-   gpio_num_t sda;
-   gpio_num_t scl;
-   uint8_t direction;
+   i2c_master_bus_config_t bus_cfg;     // I2C bus configuration
+   i2c_master_bus_handle_t bus_handle;  // Handle for the I2C bus
+   i2c_device_config_t dev_cfg;         // I2C device configuration
+   i2c_master_dev_handle_t dev_handle;  // Handle for the I2C device
 } LI2CMaster;
 
-/* Time to wait for I2c. Default is 500ms */
+/* write_buffer_t Structure
+ * Structure used to manage data intended for I2C write operations.
+ * - len  : Length of the data to be written (in bytes).
+ * - byte : Stores a single byte of data if the input is a single integer.
+ * - data : Pointer to the data buffer, either pointing to `byte` (for single-byte writes) 
+ *          or a Lua string (for multi-byte writes).
+ */
+typedef struct
+{
+  size_t len;
+  uint8_t byte;
+  const uint8_t* data;
+} write_buffer_t;
+
+// Default timeout for I2C operations, 500ms unless specified in Lua
 #define I2CWT(L,ix) ((TickType_t)luaL_optinteger(L,ix,500)/portTICK_PERIOD_MS)
 
-
-static void throwInvDirection(lua_State* L)
-{
-   luaL_error(L, "Invalid direction");
-}
-
+// Get I2C master userdata from Lua
 static LI2CMaster* I2CMaster_getUD(lua_State* L)
 {
    return (LI2CMaster*)luaL_checkudata(L,1,BAI2CMASTER);
 }
 
-
+// Check if I2C master is initialized; if not, raise an error
 static LI2CMaster* I2CMaster_checkUD(lua_State* L, int checkCmd)
 {
    LI2CMaster* i2cm = I2CMaster_getUD(L);
-   if(i2cm->port < 0)
+   if(i2cm->bus_handle == 0)
+   {
       luaL_error(L, "Closed");
-   if(checkCmd && ! i2cm->cmd)
-      luaL_error(L, "Not started");
+   }
    return i2cm;
 }
 
-
-/* i2cm:start() */
-static int I2CMaster_start(lua_State* L)
+/* I2CMaster_addDevice(i2cm, address)
+ * Configures or reconfigures an I2C device on the bus with the specified address.
+ * 
+ * Parameters:
+ *   i2cm   : Pointer to the LI2CMaster structure, containing the bus and device configuration.
+ *   address: I2C address of the device to add.
+ * 
+ * Logic:
+ *   - Checks if the device with the specified address is already configured on the bus.
+ *   - If `dev_handle` exists but the address differs, it removes the previous device handle 
+ *     using `i2c_master_bus_rm_device`.
+ *   - If the address is new, it updates the `device_address` in `dev_cfg` and adds the new device 
+ *     to the bus with `i2c_master_bus_add_device`, setting `dev_handle`.
+ * 
+ * Returns:
+ *   ESP_OK on success, or an error code if unable to add or reconfigure the device.
+ */
+static int I2CMaster_addDevice(LI2CMaster* i2cm, uint16_t address)
 {
-   LI2CMaster* i2cm = I2CMaster_checkUD(L, FALSE);
-   if( ! i2cm->cmd )
-      i2cm->cmd = i2c_cmd_link_create();
-   /* else recursive: https://www.i2c-bus.org/repeated-start-condition/ */
-   return pushEspRetVal(
-      L,i2cm->cmd ? i2c_master_start(i2cm->cmd) : ESP_ERR_NO_MEM, 0, FALSE);
+   esp_err_t ret_val = ESP_OK;
+   
+   // If a device with a different address is already configured, remove it
+   if(i2cm->dev_handle && (i2cm->dev_cfg.device_address != address))
+   {
+      ret_val = i2c_master_bus_rm_device(i2cm->dev_handle);  
+   }
+
+   // Set new device address if necessary, then add it to the bus
+   if((ret_val == ESP_OK) && (i2cm->dev_cfg.device_address != address))
+   {
+      i2cm->dev_cfg.device_address = address;     
+      ret_val = i2c_master_bus_add_device(i2cm->bus_handle, &i2cm->dev_cfg, &i2cm->dev_handle);
+   }
+  
+   return ret_val;
 }
 
+/* I2CMaster_getWriteData(L, index, wbuf)
+ * Populates the write_buffer_t structure with data for I2C write operations.
+ * Determines if the Lua input at the given index is a single integer or a string.
+ * 
+ * Parameters:
+ *   L     : The Lua state.
+ *   index : The index in the Lua stack to retrieve the data.
+ *   wbuf  : Pointer to the write_buffer_t structure to store the result.
+ * 
+ * Logic:
+ *   - If the Lua input is an integer, it is treated as a single byte, stored in `byte`, and `data` points to `byte`.
+ *   - If the Lua input is a string, it is treated as a multi-byte buffer, and `data` points to the string data.
+ */
+static void I2CMaster_getWriteData(lua_State* L, int index, write_buffer_t* wbuf)
+{
+   if(lua_isinteger(L, index))
+   {
+      wbuf->byte = (uint8_t)lua_tointeger(L, index);
+      wbuf->data = &wbuf->byte;
+      wbuf->len = 1;
+   }
+   else
+   {
+      wbuf->data = (uint8_t*)luaL_checklstring(L, index, &wbuf->len);
+   }
+}
 
-/* i2cm:address(addr, direction, [,ack]) */
-static int I2CMaster_address(lua_State* L)
+/* i2cm:probe(address, [timeout])
+ * Lua API: Checks for the presence of a device at the specified I2C address.
+ * 
+ * This function sends a START condition followed by the device address in read mode (R).
+ * If the device acknowledges (ACK) and the probe is successful, the function returns ESP_OK.
+ * A STOP condition is issued after the probe attempt.
+ * 
+ * Important:
+ *   - Ensure pull-up resistors are connected to the SDA and SCL lines when using this function.
+ *   - If the function returns ESP_ERR_TIMEOUT and the timeout was correctly specified, 
+ *     it is likely due to missing or insufficient pull-up resistors.
+ * 
+ * Parameters:
+ *   address (int)         : The I2C address of the device to probe.
+ *   timeout (optional int): Timeout for the probe operation in ms (default 500ms).
+ * 
+ * Returns:
+ *   Boolean true if the device is detected (ESP_OK), or false with an error code otherwise.
+ */
+static int I2CMaster_probe(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   const char* d = luaL_checkstring(L,3);
-   i2cm->direction = 'R' == d[0] ? I2C_MASTER_READ :
-      ('W' == d[0] ? I2C_MASTER_WRITE : throwInvArg(L, "direction"));
-   return pushEspRetVal(L,i2c_master_write_byte(
-      i2cm->cmd,
-      ((uint8_t)luaL_checkinteger(L, 2) << 1) | i2cm->direction,
-      balua_optboolean(L, 4, TRUE)), 0, FALSE);
+   
+   // Retrieve optional timeout from Lua, defaulting to I2CWT if not provided
+   TickType_t timeout = I2CWT(L, 3);
+   
+   // Get the address from Lua
+   uint16_t address = (uint16_t) luaL_checkinteger(L, 2);
+   
+   ThreadMutex_release(soDispMutex);
+   esp_err_t ret_val = i2c_master_probe(i2cm->bus_handle, address, timeout); 
+   ThreadMutex_set(soDispMutex);
+   
+   return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
-
-/* i2cm:write(data [,ack]) */
+/* i2cm:write(address, data, [timeout])
+ * Lua API: Writes data to the specified address on the I2C device.
+ * Params:
+ *   address (int): The I2C address of the device.
+ *   data (int or string): Data to write; single byte or Lua string for multi-byte.
+ *   timeout (optional int): Timeout for the write operation in ms (default 500ms).
+ * Returns:
+ *   Boolean true on success, or false and error code if unsuccessful.
+ */
 static int I2CMaster_write(lua_State* L)
 {
-   const uint8_t* data;
-   size_t dlen;
-   uint8_t byte;
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   if(i2cm->direction != I2C_MASTER_WRITE)
-      throwInvDirection(L);
-   if(lua_isinteger(L,2))
+   uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
+   TickType_t timeout = I2CWT(L, 4);
+
+   // Configure the device address on the bus
+   esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
+
+   if(ret_val == ESP_OK)
    {
-      byte=(uint8_t)lua_tointeger(L, 2);
-      data=&byte;
-      dlen=1;
+      write_buffer_t wbuf;
+      I2CMaster_getWriteData(L, 3, &wbuf);
+      
+      // Ensure data is available to write
+      if(wbuf.len == 0)
+      {
+         throwInvArg(L, "no write buffer");
+      }
+
+      // Transmit data
+      ThreadMutex_release(soDispMutex);
+      ret_val = i2c_master_transmit(i2cm->dev_handle, wbuf.data, wbuf.len, timeout); 
+      ThreadMutex_set(soDispMutex);
    }
-   else
-   {
-      data = (uint8_t*)luaL_checklstring(L,2,&dlen);
-   }
-   bool ack = balua_optboolean(L, 3, TRUE);
-   return pushEspRetVal(L,dlen==1 ? i2c_master_write_byte(i2cm->cmd,*data,ack) :
-                        i2c_master_write(i2cm->cmd,data,dlen,ack), 0, FALSE);
+   
+   return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
-
-/* i2cm:read(len [, "ACK" "NACK" "LASTNACK"]) */
+/* i2cm:read(address, len, [timeout])
+ * Lua API: Reads a specified number of bytes from the I2C device.
+ * Params:
+ *   address (int): The I2C address of the device.
+ *   len (int): Number of bytes to read.
+ *   timeout (optional int): Timeout for the read operation in ms (default 500ms).
+ * Returns:
+ *   Lua string with the data read, or nil and error code if unsuccessful.
+ */
 static int I2CMaster_read(lua_State* L)
 {
-   esp_err_t status;
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   if(i2cm->direction != I2C_MASTER_READ)
-      throwInvDirection(L);
-   i2cm->recblen = (size_t )luaL_checkinteger(L, 2);
-   const char* as = luaL_optstring(L, 3, 0);
-   i2c_ack_type_t ack = as ?
-      ('L' == as[0] ? I2C_MASTER_LAST_NACK :
-       ('A' == as[0] ? I2C_MASTER_ACK : I2C_MASTER_NACK)) : I2C_MASTER_NACK;
-   if(i2cm->recbuf || i2cm->recblen == 0)
-      throwInvArg(L, "no recbuf");
-   i2cm->recbuf = (uint8_t*)baLMalloc(L, i2cm->recblen+1);
-   if( ! i2cm->recbuf )
-      return pushEspRetVal(L,ESP_ERR_NO_MEM, 0, FALSE);
-   if(I2C_MASTER_NACK == ack && i2cm->recblen > 1)
+   uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
+   size_t recblen = (size_t)luaL_checkinteger(L, 3);
+   TickType_t timeout = I2CWT(L, 4);
+
+   // Configure the device address
+   esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
+
+   if(ret_val == ESP_OK)
    {
-      i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen-1,I2C_MASTER_ACK);
-      status=i2c_master_read_byte(
-         i2cm->cmd,i2cm->recbuf+i2cm->recblen-1,I2C_MASTER_NACK);
+      if(recblen == 0)
+      {
+         throwInvArg(L, "no recbuf");
+      }
+
+      uint8_t* recbuf = (uint8_t*)baLMalloc(L, recblen);
+
+      if(recbuf)
+      {
+         ThreadMutex_release(soDispMutex);
+         ret_val = i2c_master_receive(i2cm->dev_handle, recbuf, recblen, timeout);
+         ThreadMutex_set(soDispMutex);
+
+         if(ret_val == ESP_OK)
+         {
+            lua_pushlstring(L, (char*)recbuf, recblen);
+            baFree(recbuf);
+            return 1;
+         }
+         
+         baFree(recbuf);
+      }
+      else
+      {
+         ret_val = ESP_ERR_NO_MEM;
+      }
    }
-   else
-   {
-      status = i2cm->recblen == 1 ?
-         i2c_master_read_byte(i2cm->cmd,i2cm->recbuf,ack) :
-         i2c_master_read(i2cm->cmd,i2cm->recbuf,i2cm->recblen,ack);
-   }
-   if(status != ESP_OK)
-   {
-      baFree(i2cm->recbuf);
-      i2cm->recbuf=0;
-   }
-   return pushEspRetVal(L,status, 0, FALSE);
+  
+   return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
-
-/* i2cm:commit([timeout]) */
-static int I2CMaster_commit(lua_State* L)
+ /* i2cm:readfrom(address, register, len, [timeout])
+ * Lua API: Reads data from a specific register on the I2C device.
+ * 
+ * This function sends a write command to specify the register, followed immediately by a read command 
+ * to retrieve data from the device, without issuing a STOP condition between the write and read operations.
+ * This is suited for devices that require a repeated START condition when reading registers.
+ * 
+ * Parameters:
+ *   address (int)   : The I2C address of the device.
+ *   register (int)  : The register address to read from.
+ *   len (int)       : Number of bytes to read from the register.
+ *   timeout (optional int): Timeout for the operation in ms (default 500ms).
+ * 
+ * Returns:
+ *   Lua string with the data read, or nil and error code if unsuccessful.
+ */
+static int I2CMaster_readfrom(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   i2c_master_stop(i2cm->cmd);
-   ThreadMutex_release(soDispMutex);
-   int status=i2c_master_cmd_begin(i2cm->port,i2cm->cmd,I2CWT(L,2));
-   ThreadMutex_set(soDispMutex);
-   i2c_cmd_link_delete(i2cm->cmd);
-   i2cm->cmd=0;
-   if(i2cm->direction == I2C_MASTER_READ && status == ESP_OK)
+   uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
+   TickType_t timeout = I2CWT(L, 5);
+
+   esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
+
+   if(ret_val == ESP_OK)
    {
-      if(i2cm->recbuf)
+      write_buffer_t wbuf;
+      I2CMaster_getWriteData(L, 3, &wbuf);
+      size_t recblen = (size_t)luaL_checkinteger(L, 4);
+
+      if(recblen == 0 || wbuf.len == 0)
       {
-         lua_pushlstring(L, (char*)i2cm->recbuf, i2cm->recblen);
-         baFree(i2cm->recbuf);
-         i2cm->recbuf=0;
-         return 1;
+         throwInvArg(L, "invalid buffer length");
       }
-      status=ESP_FAIL;
+
+      uint8_t* recbuf = (uint8_t*)baLMalloc(L, recblen);
+
+      if(recbuf)
+      {
+         ThreadMutex_release(soDispMutex);
+         ret_val = i2c_master_transmit_receive(i2cm->dev_handle, wbuf.data, wbuf.len, recbuf, recblen, timeout);
+         ThreadMutex_set(soDispMutex);
+
+         if(ret_val == ESP_OK)
+         {
+            lua_pushlstring(L, (char*)recbuf, recblen);
+            baFree(recbuf);
+            return 1;
+         }
+         
+         baFree(recbuf);
+      }
+      else
+      {
+         ret_val = ESP_ERR_NO_MEM;
+      }
    }
-   if(i2cm->recbuf)
-   {
-      baFree(i2cm->recbuf);
-      i2cm->recbuf=0;
-   }
-   return pushEspRetVal(L,status,0, FALSE);
+
+   return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
-
-/* Lua close */
+/* i2cm:close()
+ * Lua API: Closes the I2C connection and releases all resources.
+ * Params: None.
+ * Returns:
+ *   Boolean true on success.
+ */
 static int I2CMaster_close(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_getUD(L);
-   lua_pushboolean(L, i2cm->port >= 0); 
-   if(i2cm->port >= 0)
+   
+   if(i2cm->dev_handle) 
    {
-      activeGPOI[i2cm->sda]=0;
-      activeGPOI[i2cm->scl]=0;
-      if(i2cm->cmd)
-         i2c_cmd_link_delete(i2cm->cmd);
-      if(i2cm->recbuf)
-         baFree(i2cm->recbuf);
-      i2c_driver_delete(i2cm->port);
-      i2cm->port=-1; 
+      i2c_master_bus_rm_device(i2cm->dev_handle);  
+      i2cm->dev_handle = 0;
    }
+   
+   if(i2cm->bus_handle)
+   {
+      activeGPOI[i2cm->bus_cfg.sda_io_num] = 0; 
+      activeGPOI[i2cm->bus_cfg.scl_io_num] = 0;
+      i2c_del_master_bus(i2cm->bus_handle);
+      i2cm->bus_handle = 0;
+   }
+
    return 1;
 }
 
-
 static const luaL_Reg i2cMasterLib[] = {
-   {"start", I2CMaster_start},
-   {"address", I2CMaster_address},
+   {"probe", I2CMaster_probe},
+   {"readfrom", I2CMaster_readfrom},
    {"write", I2CMaster_write},
-   {"read", I2CMaster_read},
-   {"commit", I2CMaster_commit},
+   {"read", I2CMaster_read},   
    {"close", I2CMaster_close},
    {"__close", I2CMaster_close},
    {"__gc", I2CMaster_close},
    {NULL, NULL}
 };
 
-
-/* ic2.master(port, pinSDA, pinSCL, speed) */
+/* li2cMaster(port, pinSDA, pinSCL, speed)
+ * Initializes a new I2C master object and configures the I2C bus.
+ * 
+ * Parameters:
+ *   port (int)      : The I2C port number, e.g., 0 or 1.
+ *   pinSDA (int)    : The GPIO number for I2C Serial Data (SDA) line.
+ *   pinSCL (int)    : The GPIO number for I2C Serial Clock (SCL) line.
+ *   speed (int)     : The clock speed in Hz for the I2C bus.
+ * 
+ * Returns:
+ *   Lua object      : A new I2C master instance or an error if initialization fails.
+ * 
+ * Description:
+ *   - Checks that the specified port number is valid.
+ *   - Allocates and initializes an `LI2CMaster` object to manage the I2C bus.
+ *   - Configures the I2C bus with the specified pins, speed, and default settings.
+ *   - Attempts to create a new master bus handle with the configuration.
+ *   - Sets the GPIO pins as active to prevent reuse, and registers the I2C bus handle.
+ */
 static int li2cMaster(lua_State* L)
 {
-   i2c_port_t port=(i2c_port_t)luaL_checkinteger(L, 1); /* port */
-   if(port < 0 || port >= I2C_NUM_MAX)
-      luaL_error(L, "Port num. range err.");
-   i2c_config_t i2cConfig = {
-      .mode = I2C_MODE_MASTER,
-      .sda_io_num = luaL_checkinteger(L, 2), /* pinSDA */
-      .scl_io_num = luaL_checkinteger(L, 3),  /* pinSCL */
-      .sda_pullup_en = GPIO_PULLUP_ENABLE,
-      .scl_pullup_en = GPIO_PULLUP_ENABLE,
-      .master.clk_speed = luaL_checkinteger(L, 4) /* speed */
-   };
-   if(activeGPOI[i2cConfig.sda_io_num])
-      throwPinInUse(L,i2cConfig.sda_io_num);
-   if(activeGPOI[i2cConfig.scl_io_num])
-      throwPinInUse(L,i2cConfig.scl_io_num);
-   i2c_param_config(port, &i2cConfig);
-   i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
-   LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(
-      L,sizeof(LI2CMaster),BAI2CMASTER,i2cMasterLib);
-   i2cm->sda = i2cConfig.sda_io_num;
-   i2cm->scl = i2cConfig.scl_io_num;
-   activeGPOI[i2cm->sda]=(LGPIO*)i2cm;
-   activeGPOI[i2cm->scl]=(LGPIO*)i2cm;
-   i2cm->port = port;
-   return 1;
+  // Get the I2C port from Lua and validate its range
+  i2c_port_t port = (i2c_port_t)luaL_checkinteger(L, 1); 
+  
+  if((port < 0) || (port >= I2C_NUM_MAX))
+  {
+     luaL_error(L, "Port num. range err.");
+  }
+   // Allocate memory for the new I2C master object and register it in Lua
+  LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(L, sizeof(LI2CMaster), BAI2CMASTER, i2cMasterLib);   
+  // Configure the I2C bus parameters (clock source, port, SDA, SCL, and pullup resistors)
+  i2cm->bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
+  i2cm->bus_cfg.i2c_port = port;
+  i2cm->bus_cfg.sda_io_num = luaL_checkinteger(L, 2);  // pinSDA
+  i2cm->bus_cfg.scl_io_num = luaL_checkinteger(L, 3);  // pinSCL
+  i2cm->bus_cfg.glitch_ignore_cnt = 7;
+  i2cm->bus_cfg.flags.enable_internal_pullup = 1;
+  // Configure the I2C device parameters (7-bit address, initial address 0, and bus speed)
+   i2cm->dev_cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+  i2cm->dev_cfg.device_address = 0;
+  i2cm->dev_cfg.scl_speed_hz = luaL_checkinteger(L, 4);// speed 
+  // Create a new I2C master bus with the configured settings
+  esp_err_t ret_val = i2c_new_master_bus(&i2cm->bus_cfg, &i2cm->bus_handle);
+  // Check if bus creation was successful; if not, return an error
+  if(ESP_OK != ret_val)
+  {
+     return pushEspRetVal(L, ret_val, "i2cm", TRUE);
+  }
+  // Check if SDA pin is already in use, raise error if so
+  if(activeGPOI[i2cm->bus_cfg.sda_io_num])
+  {
+     throwPinInUse(L, i2cm->bus_cfg.sda_io_num);
+  }
+  // Check if SCL pin is already in use, raise error if so
+  if(activeGPOI[i2cm->bus_cfg.scl_io_num])
+  {
+     throwPinInUse(L, i2cm->bus_cfg.scl_io_num);
+  }
+  
+  activeGPOI[i2cm->bus_cfg.sda_io_num] = (LGPIO*)i2cm;
+  activeGPOI[i2cm->bus_cfg.scl_io_num] = (LGPIO*)i2cm;
+
+  return 1; // Return the new I2C master object to Lua
 }
 
 /*********************************************************************
