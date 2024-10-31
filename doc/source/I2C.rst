@@ -7,11 +7,11 @@ To use the I2C API, begin by creating an I2C master object with ``esp32.i2cmaste
 
 **Data Transactions:**
 
-   **Write Data:** Use  ``i2cm:write`` to send data directly to the I2C device.
+- **Write Data:** Use  ``i2cm:write`` to send data directly to the I2C device.
 
-   **Read Data:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
+- **Read Data:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
 
-   **Read from Device:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
+- **Read from Device:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
 
 **Close Connection:** When finished, release the I2C bus by calling  ``i2cm:close``.
 
@@ -46,7 +46,7 @@ Probes a device at the specified address to check its connection.
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-- ``true`` if the device responds, otherwise ``false``.
+``true`` if the device responds, otherwise ``false``.
 
 i2cm:readfrom(address, register, len, [timeout])
 ------------------------------------------------
@@ -60,7 +60,7 @@ Reads data from a specified register on the I2C device. This method does not sen
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-- The ``x, err``, where x is true for a successful and the response data for a read operation
+``x, err``, where x is true for a successful and the response data for a read operation
 
 i2cm:write(address, data, [timeout])
 ------------------------------------
@@ -73,7 +73,7 @@ Writes data to the specified I2C device.
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-- ``True`` for a successful write operation.
+``true`` for a successful write operation.
 
 i2cm:read(address, len, [timeout])
 ----------------------------------
@@ -86,7 +86,7 @@ Read from Device: For a simpler read operation that does not require a specific 
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-- The ``x, err``, where x is true for a successful and the response data for a read operation
+``x, err``, where x is true for a successful and the response data for a read operation
 
 
 i2cm:close()
@@ -94,7 +94,7 @@ i2cm:close()
 Closes the I2C connection and releases allocated resources for the device.
 
 **Returns**:
-- ``True`` for a successful close operation.
+``true`` for a successful close operation.
 
 I2C Example
 ------------------
