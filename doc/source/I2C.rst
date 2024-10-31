@@ -53,6 +53,7 @@ i2cm:readfrom(address, register, len, [timeout])
 Reads data from a specified register on the I2C device. This method does not send a stop condition between the write and read operations, ensuring a repeated start.
 
 **Parameters:**
+
 - **address** (``int``): I2C device address
 - **register** (``int``): Register address to read from
 - **len** (``int``): Number of bytes to read
@@ -66,6 +67,7 @@ i2cm:write(address, data, [timeout])
 Writes data to the specified I2C device.
 
 **Parameters:**
+
 - **address** (``int``): I2C device address
 - **data** (``string`` or ``int``): Data to write, as a single byte or string
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
@@ -78,9 +80,10 @@ i2cm:read(address, len, [timeout])
 Read from Device: For a simpler read operation that does not require a specific register, use i2cm:read to retrieve data.
 
 **Parameters:**
-  - **address** (``int``): I2C device address
-  - **len** (``int``): Number of bytes to read
-  - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+
+- **address** (``int``): I2C device address
+- **len** (``int``): Number of bytes to read 
+- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
 - The ``x, err``, where x is true for a successful and the response data for a read operation
