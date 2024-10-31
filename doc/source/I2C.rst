@@ -1,19 +1,22 @@
 I2C API
 ========================
 
-To use the I2C API, begin by creating an I2C master object with ``esp32.i2cmaster``, specifying the I2C port, SDA GPIO, SCL GPIO, and desired communication speed. This bus-based API allows for direct interactions with I2C devices using simplified methods:
+The I2C API enables communication with I2C-enabled devices on your ESP32.
 
-**Device Check:** Use ``i2cm:probe`` to check for the presence of an I2C device at a specific address.
+To use the I2C API, begin by creating an I2C master object with ``esp32.i2cmaster``, specifying the I2C port, SDA GPIO, SCL GPIO, and desired communication speed. This bus-based API allows for direct interactions with I2C devices using simplified methods.
 
-**Data Transactions:**
+**I2C Interactions:**
+
+- **Device Check:** Use ``i2cm:probe`` to verify if an I2C device is connected at a specific address.
+
+- **Simple Read:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
+
+- **Read Data From Register:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
 
 - **Write Data:** Use  ``i2cm:write`` to send data directly to the I2C device.
 
-- **Read Data:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
+- **Close Connection:** When finished, release the I2C bus by calling  ``i2cm:close``.
 
-- **Read from Device:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
-
-**Close Connection:** When finished, release the I2C bus by calling  ``i2cm:close``.
 
 esp32.i2cmaster
 ----------------
@@ -32,13 +35,16 @@ Create an I2C master object.
 - **pinSCL** (``int``): the GPIO number used for the I2C Serial Clock
 - **speed** (``int``): the clock speed
 
-I2C Object Methods
-------------------
+I2C Master Object Methods
+--------------------------
+
+**Note:** Some methods may block for up to the specified timeout. In real-time applications where responsiveness is critical, consider running these methods in a separate thread or on a dedicated LSP page, as described in the `Lua Thread Library documentation <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#thread_lib>`_.
+
 
 i2cm:probe(address, [timeout])
 ------------------------------
 
-Probes a device at the specified address to check its connection.
+Probes a device at the specified address to verify if an I2C device is connected at this address.
 
 **Parameters:**
 
@@ -46,7 +52,21 @@ Probes a device at the specified address to check its connection.
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-``true`` if the device responds, otherwise ``false``.
+``true`` if the device responds, otherwise ``nil``, ``error code``.
+
+i2cm:read(address, len, [timeout])
+----------------------------------
+Read from Device: For a simpler read operation that does not require a specific register, use i2cm:read to retrieve data.
+
+**Parameters:**
+
+- **address** (``int``): I2C device address
+- **len** (``int``): Number of bytes to read 
+- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+
+**Returns**:
+``x, err``: The data read as a Lua string if successful, or ``nil``, ``error code`` if the operation fails.
+
 
 i2cm:readfrom(address, register, len, [timeout])
 ------------------------------------------------
@@ -60,7 +80,7 @@ Reads data from a specified register on the I2C device. This method does not sen
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-``x, err``, where x is true for a successful and the response data for a read operation
+``x, err``: The data read as a Lua string if successful, or ``nil``, ``error code`` if the operation fails.
 
 i2cm:write(address, data, [timeout])
 ------------------------------------
@@ -73,28 +93,15 @@ Writes data to the specified I2C device.
 - **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
 
 **Returns**:
-``true`` for a successful write operation.
-
-i2cm:read(address, len, [timeout])
-----------------------------------
-Read from Device: For a simpler read operation that does not require a specific register, use i2cm:read to retrieve data.
-
-**Parameters:**
-
-- **address** (``int``): I2C device address
-- **len** (``int``): Number of bytes to read 
-- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
-
-**Returns**:
-``x, err``, where x is true for a successful and the response data for a read operation
-
+``true`` on success; otherwise, ``nil``, ``error code`` is returned.
 
 i2cm:close()
 ------------
 Closes the I2C connection and releases allocated resources for the device.
 
 **Returns**:
-``true`` for a successful close operation.
+``true`` on success; otherwise, ``nil``, ``error code`` is returned.
+
 
 I2C Example
 ------------------
