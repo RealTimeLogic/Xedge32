@@ -1,4 +1,4 @@
-const fwObj = [
+const fwObj32 = [
   {
     el: "div", id: "fwguage",
     html: '<svg width="100%" height="100%" viewBox="0 0 36 36"><path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke-linecap="round" fill="none" stroke="#8F8F8F"; stroke-width="1"; stroke-dasharray="0, 100"/><text x="18" y="18" text-anchor="middle" alignment-baseline="middle"></text></svg>'
@@ -9,7 +9,7 @@ const fwObj = [
   }
 ];
 
-const respForm=[
+const respForm32=[
   {
     el:"h2",
     html:"Upload successful!"
@@ -82,7 +82,7 @@ ideCfgCB.push(function (mlist) {
 function createFMWUpdate() {
   let elems = {};
   const topElem = $('<div id="FMWUpdate">')
-  let pe = mkForm(fwObj, elems, topElem, true);
+  let pe = mkForm(fwObj32, elems, topElem, true);
   let editorId = createEditor("Firmware Update ＆ App Upload", null, null, pe);
   const setFwGuage = (val, endv ) => {
     elems.fwguage.find("path").attr("stroke-dasharray", `${val}, 100`);
@@ -128,7 +128,7 @@ function createFMWUpdate() {
 	    const rsp = JSON.parse(xhr.responseText);
 	    if(rsp.ok) {
 	      const form=$('<div class="form">');
-	      mkForm(respForm,elems,form);
+	      mkForm(respForm32,elems,form);
 	      topElem.empty().append(form);
 	      elems.DeplCfgSave.click(function() {
 		let deploy = $('input[name="DeplCfg"]:checked').val();

@@ -55,9 +55,7 @@ The following Linux commands show all steps required for installing the developm
    #idf.py set-target esp32
    #idf.py set-target esp32s3
 
-   # Configure Xedge32 options such as enabling CAM and mDNS. Note, You must
-   # enable OPC UA using menuconfig if you included OPC-UA when running
-   # BuildESP32ResourceFile.sh.
+   # Configure Xedge32 options such as enabling CAM and mDNS. Details below.
    #idf.py menuconfig
 
    # Build the code
@@ -73,6 +71,27 @@ To upload the firmware to your ESP32, follow these steps:
    - Linux: idf.py flash monitor
    - WSL: idf.py -p /dev/ttyS4 -b 115200 flash monitor
 
+
+# Configuring Xedge32
+
+To configure Xedge32, use the `idf.py menuconfig` command. This allows you to enable various features such as mDNS, Camera, OPC UA, and softTPM eFuse registers. Below is an overview of each feature, along with configuration tips.
+
+## Configuration Steps
+
+### 1. Enable mDNS
+
+mDNS (Multicast DNS) enables local network discovery, making it possible to access Xedge32 by navigating to `http://xedge32.local` in your browser. You can customize this name within your Lua script if desired.
+
+### 2. Enable OPC UA
+
+[OPC UA](https://realtimelogic.com/products/opc-ua/) is an industrial protocol useful for machine-to-machine communication. To enable OPC UA:
+
+- Use `idf.py menuconfig` and select the OPC UA option.
+- After configuring through menuconfig, ensure that you also choose "Yes" when prompted by `BuildESP32ResourceFile.sh`.
+
+### 3. Enable softTPM eFuse
+
+The softTPM eFuse option allows for secure storage of secrets directly in eFuse registers, making them permanently accessible on the device. This feature is part of the advanced security configuration settings. For full details on available configuration options, refer to the configuration section in the [generic Xedge build documentation](https://realtimelogic.com/ba/examples/xedge/readme.html).
 
 ## Embedding Lua Apps and configuring NVS
 
