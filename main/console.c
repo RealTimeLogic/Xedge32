@@ -23,7 +23,6 @@ void manageConsole(bool start)
    {
       /* Called by Lua binding esp32.execute"killmain" */
       vTaskDelete(mainTaskHandle);
-      printf("deinit\n"); 
       return;
    }
    /* called by main() */

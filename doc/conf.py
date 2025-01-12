@@ -18,7 +18,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Xedge32'
-copyright = '2023, RTL'
+copyright = '2025, RTL'
 author = 'RTL'
 
 "master_doc = 'index'"
