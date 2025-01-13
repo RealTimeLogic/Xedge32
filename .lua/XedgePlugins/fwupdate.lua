@@ -65,3 +65,14 @@ function commands.uploadfw(cmd)
    cmd:setstatus(204)
    cmd:abort()
 end
+
+local started
+local function cb(ip)
+   if not started then started=true return end
+   local dns=package.loaded["acme/dns"]
+   if dns then dns.setip(ip) end
+   xedge.elog({ts=true},"New IP %s",ip)
+end
+xedge.event("wip",cb)
+xedge.event("eth",cb)
+
