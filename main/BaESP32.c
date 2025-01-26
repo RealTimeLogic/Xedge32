@@ -111,7 +111,7 @@ typedef struct
 } GpioThreadJob;
 
 /* Array of pointers with len GPIO_NUM_MAX */
-LGPIO* activeGPOI[GPIO_NUM_MAX];
+LGPIO* activeGPIO[GPIO_NUM_MAX];
 
 
 /*********************************************************************
@@ -300,11 +300,11 @@ typedef struct LADC
  */
 static void adcStopContinuousCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   LADC* adc = (LADC*)activeGPIO[arg.pin];
    baAssert(adc);
    if(adc)
    {
-      activeGPOI[arg.pin]=0;
+      activeGPIO[arg.pin]=0;
       adc_continuous_stop(adc->u.contin.handle);
       adc_continuous_deinit(adc->u.contin.handle);
       xSemaphoreGive(adc->u.contin.stopSem); /* Continue with ADC_close() */
@@ -334,7 +334,7 @@ static void ADC_close(lua_State* L, LADC* o)
          ThreadMutex_set(soDispMutex);
          vSemaphoreDelete(o->u.contin.stopSem);
       }
-      activeGPOI[o->pin]=0;
+      activeGPIO[o->pin]=0;
       if(o->caliHandle)
       {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
@@ -440,7 +440,7 @@ static int adcMeanFilter(lua_State* L, int msgh, LADC* adc)
  */
 static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LADC* adc = (LADC*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   LADC* adc = (LADC*)activeGPIO[((GpioThreadJob*)jb)->pin];
    if(adc)
    {
       lua_State* L = jb->Lt;
@@ -510,7 +510,7 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void adcEventCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   LADC* adc = (LADC*)activeGPIO[arg.pin];
    if(adc && ! adc->u.contin.running)
    {
       adc->u.contin.running = TRUE;
@@ -523,7 +523,7 @@ static void adcEventCB(EventBrokerCallbackArg arg)
  */
 static void adcOverflowCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   LADC* adc = (LADC*)activeGPIO[arg.pin];
    if(adc)
       adc->u.contin.overflow=TRUE;
 }
@@ -560,7 +560,7 @@ static IRAM_ATTR bool adcConvDoneInterruptHandler(
  */
 static void adcStartContinuousCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPOI[arg.pin];
+   LADC* adc = (LADC*)activeGPIO[arg.pin];
    baAssert(adc);
    if(adc)
    {
@@ -622,7 +622,7 @@ static int ladc(lua_State* L)
    err = adc_oneshot_channel_to_io(unitId, channel, &pin);
    if(ESP_OK != err)
       return pushEspRetVal(L, err, "channel_to_io",TRUE);
-   if(activeGPOI[pin])
+   if(activeGPIO[pin])
       throwPinInUse(L,pin);
    if(hasCB) /* continuous mode */
    {
@@ -701,7 +701,7 @@ static int ladc(lua_State* L)
    }
    LADC* adc = (LADC*)lNewUdata(L, sizeof(LADC)+bufSize+blLen*sizeof(uint16_t),
                                 BAADC, adcObjLib);
-   activeGPOI[pin]=(LGPIO*)adc; /* mark pin in use */
+   activeGPIO[pin]=(LGPIO*)adc; /* mark pin in use */
    if(hasCB)
    {
       adc->u.contin.filter=filter;
@@ -766,7 +766,7 @@ static void GPIO_close(lua_State* L, LGPIO* o)
    if(GPIO_NUM_MAX != o->pin)
    {
       gpio_reset_pin(o->pin);
-      activeGPOI[o->pin]=0; /* should be atomic */
+      activeGPIO[o->pin]=0; /* should be atomic */
       o->pin = GPIO_NUM_MAX;
    }
 }
@@ -779,7 +779,7 @@ static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    U8 queue[GPIO_QUEUE_SIZE];
    GpioThreadJob* job = (GpioThreadJob*)jb;
    ThreadMutex_set(&rMutex);
-   LGPIO* gpio = activeGPOI[job->pin];
+   LGPIO* gpio = activeGPIO[job->pin];
    if(gpio)
    {
       queueLen = gpio->queueLen;
@@ -830,7 +830,7 @@ static void gpioEventCB(EventBrokerCallbackArg arg)
    int level = gpio_get_level(arg.pin);
 
    ThreadMutex_set(&rMutex);
-   gpio = activeGPOI[arg.pin];
+   gpio = activeGPIO[arg.pin];
    if(gpio)
    {
       if(gpio->queueLen < GPIO_QUEUE_SIZE)
@@ -926,7 +926,7 @@ static int lgpio(lua_State* L)
        ('O' == mode[0] ? GPIO_MODE_OUTPUT_OD :
         ('I' == mode[0] && !mode[5] ? GPIO_MODE_INPUT_OUTPUT :
          GPIO_MODE_INPUT_OUTPUT_OD)));
-   if(activeGPOI[pin])
+   if(activeGPIO[pin])
       throwPinInUse(L,pin);
    lInitConfigTable(L, 3);
    lua_getfield(L, 3, "callback"); /* callback IX is now 4 */
@@ -954,7 +954,7 @@ static int lgpio(lua_State* L)
    gpio_reset_pin(pin);
    if(ESP_OK != gpio_config(&cfg))
       throwInvArg(L,"config");
-   activeGPOI[pin]=gpio;
+   activeGPIO[pin]=gpio;
    if(hasCB)
    {
       /* Userdata at -1 and callback ix is 4 */
@@ -978,7 +978,7 @@ typedef struct
 {
    pcnt_unit_handle_t unit;
    int callbackRef;
-   gpio_num_t pin; // One of the GPIO pins used; We use it as index in activeGPOI 
+   gpio_num_t pin; // One of the GPIO pins used; We use it as index in activeGPIO 
    int noOfChannels;
    int qHead;
    int qTail;
@@ -1018,7 +1018,7 @@ static int LPCNT_close(lua_State* L, LPCNT* o)
       status = pcnt_del_unit(o->unit);
       if(ESP_OK != status)
          HttpTrace_printf(5, "Cannot close PCNT unit", esp_err_to_name(status));
-      activeGPOI[o->pin]=0; /* release */
+      activeGPIO[o->pin]=0; /* release */
    }
    return 0;
 }
@@ -1155,11 +1155,11 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
       /* Only check during phase 1, the throw phase */
       if( ! channels )
       {
-         if(activeGPOI[chanCfg.edge_gpio_num])
+         if(activeGPIO[chanCfg.edge_gpio_num])
             throwPinInUse(L,chanCfg.edge_gpio_num);
-         if(activeGPOI[chanCfg.level_gpio_num])
+         if(activeGPIO[chanCfg.level_gpio_num])
             throwPinInUse(L,chanCfg.level_gpio_num);
-         /* Select any GPIO we use. Used for activeGPOI[] lookup */ 
+         /* Select any GPIO we use. Used for activeGPIO[] lookup */ 
          *pinPtr=chanCfg.edge_gpio_num;
       }
       int edgeIx=balua_getTabField(L, actionIx, "edge");
@@ -1214,7 +1214,7 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
 static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
    GpioThreadJob* job = (GpioThreadJob*)jb;
-   LPCNT* o = (LPCNT*)activeGPOI[job->pin];
+   LPCNT* o = (LPCNT*)activeGPIO[job->pin];
    if(o)
    {
       lua_State* L = jb->Lt;
@@ -1250,7 +1250,7 @@ static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LPCNT_onReachCB(EventBrokerCallbackArg arg)
 {
-   if(activeGPOI[arg.pin])
+   if(activeGPIO[arg.pin])
       dispatchThreadJob(arg.pin,LPCNT_onReachLuaCB);
 }
 
@@ -1261,7 +1261,7 @@ static bool LPCNT_onReachInterruptHandler(
    pcnt_unit_handle_t unit, const pcnt_watch_event_data_t* edata, void* pin)
 {
    BaseType_t highTaskWakeup=pdFALSE;
-   LPCNT* o=(LPCNT*)activeGPOI[(gpio_num_t)pin];
+   LPCNT* o=(LPCNT*)activeGPIO[(gpio_num_t)pin];
    /* This interrupt function has higher priority than step 3;
     * thus, the following appears as an atomic operation to LPCNT_onReachLuaCB
     */
@@ -1293,7 +1293,7 @@ static int lLPCNT(lua_State* L)
       .flags.accum_count = balua_getBoolField(L, 1, "accumulator", FALSE)
    };
    int noOfChannels;
-   int gpioPin=-1; /* One of the pins used. Used for activeGPOI[gpioPin] lookup */
+   int gpioPin=-1; /* One of the pins used. Used for activeGPIO[gpioPin] lookup */
    /* Validate input table and count channels. This may throw error message. */
    LPCNT_channels(L,0,&noOfChannels,0, &gpioPin);
    baAssert(gpioPin != -1);
@@ -1332,7 +1332,7 @@ static int lLPCNT(lua_State* L)
             pcnt_unit_register_event_callbacks(pcnt->unit, &cbs, (void *)gpioPin);
             pcnt_unit_enable(pcnt->unit);
             pcnt_unit_clear_count(pcnt->unit);
-            activeGPOI[gpioPin]=(LGPIO*)pcnt; /* used for activeGPOI[] lookup */
+            activeGPIO[gpioPin]=(LGPIO*)pcnt; /* used for activeGPIO[] lookup */
             lua_settop(L,userdataIx);
             return 1; /* LPCNT userdata */
          }
@@ -1406,7 +1406,7 @@ static void LLEDC_close(lua_State* L, LLEDC* o)
 {
    if(o->running)
    {
-      activeGPOI[o->pin]=0;
+      activeGPIO[o->pin]=0;
       ECHK(ledc_stop(o->mode,o->channel,0));
       if(0 == --ledsRunning)
          ledc_fade_func_uninstall();
@@ -1437,7 +1437,7 @@ static const luaL_Reg ledcObjLib[] = {
  */
 static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LLEDC* led = (LLEDC*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   LLEDC* led = (LLEDC*)activeGPIO[((GpioThreadJob*)jb)->pin];
    if(led)
    {
       lua_State* L = jb->Lt;
@@ -1453,7 +1453,7 @@ static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void ledEventCB(EventBrokerCallbackArg arg)
 {
-   if(activeGPOI[arg.pin])
+   if(activeGPIO[arg.pin])
       dispatchThreadJob(arg.pin, executeLuaLedEventCB);
 }
 
@@ -1501,7 +1501,7 @@ static int lLedChannel(lua_State* L)
    int hasCB = lua_isfunction(L, 2);
    if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid GPIO pin");
-   if(activeGPOI[pin])
+   if(activeGPIO[pin])
       throwPinInUse(L,pin);
    if(channel < LEDC_CHANNEL_0 || channel >= LEDC_CHANNEL_MAX)
       throwInvArg(L, "channel");
@@ -1528,7 +1528,7 @@ static int lLedChannel(lua_State* L)
    led->mode=mode;
    led->channel=channel;
    led->running=TRUE;
-   activeGPOI[pin]=(LGPIO*)led;
+   activeGPIO[pin]=(LGPIO*)led;
    if(hasCB)
    {
       led->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 2);
@@ -1882,8 +1882,8 @@ static int I2CMaster_close(lua_State* L)
    
    if(i2cm->bus_handle)
    {
-      activeGPOI[i2cm->bus_cfg.sda_io_num] = 0; 
-      activeGPOI[i2cm->bus_cfg.scl_io_num] = 0;
+      activeGPIO[i2cm->bus_cfg.sda_io_num] = 0; 
+      activeGPIO[i2cm->bus_cfg.scl_io_num] = 0;
       i2c_del_master_bus(i2cm->bus_handle);
       i2cm->bus_handle = 0;
    }
@@ -1951,18 +1951,18 @@ static int li2cMaster(lua_State* L)
      return pushEspRetVal(L, ret_val, "i2cm", TRUE);
   }
   // Check if SDA pin is already in use, raise error if so
-  if(activeGPOI[i2cm->bus_cfg.sda_io_num])
+  if(activeGPIO[i2cm->bus_cfg.sda_io_num])
   {
      throwPinInUse(L, i2cm->bus_cfg.sda_io_num);
   }
   // Check if SCL pin is already in use, raise error if so
-  if(activeGPOI[i2cm->bus_cfg.scl_io_num])
+  if(activeGPIO[i2cm->bus_cfg.scl_io_num])
   {
      throwPinInUse(L, i2cm->bus_cfg.scl_io_num);
   }
   
-  activeGPOI[i2cm->bus_cfg.sda_io_num] = (LGPIO*)i2cm;
-  activeGPOI[i2cm->bus_cfg.scl_io_num] = (LGPIO*)i2cm;
+  activeGPIO[i2cm->bus_cfg.sda_io_num] = (LGPIO*)i2cm;
+  activeGPIO[i2cm->bus_cfg.scl_io_num] = (LGPIO*)i2cm;
 
   return 1; // Return the new I2C master object to Lua
 }
@@ -2234,7 +2234,7 @@ static void LRmtTx_del(LRmtTx* o, lua_State* L)
          rmt_del_encoder(o->txEncoder);
          rmt_del_channel(o->txChannel);
          o->txChannel=0;
-         activeGPOI[o->pin]=0;
+         activeGPIO[o->pin]=0;
       }
       o->rx=NULL;
    }
@@ -2252,7 +2252,7 @@ static int LRmtTx_close(lua_State* L)
  */
 static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtBase* base = (LRmtBase*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   LRmtBase* base = (LRmtBase*)activeGPIO[((GpioThreadJob*)jb)->pin];
    if(base && base->tx)
    {
       LRmtTx* o = base->tx;
@@ -2282,7 +2282,7 @@ static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LRmtTx_onTxComplete(EventBrokerCallbackArg arg)
 {
-   if(activeGPOI[arg.pin])
+   if(activeGPIO[arg.pin])
       dispatchThreadJob(arg.pin, LRmtTx_executeOnTxComplete);
 }
 
@@ -2291,7 +2291,7 @@ static bool IRAM_ATTR LRmtTx_interruptHandler(
    rmt_channel_handle_t tx_chan, const rmt_tx_done_event_data_t *edata, void *arg)
 {
    BaseType_t hwakeup = pdFALSE;
-   LRmtBase* base = (LRmtBase*)activeGPOI[(gpio_num_t)arg];
+   LRmtBase* base = (LRmtBase*)activeGPIO[(gpio_num_t)arg];
    if(base && base->tx)
    {
       LRmtRx* rx = base->tx->rx;
@@ -2359,12 +2359,12 @@ static int LRmtTx_create(lua_State* L)
       L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib);
    memset(tx,0,sizeof(LRmtTx));
    ((LRmtBase*)tx)->tx=tx;
-   if(activeGPOI[txCfg.gpio_num])
+   if(activeGPIO[txCfg.gpio_num])
    {
       if(hasRx)
       {
          rx = (LRmtRx*)luaL_checkudata(L,2,BARMTRX);
-         if((LRmtRx*)activeGPOI[txCfg.gpio_num] == rx && rx->rxChannel)
+         if((LRmtRx*)activeGPIO[txCfg.gpio_num] == rx && rx->rxChannel)
          {
             ((LRmtBase*)rx)->tx=tx;
             txCfg.flags.io_loop_back=TRUE;
@@ -2409,7 +2409,7 @@ static int LRmtTx_create(lua_State* L)
             if(rx)
                tx->rx=rx;
             else
-               activeGPOI[tx->pin]=(LGPIO*)tx;
+               activeGPIO[tx->pin]=(LGPIO*)tx;
             return 1;
          }
       }
@@ -2423,7 +2423,7 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
 {
    if(o->rxChannel)
    {
-      activeGPOI[o->pin]=0;
+      activeGPIO[o->pin]=0;
       rmt_disable(o->rxChannel);
       rmt_del_channel(o->rxChannel);
       o->rxChannel=0;
@@ -2438,7 +2438,7 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
  */
 static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtRx* o = (LRmtRx*)activeGPOI[((GpioThreadJob*)jb)->pin];
+   LRmtRx* o = (LRmtRx*)activeGPIO[((GpioThreadJob*)jb)->pin];
    if(o && o->symBuf)
    {
       lua_State* L = jb->Lt;
@@ -2472,7 +2472,7 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LRmtRx_onRxComplete(EventBrokerCallbackArg arg)
 {
-   if(activeGPOI[arg.pin])
+   if(activeGPIO[arg.pin])
       dispatchThreadJob(arg.pin, LRmtRx_executeOnRxComplete);
 }
 
@@ -2481,7 +2481,7 @@ static bool IRAM_ATTR LRmtRx_interruptHandler(
    rmt_channel_handle_t channel, const rmt_rx_done_event_data_t* edata, void* arg)
 {
    BaseType_t hwakeup = pdFALSE;
-   LRmtRx* o = (LRmtRx*)activeGPOI[(gpio_num_t)arg];
+   LRmtRx* o = (LRmtRx*)activeGPIO[(gpio_num_t)arg];
    if(o && o->symBuf)
    {
       EventBrokerQueueNode n = {
@@ -2566,7 +2566,7 @@ static int LRmtRx_create(lua_State* L)
    };
    if(cfg.gpio_num < GPIO_NUM_0 || cfg.gpio_num >= GPIO_NUM_MAX)
       luaL_argerror(L, 1, "Invalid GPIO pin");
-   if(activeGPOI[cfg.gpio_num])
+   if(activeGPIO[cfg.gpio_num])
       throwPinInUse(L,cfg.gpio_num);
    LRmtRx* rx = (LRmtRx*)lNewUdata(L,sizeof(LRmtRx),BARMTRX,rmtRxLib);
    memset(rx,0,sizeof(LRmtRx));
@@ -2588,7 +2588,7 @@ static int LRmtRx_create(lua_State* L)
          status=rmt_enable(rx->rxChannel);
          if(ESP_OK == status)
          {
-            activeGPOI[rx->pin]=(LGPIO*)rx;
+            activeGPIO[rx->pin]=(LGPIO*)rx;
             return 1;
          }
       }
@@ -3386,9 +3386,40 @@ static const luaL_Reg basLib[] = {
    {"mac", lmac}
 };
 
+#define RESERVED_PIN (void*)1  // Define a flag for reserved pins
+
 void installESP32Libs(lua_State* L)
 {
-   memset(activeGPOI, 0, sizeof(void*)*GPIO_NUM_MAX);
+   memset(activeGPIO, 0, sizeof(void*)*GPIO_NUM_MAX);
+
+// --- RESERVED PINS FOR ESP32 ---
+#ifdef CONFIG_IDF_TARGET_ESP32
+    activeGPIO[6]  = RESERVED_PIN; // GPIO6  - Connected to SPI Flash SCK (CLK)
+    activeGPIO[7]  = RESERVED_PIN; // GPIO7  - Connected to SPI Flash SDO (MOSI)
+    activeGPIO[8]  = RESERVED_PIN; // GPIO8  - Connected to SPI Flash SDI (MISO)
+    activeGPIO[9]  = RESERVED_PIN; // GPIO9  - Connected to SPI Flash WP
+    activeGPIO[10] = RESERVED_PIN; // GPIO10 - Connected to SPI Flash HD
+    activeGPIO[11] = RESERVED_PIN; // GPIO11 - Connected to SPI Flash CS
+#endif
+
+   // --- RESERVED PINS FOR ESP32-S3 ---
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    activeGPIO[26] = RESERVED_PIN; // GPIO26 - Connected to SPI Flash SCK (CLK)
+    activeGPIO[27] = RESERVED_PIN; // GPIO27 - Connected to SPI Flash SDO (MOSI)
+    activeGPIO[28] = RESERVED_PIN; // GPIO28 - Connected to SPI Flash SDI (MISO)
+    activeGPIO[29] = RESERVED_PIN; // GPIO29 - Connected to SPI Flash WP
+    activeGPIO[30] = RESERVED_PIN; // GPIO30 - Connected to SPI Flash HD
+    activeGPIO[31] = RESERVED_PIN; // GPIO31 - Connected to SPI Flash CS
+
+    // PSRAM Pins (Reserved if PSRAM is enabled)
+    activeGPIO[32] = RESERVED_PIN; // GPIO32 - Connected to PSRAM SCK (CLK)
+    activeGPIO[33] = RESERVED_PIN; // GPIO33 - Connected to PSRAM CS
+    activeGPIO[34] = RESERVED_PIN; // GPIO34 - Connected to PSRAM SDO
+    activeGPIO[35] = RESERVED_PIN; // GPIO35 - Connected to PSRAM SDI
+    activeGPIO[36] = RESERVED_PIN; // GPIO36 - Connected to PSRAM WP
+    activeGPIO[37] = RESERVED_PIN; // GPIO37 - Connected to PSRAM HD
+#endif
+
    ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
    luaL_newlib(L, esp32Lib);
