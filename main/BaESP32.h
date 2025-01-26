@@ -40,7 +40,7 @@ const char* wifiAuthMode(int authmode, int print);
 
 struct LGPIO;
 
-extern struct LGPIO* activeGPOI[GPIO_NUM_MAX];
+extern struct LGPIO* activeGPIO[GPIO_NUM_MAX];
 
 
 /*

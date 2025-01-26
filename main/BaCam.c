@@ -55,7 +55,7 @@ static int LCAM_close(lua_State* L)
       {
          if(o->pins[i] >= 0)
          {
-            activeGPOI[o->pins[i]] = NULL; // Release
+            activeGPIO[o->pins[i]] = NULL; // Release
          }
       }
       // The sensor field at NULL indicates that the camera could not
@@ -178,7 +178,7 @@ int lcam(lua_State* L)
    {
       if(pins[i] >= 0)
       {
-         if(pins[i] >= GPIO_NUM_MAX || activeGPOI[pins[i]])
+         if(pins[i] >= GPIO_NUM_MAX || activeGPIO[pins[i]])
             luaL_error(L,"Pin %d in use", pins[i]);
       }
    }
@@ -318,13 +318,13 @@ int lcam(lua_State* L)
 
    for(int i = 0 ; i < sizeof(pins)/sizeof(pins[0]) ; i++)
    {
-      /* We assign the activeGPOI a non NULL value to indicate it is
+      /* We assign the activeGPIO a non NULL value to indicate it is
        * in use; the pointer is only used for checking that it is non
        * NULL and it is not used as a valid pointer value.
        */
       if(pins[i] >= 0)
       {
-         activeGPOI[pins[i]] = (struct LGPIO*)1;
+         activeGPIO[pins[i]] = (struct LGPIO*)1;
       }
    }
    baAssert(sizeof(pins)/sizeof(pins[0]) == sizeof(cam->pins)/sizeof(cam->pins[0]));
