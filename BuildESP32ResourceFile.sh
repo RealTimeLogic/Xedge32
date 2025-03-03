@@ -27,6 +27,7 @@ echo "Adding ESP32 modules"
 if [ "$NO_FWUPDATE" == "1" ]; then
     zip -D -r -9 $RB/Xedge.zip .lua -x ".lua/XedgePlugins/fw*" || exit 1
 else
+    zip -d main/BAS-Resources/build/Xedge.zip ".lua/XedgePlugins/appupdate.*"
     zip -D -r -9 $RB/Xedge.zip  .lua || exit 1
 fi
 

@@ -36,7 +36,8 @@
 #include "CfgESP32.h"
 
 /*
- * To enable the thread debug please execute idf.py menuconfig and go to xedge->debug thread.
+ * To enable the thread debug please execute idf.py menuconfig and go
+ * to xedge->debug thread.
  */
 #if CONFIG_DEBUG_THREADS
     #include <freertos/task_snapshot.h>
@@ -89,7 +90,7 @@ static const char* lcomplete(lua_State* L, int status)
 static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
 {
    lua_State* L = job->Lt;
-   int status = luaL_loadbuffer(L, luaLineBuffer.buf, luaLineBuffer.ix, "=stdin");
+   int status = luaL_loadbuffer(L,luaLineBuffer.buf,luaLineBuffer.ix,"=stdin");
    
    if(LUA_OK == status)
    {
@@ -280,7 +281,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    /* We return when we get an IP address, thus preventing the
     * Barracuda App Server from starting until the network is ready.
     */
-   netWaitIP();
+   //netWaitIP(); // Function in NetESP32.c
    return 0;
 }
 

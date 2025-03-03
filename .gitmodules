@@ -4,7 +4,12 @@
 [submodule "main/BAS-Resources"]
 	path = main/BAS-Resources
 	url = https://github.com/RealTimeLogic/BAS-Resources.git
+[submodule "main/LPeg"]
+	path = main/LPeg
+	url = https://github.com/roberto-ieru/LPeg
+[submodule "main/CBOR"]
+	path = main/CBOR
+	url = https://github.com/spc476/CBOR
 [submodule "main/lua-protobuf"]
 	path = main/lua-protobuf
 	url = https://github.com/surfskidude/lua-protobuf
-

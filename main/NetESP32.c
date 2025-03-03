@@ -34,7 +34,7 @@
 
 static const char TAG[]={"X"};
 
-static SemaphoreHandle_t semGotIp = 0;
+//static SemaphoreHandle_t semGotIp = 0;
 static uint8_t gotIP = FALSE; /* if IP set */
 
 #ifdef CONFIG_ETH_ENABLED
@@ -286,8 +286,8 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
       netExecXedgeEvent("eth", param1, param2, param3);
    }
 
-   if(semGotIp)
-      xSemaphoreGive(semGotIp);
+//   if(semGotIp)
+//      xSemaphoreGive(semGotIp);
 }
 
 /**
@@ -866,7 +866,8 @@ static esp_err_t netEthStart(netConfig_t* cfg)
  *        starting until a valid IP address is obtained.
  * @note This function assumes that the soDispMutex mutex is already 
  *       locked by the calling function.
- */    
+ */
+#if 0
 void netWaitIP(void)   
 {
    if(!gotIP)
@@ -880,6 +881,7 @@ void netWaitIP(void)
       semGotIp=0;
    }
 }
+#endif
 
 /**
  * @brief Checks if the IP address has been acquired.
