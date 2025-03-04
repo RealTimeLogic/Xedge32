@@ -6,10 +6,10 @@
 	url = https://github.com/RealTimeLogic/BAS-Resources.git
 [submodule "main/LPeg"]
 	path = main/LPeg
-	url = https://github.com/roberto-ieru/LPeg
+	url = https://github.com/roberto-ieru/LPeg.git
 [submodule "main/CBOR"]
 	path = main/CBOR
-	url = https://github.com/spc476/CBOR
+	url = https://github.com/spc476/CBOR.git
 [submodule "main/lua-protobuf"]
 	path = main/lua-protobuf
-	url = https://github.com/surfskidude/lua-protobuf
+	url = https://github.com/surfskidude/lua-protobuf.git
