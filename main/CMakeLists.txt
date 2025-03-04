@@ -1,6 +1,6 @@
 
 idf_component_register(
-  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "NetESP32.c" "CfgESP32.c" "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/XedgeZip.c" "console.c" "BaESP32.c" "LPeg/lpcap.c" "LPeg/lpcode.c" "LPeg/lpprint.c" "LPeg/lptree.c" "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c" "BaCam.c"
+  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "NetESP32.c" "CfgESP32.c" "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/XedgeZip.c" "console.c" "BaESP32.c" "LPeg/lpcset.c" "LPeg/lpcap.c" "LPeg/lpcode.c" "LPeg/lpprint.c" "LPeg/lptree.c" "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c" "BaCam.c"
   INCLUDE_DIRS "."
   "BAS/inc"
   "BAS/inc/arch/NET/LwIP"
