@@ -15,6 +15,10 @@ You do not need to compile Xedge32. Compiling Xedge32 is for C code experts.
 * [Xedge32 South Bridge API](https://realtimelogic.com/ba/ESP32/)
 
 
+## Understanding the Xedge32 Architecture
+
+As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.com/articles/Your-First-Xedge32-Project), Xedge32 is explicitly **built for OEM integration**. It's an ESP32 customized version of the more general-purpose Xedge framework, which itself is powered by the [Barracuda App Server](https://github.com/RealTimeLogic/BAS). For more details, check out the [Xedge product page](https://realtimelogic.com/products/xedge/).
+
 ## Compiling The C Code (for experts)
 
 **Note:** [Xedge32](https://realtimelogic.com/ba/ESP32/) is built on the more generic [Xedge](https://realtimelogic.com/products/xedge/), which itself is based on the [Barracuda App Server library](https://realtimelogic.com/products/barracuda-application-server/). Xedge32, Xedge, and the Barracuda App Server are OEM software components designed for easy integration into OEM products. All components are [designed to be extended](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code).

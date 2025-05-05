@@ -233,8 +233,8 @@ The specified ``callback`` function will be called when the network changes stat
 - ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. This event is generated  when the device receives the time from the network. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
 
 
-Example code
-~~~~~~~~~~~~~~~~
+Event Examples
+~~~~~~~~~~~~~~~
 
 .. code-block:: lua
 
@@ -262,6 +262,35 @@ Example code
    xedge.event("sntp",function()
       trace("Time synchronized")
    end)
+
+
+
+The following example shows how to register and de-register an event using xedge.event(). It subscribes to "sntp" events, which are triggered after system startup and any time the system clock is synchronized via SNTP. The code demonstrates how to handle only the first event, record the system's boot time, and then unregister the handler to avoid processing future events. The captured time is saved to the app table for use elsewhere in the application.
+
+.. code-block:: lua
+
+   local sntp -- Function forward declaration
+
+   -- Cleanup hook: removes the SNTP event listener.
+   -- Called automatically when the application stops, or manually after
+   -- handling the event once.
+   function onunload()
+      xedge.event("sntp", sntp, true)  -- Unsubscribe from the "sntp" event
+   end
+
+   -- Event handler: called the first time SNTP syncs the clock.
+   -- Automatically unregisters itself after running once.
+   sntp = function()
+      -- Remove the event listener so we don't handle future "sntp" events
+      onunload()
+      startTime = ba.datetime"NOW"  -- Record boot/start time
+      -- Log event with timestamp
+      xedge.elog({ts=true}, "Boot time=%s", startTime:tostring())
+      xedge.eflush({subject="App starting"})  -- Flush event log with context
+   end
+
+   -- Register our one-time SNTP sync handler
+   xedge.event("sntp", sntp)
 
 
 Note

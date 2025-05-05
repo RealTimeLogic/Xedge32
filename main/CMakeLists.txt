@@ -11,7 +11,7 @@ idf_component_register(
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
 #  generates faulty BAS binary code without this setting.
 
-target_compile_options(${COMPONENT_LIB} PRIVATE -DBA_ESP32 -DBA_FREERTOS -DBA_LWIP -DUSE_DLMALLOC -DBP_IO=0 -DUSE_LPEG=1 -DUSE_CBOR=1 -DUSE_PROTOBUF=1 -DUSE_REVCON=1 -DB_LITTLE_ENDIAN -DLUA_NUMBER_INTEGER=0 -DUSE_DBGMON=1)
+target_compile_options(${COMPONENT_LIB} PRIVATE -DBA_ESP32 -DMAXTHREADS=2 -DBA_FREERTOS -DBA_LWIP -DUSE_DLMALLOC -DBP_IO=0 -DUSE_LPEG=1 -DUSE_CBOR=1 -DUSE_PROTOBUF=1 -DUSE_REVCON=1 -DB_LITTLE_ENDIAN -DLUA_NUMBER_INTEGER=0 -DUSE_DBGMON=1)
 
 
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
