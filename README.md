@@ -6,18 +6,27 @@ Looking to turn your ESP32 into a powerful [Edge Controller or IoT Gateway](http
 
 ![ESP32 Edge Controller](https://realtimelogic.com/images/xedge/v1/Xedge.png)
 
+**Figure 1: Xedge32 in developer mode**
+
 ## Getting Started
 
 You do not need to compile Xedge32. Compiling Xedge32 is for C code experts.
 
 * [Download the Xedge32 Firmware](https://realtimelogic.com/downloads/bas/ESP32/)
 * [Xedge32 Tutorials](https://realtimelogic.com/xedge32-tutorials/)
-* [Xedge32 South Bridge API](https://realtimelogic.com/ba/ESP32/)
+* [Xedge32 South Bridge API](https://realtimelogic.com/ba/ESP32/) - GPIO and HW APIs
+* [How to use Xedge32 in developer mode](https://realtimelogic.com/ba/doc/en/Xedge.html)
 
 
 ## Understanding the Xedge32 Architecture
 
-As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.com/articles/Your-First-Xedge32-Project), Xedge32 is explicitly **built for OEM integration**. It's an ESP32 customized version of the more general-purpose Xedge framework, which itself is powered by the [Barracuda App Server](https://github.com/RealTimeLogic/BAS). For more details, check out the [Xedge product page](https://realtimelogic.com/products/xedge/).
+As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.com/articles/Your-First-Xedge32-Project), Xedge32 is explicitly **[built for OEM integration](#xedge32-and-oem-integration)**. It's an ESP32 customized version of the more general-purpose Xedge framework, which itself is powered by the [Barracuda App Server](https://github.com/RealTimeLogic/BAS).
+
+**For more details:**
+
+* [Xedge product page](https://realtimelogic.com/products/xedge/)
+* [Advanced compilation options including release build options](https://realtimelogic.com/ba/examples/xedge/readme.html)
+
 
 ## Compiling The C Code (for experts)
 
@@ -101,6 +110,13 @@ The softTPM eFuse option allows for secure storage of secrets directly in eFuse 
 ## Embedding Lua Apps and configuring NVS
 
 Lua apps and the Xedge configuration file can be embedded in the firmware binary using `fatfsgen.py` and  `nvs_partition_gen.py`. See the [Partitions Generator Utility](partitions/README.md) readme file for details.
+
+## Xedge32 and OEM Integration
+
+OEM integration means you are not using Xedge32 as a one-size-fits-all product. You are working with a platform designed to be embedded inside your firmware. Instead of starting from scratch, you extend and customize the platform to fit your specific needs, then ship it as an integral part of your product.
+
+Xedge32 is built for precisely this. It gives you a solid base, and with Lua, you can add features, tweak behavior, and expose your own Lua to C APIs without modifying the core system. For a high-level conceptual view, check out the article [Using Lua for Embedded Development vs. Traditional C Code](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code) and the tutorial on [creating Lua to C code APIs](https://tutorial.realtimelogic.com/Lua-Bindings.lsp).
+
 
 ## Export restrictions
 
