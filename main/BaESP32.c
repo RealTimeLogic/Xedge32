@@ -75,6 +75,7 @@ LThreadMgr Documentation:
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
 #include <esp_ota_ops.h>
+#include "esp_idf_version.h"
 
 #include "BaESP32.h"
 #include "CfgESP32.h"
@@ -2344,8 +2345,11 @@ static int LRmtTx_create(lua_State* L)
       .intr_priority = (int)balua_getIntField(L,1,"priority",0),
       .flags.invert_out=balua_getBoolField(L,1,"invert", FALSE),
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
-      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
+      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE);
+#endif
    };
+      
    /* fixme: analyze this; ESP-IDF assert rmt_ll_tx_set_channel_clock_div if larger */
    if(txCfg.resolution_hz > 80000000)
       return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"resolution",TRUE);
@@ -2367,7 +2371,9 @@ static int LRmtTx_create(lua_State* L)
          if((LRmtRx*)activeGPIO[txCfg.gpio_num] == rx && rx->rxChannel)
          {
             ((LRmtBase*)rx)->tx=tx;
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
             txCfg.flags.io_loop_back=TRUE;
+#endif
             goto L_ok;
          }
       }
@@ -2379,6 +2385,13 @@ static int LRmtTx_create(lua_State* L)
    esp_err_t status=rmt_new_tx_channel(&txCfg, &tx->txChannel);
    if(ESP_OK == status)
    {
+// Open-drain now via GPIO API (io_od_mode removed)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
+      if(balua_getBoolField(L,1,"opendrain",FALSE))
+      {
+         gpio_od_enable(tx->pin);
+      }
+#endif
       lua_getfield(L, 1, "dutycycle");
       if(lua_isnumber(L, -1))
       {

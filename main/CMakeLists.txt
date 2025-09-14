@@ -6,6 +6,19 @@ idf_component_register(
   "BAS/inc/arch/NET/LwIP"
   "BAS/inc/arch/FreeRTOS"
   "BAS/examples/xedge/src"
+  PRIV_REQUIRES
+    driver    
+    esp_wifi
+    esp_event
+    esp_netif
+    nvs_flash
+	fatfs           # <-- for esp_vfs_fat.h
+	esp_eth         # <-- for esp_eth_mac.h / esp_eth_phy.h
+	efuse           # for esp_efuse.h
+ 	esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
+    app_update      # <-- for esp_ota_ops.h
+    esp32-camera 
+	esp_timer
 )
 
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
@@ -28,3 +41,10 @@ fatfs_create_spiflash_image(storage ../partitions/storage FLASH_IN_PROJECT PRESE
 # Key-value pairs. FLASH_IN_PROJECT indicates that the generated image should be 
 # flashed when the entire project is flashed to the target with 'idf.py -p PORT flash'.
 nvs_create_partition_image(nvs ../partitions/nvs_xedge_values.csv FLASH_IN_PROJECT)
+
+# Suppress GCC's 'maybe-uninitialized' just for pb.c
+set_source_files_properties(
+  lua-protobuf/pb.c
+  PROPERTIES
+    COMPILE_FLAGS "-Wno-maybe-uninitialized -Wno-error=maybe-uninitialized"
+)
