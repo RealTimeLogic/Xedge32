@@ -44,20 +44,20 @@ The following Linux commands show all steps required for installing the developm
    # remove old installation, if any
    rm -rf .espressif esp/esp-idf
 
-   # Install the latest esp-idf
+   # Install the esp-idf
    mkdir esp
    cd esp
-   git clone --recursive https://github.com/espressif/esp-idf.git
-   ./install.sh
-   cd ..
+   git clone -b v5.5.1 --recursive https://github.com/espressif/esp-idf.git
+   esp-idf/install.sh
    source esp-idf/export.sh
 
-   # Download and update Xedge32
+   # Download and update Xedge32; You can install it in any directory
+   cd ~/esp
    git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
    cd xedge
    git submodule update --init --remote
 
-   # Build the Xedge resource file Xedge.zip, convert to C, and copy C file to Xedge directory
+   # Build the Xedge resource Xedge.zip, convert it to C, and copy the C file to the Xedge directory
    chmod +x BuildESP32ResourceFile.sh
    ./BuildESP32ResourceFile.sh
 

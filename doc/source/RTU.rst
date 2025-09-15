@@ -7,7 +7,7 @@ This Lua module extends the functionality of the Barracuda App Server's Modbus T
 
 .. code-block:: lua
 
-   rtu=require"modbus.rtu".create(port, config)
+   rtu=require"modbus.rtu".connect(port, config)
 
 Create a Modbus RTU object.
 

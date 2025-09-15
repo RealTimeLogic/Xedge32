@@ -2346,7 +2346,7 @@ static int LRmtTx_create(lua_State* L)
       .flags.invert_out=balua_getBoolField(L,1,"invert", FALSE),
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
 #if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
-      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE);
+      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
 #endif
    };
       
