@@ -189,6 +189,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
     */
    cfgGetNet(&cfg);
 
+#if SOC_WIFI_SUPPORTED
    if(!strcmp("wifi", cfg.adapter))
    {
       netWifiConnect(cfg.ssid, cfg.password);
@@ -197,6 +198,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    {
       netEthConnect();
    }  
+#endif
 
    if(gotSdCard)
    {
@@ -620,10 +622,12 @@ void app_main(void)
     * is running, as it utilizes the baMalloc function.
     */
 
+#if SOC_WIFI_SUPPORTED
    if(!adapter)
    {
       netWifiApStart(true);
    }
+#endif
    
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 

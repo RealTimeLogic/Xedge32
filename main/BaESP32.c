@@ -1477,13 +1477,10 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
 }
 
 
-#if CONFIG_IDF_TARGET_ESP32S3
-#define LEDC_HIGH_SPEED_MODE LEDC_SPEED_MODE_MAX
-#endif
 static ledc_mode_t lLedGetSpeedMode(lua_State* L, int ix)
 {
    const char* mode = balua_checkStringField(L, 1, "mode");
-   return 'H' == mode[0] ? LEDC_HIGH_SPEED_MODE :
+   return 'H' == mode[0] ? LEDC_SPEED_MODE_MAX :
       ('L' == mode[0] ? LEDC_LOW_SPEED_MODE : throwInvArg(L, "mode"));
 }
 
@@ -3041,7 +3038,8 @@ static int lwscan(lua_State* L)
  */
 static int lnetconnect(lua_State* L)
 {
-netConfig_t cfg = {0};
+#if SOC_WIFI_SUPPORTED
+   netConfig_t cfg = {0};
    
    // Set the network adapter from Lua string argument.
    strcpy(cfg.adapter, (char*)luaL_checkstring(L, 1));
@@ -3087,6 +3085,9 @@ netConfig_t cfg = {0};
    ThreadMutex_set(soDispMutex);
    // Call the netConnect function and push the return value to the Lua stack.
    return pushEspRetVal(L, netConnect(&cfg), 0, TRUE);
+#else
+   return pushEspRetVal(L,ESP_ERR_NOT_SUPPORTED,0,FALSE);
+#endif
 }
  
 /**
@@ -3148,6 +3149,7 @@ static int lloglevel(lua_State* L)
 
 static int lapinfo(lua_State* L)
 {
+#if SOC_WIFI_SUPPORTED
    wifi_ap_record_t ap;
    esp_err_t err = esp_wifi_sta_get_ap_info(&ap);
    if(err == ESP_OK)
@@ -3159,6 +3161,9 @@ static int lapinfo(lua_State* L)
                         pciphers,gcipher,ap.primary);
    }
    return pushEspRetVal(L,err,0,FALSE);
+#else
+   return pushEspRetVal(L,ESP_ERR_NOT_SUPPORTED,0,FALSE);
+#endif
 }
 
 
