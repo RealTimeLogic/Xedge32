@@ -189,6 +189,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
     */
    cfgGetNet(&cfg);
 
+#if SOC_WIFI_SUPPORTED
    if(!strcmp("wifi", cfg.adapter))
    {
       netWifiConnect(cfg.ssid, cfg.password);
@@ -197,6 +198,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    {
       netEthConnect();
    }  
+#endif
 
    if(gotSdCard)
    {
@@ -275,7 +277,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    if(fp)
       fp->closeFp(fp);
 #endif
-   aux->addSecret(aux, keyBuf,sizeof(keyBuf)); /* Send device key to Lua code */
+   aux->addSecret(aux, TRUE, keyBuf, sizeof(keyBuf)); /* Send DDUI to TPM */
    aux->xedgeCfgFile = openXCfgPartition() ? xedgeCfgFile : 0;
 
    /* We return when we get an IP address, thus preventing the
@@ -620,10 +622,12 @@ void app_main(void)
     * is running, as it utilizes the baMalloc function.
     */
 
+#if SOC_WIFI_SUPPORTED
    if(!adapter)
    {
       netWifiApStart(true);
    }
+#endif
    
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 

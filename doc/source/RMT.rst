@@ -24,7 +24,7 @@ RMT-Symbol Layout
 
 The RMT hardware defines data according to its unique RMT-symbol pattern. An RMT-symbol encodes the duration and level of a digital signal pulse, which are critical for accurate signal generation and reception.
 
-.. figure:: https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/_images/packetdiag-3577851dc99f87d0ace9a8ff06179282fd6f9c71.png
+.. figure:: img/RMT-Symbol-Layout.png
    :align: center
    :alt: RMT-symbol layout
 

@@ -75,12 +75,3 @@ Xedge ESP32
    source/tutorials
    source/applications.rst
    source/license
-
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
