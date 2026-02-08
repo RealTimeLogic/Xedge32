@@ -606,6 +606,22 @@ void app_main(void)
    esp_log_level_set("*", ESP_LOG_ERROR);
    
    bool adapter = initComponents();
+
+   /**
+    * Installs the Wi-Fi in Access Point (AP) mode when no adapter is
+    * configured.
+    *
+    * Note: This function should be called after the BAS (Base
+    * Application Service) is running, as it utilizes the baMalloc
+    * function.
+    */
+#if SOC_WIFI_SUPPORTED
+   if(!adapter)
+   {
+      netWifiApStart(true);
+   }
+#endif
+
    manageConsole(true);
    
    for(int i = 0; i < 50 ; i++)
@@ -615,20 +631,7 @@ void app_main(void)
    }
    startMdnsService();
 
-   /**
-    * Installs the Wi-Fi in Access Point (AP) mode when no adapter is configured.
-    *
-    * Note: This function should be called after the BAS (Base Application Service)
-    * is running, as it utilizes the baMalloc function.
-    */
-
-#if SOC_WIFI_SUPPORTED
-   if(!adapter)
-   {
-      netWifiApStart(true);
-   }
-#endif
-   
+  
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
     * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.
