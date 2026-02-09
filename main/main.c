@@ -63,6 +63,23 @@ static sdmmc_card_t *card = NULL;
 #define EOFMARK		"<eof>"
 #define marklen		(sizeof(EOFMARK)/sizeof(char) - 1)
 
+#if CONFIG_mDNS_ENABLED
+static void startMdnsService()
+{
+   //initialize mDNS service
+   char buf[80]={0};
+   const char* ptr = ESP_OK == mDnsCfg(buf) ? buf : "Xedge32";
+   ESP_ERROR_CHECK(mdns_init());
+   mdns_hostname_set(ptr);
+   HttpTrace_printf(9,"mDNS: %s\n",ptr); 
+   mdns_instance_name_set("Xedge32");
+   mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+}
+#else
+#define startMdnsService()
+#endif
+
+
 /*
   Check whether 'status' signals a syntax error and the error message
   at the top of the stack ends with the above mark for incomplete
@@ -170,8 +187,11 @@ static int xedgeCfgFile(lua_State* L)
 }
 
 
-/* xedge.c calls this function. We use it to register the auto
- * generated bindings and the bindings in installESP32Libs.
+/* xedge.c calls this function. We use it to register the ESP32 Lua bindings.
+ * This code also starts the ESP32 network. Function xedgeOpenAUX is
+ * called when all Xedge objects used elsewhere in the ESP32-specific
+ * code have been initialized, but the function is called before the
+ * Xedge Lua app is started.
 */
 int xedgeOpenAUX(XedgeOpenAUX* aux)
 {
@@ -179,7 +199,13 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
 #if CONFIG_DEBUG_THREADS
    Lg=L;
 #endif
+   /*
+     installESP32Libs must be called before netInit since it sets up a
+     mutex used by all net callbacks.
+    */
    installESP32Libs(L);
+   netInit();
+   startMdnsService();
 
    netConfig_t cfg;
 
@@ -335,6 +361,7 @@ int xedgeInitDiskIo(DiskIo* io) /* Called by xedge.c */
    }
    /* Else: restarted internally by debugger */
    DiskIo_setRootDir(io,bp);
+
    return 0;
 }
 
@@ -362,6 +389,7 @@ static void mainServerTask(Thread *t)
 
    HttpTrace_setFLushCallback(writeHttpTrace);
    HttpServer_setErrHnd(myErrHandler); 
+
    barracuda(); /* Does not return */
 }
 
@@ -561,7 +589,7 @@ int lsdcard(lua_State* L)
    return 1;
 }
 
-static bool initComponents()
+static void initComponents()
 {
    static Thread t;
    
@@ -574,64 +602,18 @@ static bool initComponents()
       openSdCard(&cfg);
    }
    
-   bool adapter = netInit();
-
    /* Using BAS thread porting API */
    Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
    Thread_start(&t);
-   
-   return adapter;
 }
-
-#if CONFIG_mDNS_ENABLED
-static void startMdnsService()
-{
-   //initialize mDNS service
-   char buf[80]={0};
-   const char* ptr = ESP_OK == mDnsCfg(buf) ? buf : "Xedge32";
-   ESP_ERROR_CHECK(mdns_init());
-   mdns_hostname_set(ptr);
-   HttpTrace_printf(9,"mDNS: %s\n",ptr); 
-   mdns_instance_name_set("Xedge32");
-   mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-}
-#else
-#define startMdnsService()
-#endif
-
 
 void app_main(void)
 {
    // Disable the esp log system.
    esp_log_level_set("*", ESP_LOG_ERROR);
-   
-   bool adapter = initComponents();
-
-   /**
-    * Installs the Wi-Fi in Access Point (AP) mode when no adapter is
-    * configured.
-    *
-    * Note: This function should be called after the BAS (Base
-    * Application Service) is running, as it utilizes the baMalloc
-    * function.
-    */
-#if SOC_WIFI_SUPPORTED
-   if(!adapter)
-   {
-      netWifiApStart(true);
-   }
-#endif
-
+   initComponents();
    manageConsole(true);
    
-   for(int i = 0; i < 50 ; i++)
-   {
-      if(netGotIP()) break;
-      Thread_sleep(100);
-   }
-   startMdnsService();
-
-  
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
     * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.

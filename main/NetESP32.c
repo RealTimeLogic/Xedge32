@@ -34,7 +34,6 @@
 
 static const char TAG[]={"X"};
 
-//static SemaphoreHandle_t semGotIp = 0;
 static uint8_t gotIP = FALSE; /* if IP set */
 
 #ifdef CONFIG_ETH_ENABLED
@@ -861,38 +860,6 @@ static esp_err_t netEthStart(netConfig_t* cfg)
 }
     
 /**
- * @brief Waits for the acquisition of an IP address before continuing.
- *        This function is used to prevent the Barracuda App Server from 
- *        starting until a valid IP address is obtained.
- * @note This function assumes that the soDispMutex mutex is already 
- *       locked by the calling function.
- */
-#if 0
-void netWaitIP(void)   
-{
-   if(!gotIP)
-   {
-      semGotIp = xSemaphoreCreateBinary();
-      baAssert(ThreadMutex_isOwner(soDispMutex));
-      ThreadMutex_release(soDispMutex);
-      xSemaphoreTake(semGotIp, portMAX_DELAY);
-      ThreadMutex_set(soDispMutex);
-      vSemaphoreDelete(semGotIp);
-      semGotIp=0;
-   }
-}
-#endif
-
-/**
- * @brief Checks if the IP address has been acquired.
- * @return TRUE if the IP address is set, 0 otherwise.
- */
-int netGotIP()
-{
-   return (gotIP == TRUE); 
-}
-
-/**
  * @brief Checks if the network adapter is a SPI-based interface.
  * @param cfg Pointer to the network configuration structure.
  * @return TRUE if the adapter is SPI-based.
@@ -922,7 +889,7 @@ int netIsAdapterRmii(char* adapter)
  */   
 bool netInit(void) 
 {
-netConfig_t cfg;
+   netConfig_t cfg;
    
    ESP_ERROR_CHECK(esp_netif_init());
    ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -947,8 +914,15 @@ netConfig_t cfg;
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
    
-   return !strcmp("close", cfg.adapter) ? false : true;
+   if(strcmp("close", cfg.adapter)) // STA mode if not equal
+   {
+      return true; // STA mode
+   }
+   // Start network in AP mode 
+   netWifiApStart(true);
+   return false; // AP mode
 }
+
 
 /**
  * @brief Establishes a network connection using the provided network configuration.

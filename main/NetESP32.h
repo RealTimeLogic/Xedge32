@@ -74,7 +74,6 @@ typedef enum {
 } ap_mode_t;
 
 void netWaitIP(void);   
-int netGotIP(void);
 esp_err_t netWifiApStart(bool regHandler);
 
 int netIsAdapterSpi(char* adapter);
