@@ -47,7 +47,7 @@ The following Linux commands show all steps required for installing the developm
    # Install the esp-idf
    mkdir esp
    cd esp
-   git clone -b v5.5.1 --recursive https://github.com/espressif/esp-idf.git
+   git clone -b v5.5.3 --recursive https://github.com/espressif/esp-idf.git
    esp-idf/install.sh
    source esp-idf/export.sh
 
