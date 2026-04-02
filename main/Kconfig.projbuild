@@ -66,8 +66,16 @@ menu "Xedge config"
          range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
          default 1
          help
-             Set PHY address according your board schematic.
-     
+            Set PHY address according your board schematic.
+
+      config XEDGE_ETH_W5500
+         bool "Enable W5500 SPI Ethernet"
+         default y
+         depends on IDF_TARGET_ESP32S3
+         help
+            Enables support for the W5500 Ethernet chip.
+            Only available when the processor is an ESP32-S3.
+
       menu "Wifi AP"
 
        config WIFI_AP_SSID
@@ -135,16 +143,14 @@ menu "Xedge config"
       help
              Use Efuse for storing soft TPM (Trusted Platform Module) key
    endmenu
-
    
    menu "Debug Threads"
       config DEBUG_THREADS
          bool "Enable Debug Threads"
-      default n
-      help
+         default n
+         select FREERTOS_USE_TRACE_FACILITY
+         help
              Enable this option to enable debugging of threads.
-
-      # Automatically set CONFIG_FREERTOS_USE_TRACE_FACILITY to y when DEBUG_THREADS is enabled
-      select FREERTOS_USE_TRACE_FACILITY if DEBUG_THREADS
+             Automatically sets CONFIG_FREERTOS_USE_TRACE_FACILITY to y.
    endmenu
 endmenu

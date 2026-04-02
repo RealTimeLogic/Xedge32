@@ -16,3 +16,8 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp32-camera: ^2
+  ## Driver W5500 (Only for ESP32-S3)
+  espressif/w5500:
+    version: "^1.0.1"
+    rules:
+      - if: "target == esp32s3"

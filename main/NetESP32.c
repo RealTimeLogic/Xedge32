@@ -25,9 +25,19 @@
 #include "CfgESP32.h"
 #include "NetESP32.h"
 
-#ifdef CONFIG_ETH_ENABLED
+// We check if there is ANY Ethernet hardware enabled in the current build
+#if defined(CONFIG_XEDGE_ETH_W5500) || defined(CONFIG_ETH_USE_ESP_EMAC) || defined(CONFIG_ETH_USE_ESP32_EMAC)
+    #define XEDGE_HAS_ACTIVE_ETHERNET 1
+#endif
+
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #include <esp_eth_mac.h>
 #include <esp_eth.h>
+#endif
+
+#if CONFIG_XEDGE_ETH_W5500
+#include "esp_eth_mac_w5500.h"
+#include "esp_eth_phy_w5500.h"
 #endif
 
 #define WIFI_SCAN_LIST_SIZE 10
@@ -36,7 +46,7 @@ static const char TAG[]={"X"};
 
 static uint8_t gotIP = FALSE; /* if IP set */
 
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_eth_mac_t *s_mac = NULL;
 static esp_eth_phy_t *s_phy = NULL;
@@ -552,7 +562,7 @@ static esp_err_t netWifiApStop(void)
 static esp_err_t netEthStop(void)
 {
    printf("Closing Ethernet connection\n");
-#ifdef CONFIG_ETH_ENABLED    
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
    if((eth_netif != NULL) && (s_eth_handle != NULL)) 
    {
       ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
@@ -591,6 +601,7 @@ static void netRmiiInit(int mdcPin, int mdioPin)
 } 
 #endif
 
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #ifdef CONFIG_ETH_USE_SPI_ETHERNET
 /**
  * @brief Initialize the Ethernet interface using SPI mode.
@@ -617,8 +628,9 @@ static void netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
    spi_devcfg->queue_size = 20;
 }
 #endif
+#endif
 
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 /**
  * @brief Sets the MAC address for the ESP32's internal Ethernet MAC.
  *
@@ -709,7 +721,7 @@ esp_err_t ret = ESP_OK;
  */
 esp_err_t netEthConnect(void)
 {
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
    if(s_eth_handle != NULL)
    {
       esp_eth_start(s_eth_handle);
@@ -728,7 +740,7 @@ esp_err_t netEthConnect(void)
  */
 static esp_err_t netEthStart(netConfig_t* cfg)
 {
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_ETH();
    esp_netif_config.if_desc = "Ethernet";
    esp_netif_config.route_prio = 64;
@@ -816,7 +828,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    /* w5500 ethernet driver is based on spi driver */
    else if(!strcmp("W5500", cfg->adapter))
    {
-#if CONFIG_ETH_SPI_ETHERNET_W5500
+#if CONFIG_XEDGE_ETH_W5500
       spi_device_interface_config_t spi_devcfg = {0};
       netSpiInit(&cfg->spi, &spi_devcfg);
                                                                   
@@ -825,7 +837,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       s_mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
       s_phy = esp_eth_phy_new_w5500(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_W5500 undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_W5500 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }

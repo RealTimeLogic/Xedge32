@@ -1,24 +1,28 @@
 
 idf_component_register(
   SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "NetESP32.c" "CfgESP32.c" "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/XedgeZip.c" "console.c" "BaESP32.c" "LPeg/lpcset.c" "LPeg/lpcap.c" "LPeg/lpcode.c" "LPeg/lpprint.c" "LPeg/lptree.c" "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c" "BaCam.c"
-  INCLUDE_DIRS "."
-  "BAS/inc"
-  "BAS/inc/arch/NET/LwIP"
-  "BAS/inc/arch/FreeRTOS"
-  "BAS/examples/xedge/src"
-  PRIV_REQUIRES
-    driver    
-    esp_wifi
-    esp_event
-    esp_netif
-    nvs_flash
-	fatfs           # <-- for esp_vfs_fat.h
-	esp_eth         # <-- for esp_eth_mac.h / esp_eth_phy.h
-	efuse           # for esp_efuse.h
- 	esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
-    app_update      # <-- for esp_ota_ops.h
-    esp32-camera 
-	esp_timer
+  	INCLUDE_DIRS "."
+  	"BAS/inc"
+  	"BAS/inc/arch/NET/LwIP"
+  	"BAS/inc/arch/FreeRTOS"
+  	"BAS/examples/xedge/src"
+	PRIV_REQUIRES
+		esp_driver_i2c
+		esp_driver_uart
+		esp_driver_pcnt
+		esp_driver_rmt
+		esp_driver_usb_serial_jtag    
+		esp_wifi
+		esp_event
+		esp_netif
+		nvs_flash
+		fatfs           # <-- for esp_vfs_fat.h
+		esp_eth         # <-- for esp_eth_mac.h / esp_eth_phy.h
+		efuse           # for esp_efuse.h
+	 	esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
+		app_update      # <-- for esp_ota_ops.h
+		esp32-camera 
+		esp_timer
 )
 
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
