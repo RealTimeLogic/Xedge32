@@ -1,4 +1,9 @@
 # -*- mode: gitignore; -*-
 *~
 doc/_build
+doc/build
 Build-Resources
+managed_components
+build
+sdkconfig
+
