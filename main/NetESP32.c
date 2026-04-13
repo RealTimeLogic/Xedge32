@@ -12,7 +12,10 @@
 #include <time.h>
 #include <sys/time.h>
 #include <esp_sntp.h>
+
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
 #include <esp_wifi.h>
+#endif
 
 #include <esp_mac.h>
 #include <esp_event.h>
@@ -35,10 +38,23 @@
 #include <esp_eth.h>
 #endif
 
-#if CONFIG_XEDGE_ETH_W5500
-#include "esp_eth_mac_w5500.h"
-#include "esp_eth_phy_w5500.h"
-#endif
+#if CONFIG_XEDGE_ETH_PHY_LAN8720
+    #include "esp_eth_phy_lan87xx.h"
+#elif CONFIG_XEDGE_ETH_PHY_IP101
+    #include "esp_eth_phy_ip101.h"  
+#elif CONFIG_XEDGE_ETH_PHY_KSZ8041
+    #include "esp_eth_phy_ksz80xx.h" 
+#elif CONFIG_XEDGE_ETH_PHY_RTL8201
+    #include "esp_eth_phy_rtl8201.h" 
+#elif CONFIG_XEDGE_ETH_PHY_DP83848
+    #include "esp_eth_phy_dp83848.h"
+#elif CONFIG_XEDGE_ETH_PHY_W5500
+    #include "esp_eth_mac_w5500.h"
+    #include "esp_eth_phy_w5500.h"
+#elif CONFIG_XEDGE_ETH_PHY_DM9051 
+    #include "esp_eth_phy_dm9051.h"
+    #include "esp_eth_mac_dm9051.h"
+#endif 
 
 #define WIFI_SCAN_LIST_SIZE 10
 
@@ -51,7 +67,9 @@ static esp_eth_handle_t s_eth_handle = NULL;
 static esp_eth_mac_t *s_mac = NULL;
 static esp_eth_phy_t *s_phy = NULL;
 static esp_eth_netif_glue_handle_t s_eth_glue = NULL;
+#ifdef CONFIG_ETH_USE_SPI_ETHERNET
 static spi_host_device_t spiHostId = 0;
+#endif
 #endif
 
 static esp_netif_t *wifi_netif = NULL;
@@ -162,6 +180,7 @@ static StaticQueue_t xStaticQueue;
 
 const char* wifiAuthMode(int authmode, int print)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    const char* msg;
    const char pre[]={"Authmode \t"};
    switch (authmode)
@@ -180,10 +199,14 @@ const char* wifiAuthMode(int authmode, int print)
    if(print)
       HttpTrace_printf(0,"%s%s\n",pre,msg);
    return msg;
+#else
+   return NULL;
+#endif
 }
 
 const char* wifiCipherType(int pcipher, int gcipher, int print, const char** pciphers)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    const char* msg;
    const char* pre="Pairwise Cipher\t";
    switch(pcipher)
@@ -213,6 +236,9 @@ const char* wifiCipherType(int pcipher, int gcipher, int print, const char** pci
    if(print)
       HttpTrace_printf(0,"%s%s\n",pre,msg);
    return msg;
+#else
+   return NULL;
+#endif
 }
 
 
@@ -221,6 +247,7 @@ void wifiScan(int print, lua_State* L,
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel))
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    uint16_t number = WIFI_SCAN_LIST_SIZE;
    wifi_ap_record_t apInfo[WIFI_SCAN_LIST_SIZE];
    uint16_t apCount = 0;
@@ -252,6 +279,7 @@ void wifiScan(int print, lua_State* L,
       cb(L,apInfo[i].ssid,apInfo[i].rssi,authmode,pcipher,gcipher,
          apInfo[i].primary);
    }
+#endif
 }
 
 static void onSntpSync(struct timeval *tv)
@@ -369,7 +397,9 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          }
          else 
          {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
             esp_wifi_connect();
+#endif
          }
       }
       else if(eventId == WIFI_EVENT_AP_STACONNECTED) 
@@ -404,6 +434,8 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
  */
 static esp_err_t netWifiStart(void)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
+
    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent, NULL));
    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &onNetEvent, NULL));
       
@@ -418,8 +450,12 @@ static esp_err_t netWifiStart(void)
    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
    ESP_ERROR_CHECK(esp_wifi_start());
-
+   
    return ESP_OK;
+#else
+   ESP_LOGE(TAG, "Wi-Fi is not compiled/supported on this hardware.");
+   return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -431,6 +467,7 @@ static esp_err_t netWifiStart(void)
  */
 static esp_err_t netWifiStop(bool unregHandler) 
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    printf("Closing Wi-Fi connection\n");
   
    if(wifi_netif != NULL) 
@@ -449,6 +486,7 @@ static esp_err_t netWifiStop(bool unregHandler)
       esp_netif_destroy(wifi_netif);
       wifi_netif = NULL;
    }
+#endif
 
    return ESP_OK;
 }
@@ -462,6 +500,7 @@ static esp_err_t netWifiStop(bool unregHandler)
  */ 
 esp_err_t netWifiApStart(bool regHandler)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    ESP_ERROR_CHECK(esp_netif_init());
    ap_netif = esp_netif_create_default_wifi_ap();
 
@@ -520,7 +559,11 @@ esp_err_t netWifiApStart(bool regHandler)
    netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("ap"), 0);
    netEventGotIP(IP_EVENT_STA_GOT_IP, ipInfo);
    
-   return ESP_OK;          
+   return ESP_OK;
+#else
+   ESP_LOGE(TAG, "Wi-Fi is not compiled/supported on this hardware.");
+   return ESP_ERR_NOT_SUPPORTED;
+#endif          
 }
 
 /**
@@ -530,6 +573,7 @@ esp_err_t netWifiApStart(bool regHandler)
  */ 
 static esp_err_t netWifiApStop(void) 
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    printf("Closing Wi-Fi AP connection\n");
   
    if(ap_netif != NULL) 
@@ -544,6 +588,7 @@ static esp_err_t netWifiApStop(void)
       esp_netif_destroy(ap_netif);
       ap_netif = NULL;
    }
+#endif
 
    return ESP_OK;
 }
@@ -566,7 +611,11 @@ static esp_err_t netEthStop(void)
    if((eth_netif != NULL) && (s_eth_handle != NULL)) 
    {
       ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
-      ESP_ERROR_CHECK(esp_eth_stop(s_eth_handle));
+      // We ask the operating system if the driver is actually running before attempting to stop it.
+      if (esp_eth_stop(s_eth_handle) == ESP_ERR_INVALID_STATE)
+      {
+         ESP_LOGW(TAG, "Ethernet is already stopped"); 
+      }      
       ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
       s_eth_glue = NULL;
        
@@ -578,28 +627,13 @@ static esp_err_t netEthStop(void)
 
       esp_netif_destroy(eth_netif);
       eth_netif = NULL;
-      
+#ifdef CONFIG_ETH_USE_SPI_ETHERNET     
       spi_bus_free(spiHostId);  
+#endif
    }
 #endif   
    return ESP_OK;
 }
-
-#if CONFIG_ETH_USE_ESP32_EMAC
-/**
- * @brief Initialize the Ethernet interface using RMII mode.
- *
- * @param mdcPin The GPIO pin number for the MDC (Management Data Clock) signal.
- * @param mdioPin The GPIO pin number for the MDIO (Management Data Input/Output) signal.
- */
-static void netRmiiInit(int mdcPin, int mdioPin)
-{
-   eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
-   esp32_emac_config.smi_mdc_gpio_num = mdcPin; 
-   esp32_emac_config.smi_mdio_gpio_num = mdioPin; 
-   s_mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
-} 
-#endif
 
 #ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #ifdef CONFIG_ETH_USE_SPI_ETHERNET
@@ -664,7 +698,8 @@ uint8_t mac[6];  // Array to store the MAC address
  */
 esp_err_t netWifiConnect(char* ssid, char* password)
 {
-esp_err_t ret = ESP_OK;
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
+   esp_err_t ret = ESP_OK;
 
    esp_wifi_disconnect();
    
@@ -711,6 +746,9 @@ esp_err_t ret = ESP_OK;
    }
    
    return ret;
+#else
+   return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -748,71 +786,78 @@ static esp_err_t netEthStart(netConfig_t* cfg)
      .base = &esp_netif_config,
      .stack = ESP_NETIF_NETSTACK_DEFAULT_ETH
    };
-
    eth_netif = esp_netif_new(&netif_config);
    assert(eth_netif);
-   
+   printf("esp_netif_new, eth_netif=%p\n", eth_netif);
    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
    mac_config.rx_task_stack_size = CONFIG_ETHERNET_EMAC_TASK_STACK_SIZE;
    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
    phy_config.phy_addr = CONFIG_ETHERNET_PHY_ADDR;
    phy_config.reset_gpio_num = cfg->phyRstPin; 
 
+#if CONFIG_ETH_USE_ESP32_EMAC
+   eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
+   esp32_emac_config.smi_gpio.mdc_num = cfg->phyMdcPin;   
+   esp32_emac_config.smi_gpio.mdio_num = cfg->phyMdioPin;
+    
+   // RMII Clock Configuration (The ESP32 RECEIVES 50MHz from IP101)
+   esp32_emac_config.clock_config.rmii.clock_mode = EMAC_CLK_EXT_IN;
+   esp32_emac_config.clock_config.rmii.clock_gpio = 50; 
+
+   s_mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
+printf("esp_eth_mac_new_esp32, s_mac=%p\n", s_mac);
+#endif
    
    if(!strcmp("IP101", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_IP101
       s_phy = esp_eth_phy_new_ip101(&phy_config);
+printf("esp_eth_phy_new_ip101, s_mac=%p\n", s_phy);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_IP101 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif  
    }
    else if(!strcmp("RTL8201", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_RTL8201
       s_phy = esp_eth_phy_new_rtl8201(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_RTL8201 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("LAN87XX", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_LAN8720
       s_phy = esp_eth_phy_new_lan87xx(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_LAN8720 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("DP83848", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_DP83848
       s_phy = esp_eth_phy_new_dp83848(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_DP83848 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    else if(!strcmp("KSZ80XX", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_KSZ8041
       s_phy = esp_eth_phy_new_ksz80xx(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_KSZ8041 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
    /* dm9051 ethernet driver is based on spi driver */
    else if(!strcmp("DM9051", cfg->adapter))
    {
-#if CONFIG_ETH_SPI_ETHERNET_DM9051
+#if CONFIG_XEDGE_ETH_PHY_DM9051
       spi_device_interface_config_t spi_devcfg;
       netSpiInit(&cfg->spi, &spi_devcfg);
                                                                      
@@ -821,7 +866,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
       s_mac = esp_eth_mac_new_dm9051(&dm9051_config, &mac_config);
       s_phy = esp_eth_phy_new_dm9051(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_DM9051 undef");
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_DM9051 undef");
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
@@ -841,18 +886,17 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    return ESP_ERR_INVALID_ARG;  
 #endif 
    }
-  
    else 
    {
       return ESP_ERR_INVALID_ARG;
    }
-   
+  
    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent, NULL));
    
    // Install Ethernet driver
    esp_eth_config_t config = ETH_DEFAULT_CONFIG(s_mac, s_phy);
    esp_err_t err = esp_eth_driver_install(&config, &s_eth_handle);
-
+printf("esp_eth_driver_install, s_eth_handle=%p\n", s_eth_handle);
    if(err != ESP_OK)
    {
       return err;
@@ -909,14 +953,18 @@ bool netInit(void)
    gpio_install_isr_service(0);
     
    cfgGetNet(&cfg);
-  
+    printf("netInit cfg.adapter=%s\n", cfg.adapter); 
+ 
    if(!strcmp("wifi", cfg.adapter))
    {   
       netWifiStart();
    }
    else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
    {
-      netEthStart(&cfg);      
+      if(netEthStart(&cfg) == ESP_OK)
+      {
+         netEthConnect();
+      }      
    }
    
    netXedgeEventInit();
@@ -925,14 +973,15 @@ bool netInit(void)
    esp_sntp_setservername(0, "pool.ntp.org");
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
-   
+   printf("netInit end cfg.adapter=%s\n", cfg.adapter); 
    if(strcmp("close", cfg.adapter)) // STA mode if not equal
    {
       return true; // STA mode
    }
    // Start network in AP mode 
    netWifiApStart(true);
-   return false; // AP mode
+   printf("netWifiApStart(true), return false\n"); 
+   return true; // false; // AP mode
 }
 
 

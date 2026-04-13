@@ -68,16 +68,98 @@ menu "Xedge config"
          help
             Set PHY address according your board schematic.
 
-      config XEDGE_ETH_W5500
-         bool "Enable W5500 SPI Ethernet"
+      choice XEDGE_ETH_INTERFACE
+          prompt "Ethernet Interface Type"
+          default XEDGE_ETH_USE_INTERNAL if SOC_EMAC_SUPPORTED
+          default XEDGE_ETH_USE_SPI if !SOC_EMAC_SUPPORTED
+          help
+              Select the primary network hardware for Xedge32.
+
+          config XEDGE_ETH_USE_INTERNAL
+              depends on SOC_EMAC_SUPPORTED
+              bool "Internal EMAC (RMII)"
+              select ETH_USE_ESP32_EMAC    # ETH_USE_ESP32_EMAC enabled.
+              help
+                  Use the processor's internal MAC address (e.g., ESP32 Classic, ESP32-P4).
+
+          config XEDGE_ETH_USE_SPI
+              bool "SPI Ethernet Module"
+              select ETH_USE_SPI_ETHERNET  # ETH_USE_SPI_ETHERNET enabled.
+              help
+                  Use an external module via SPI bus (e.g., W5500 on ESP32-S3).
+          
+          config XEDGE_ETH_NONE
+              bool "No Ethernet (Only Wi-Fi)"
+      endchoice
+
+		  # PHY hardware devices for RMII internal interface.
+      if XEDGE_ETH_USE_INTERNAL
+          choice XEDGE_ETH_INTERNAL_PHY
+              prompt "Internal EMAC PHY Device"
+              default XEDGE_ETH_PHY_IP101
+
+              config XEDGE_ETH_PHY_IP101
+                  bool "IP101"
+                  help
+                     Enables support for the IP101 Ethernet chip.
+              config XEDGE_ETH_PHY_LAN8720
+                  bool "LAN8720"
+                  help
+                     Enables support for the LAN8720 Ethernet chip.
+              config XEDGE_ETH_PHY_DP83848
+                  bool "DP83848"
+                  help
+                     Enables support for the DP83848 Ethernet chip.
+              config XEDGE_ETH_PHY_KSZ8041
+                  bool "KSZ8041"
+                  help
+                     Enables support for the KSZ8041 Ethernet chip.
+              config XEDGE_ETH_PHY_RTL8201
+                  bool "RTL8201"
+                  help
+                     Enables support for the RTL8201 Ethernet chip.
+          endchoice
+
+          config XEDGE_ETH_MDC_PIN
+              int "SMI MDC GPIO"
+              default 31 if IDF_TARGET_ESP32P4
+              default 23
+              
+          config XEDGE_ETH_MDIO_PIN
+              int "SMI MDIO GPIO"
+              default 52 if IDF_TARGET_ESP32P4
+              default 18
+      endif
+
+      # PHY hardware devices for SPI interface.
+      if XEDGE_ETH_USE_SPI
+          choice XEDGE_ETH_SPI_DEVICE
+              prompt "SPI Ethernet Module"
+              default XEDGE_ETH_SPI_W5500
+
+              config XEDGE_ETH_SPI_W5500
+                  bool "Wiznet W5500"
+                  help
+                     Enables support for the W5500 Ethernet chip.
+                     Only available when the processor is an ESP32-S3
+              config XEDGE_ETH_PHY_DM9051
+                  bool "Wiznet DM9051"
+                  help
+                     Enables support for the DM9051 Ethernet chip.
+          endchoice
+      endif
+     
+      config XEDGE_WIFI_ENABLED
+         bool "Enable Wi-Fi features"
          default y
-         depends on IDF_TARGET_ESP32S3
+         depends on !IDF_TARGET_ESP32P4
          help
-            Enables support for the W5500 Ethernet chip.
-            Only available when the processor is an ESP32-S3.
+            Enable native Wi-Fi support (Station and AP).
+            Currently disabled by default on the ESP32-P4.
 
       menu "Wifi AP"
-
+       depends on XEDGE_WIFI_ENABLED
+      	
        config WIFI_AP_SSID
            string "WiFi SSID"
            default "xedge32"

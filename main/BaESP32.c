@@ -76,6 +76,7 @@ LThreadMgr Documentation:
 #include <esp_vfs_fat.h>
 #include <esp_ota_ops.h>
 #include "esp_idf_version.h"
+#include "soc/soc_caps.h"
 
 #include "BaESP32.h"
 #include "CfgESP32.h"
@@ -1479,6 +1480,11 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
 
 #if CONFIG_IDF_TARGET_ESP32S3
 #define LEDC_HIGH_SPEED_MODE LEDC_SPEED_MODE_MAX
+#endif
+// If the current processor does NOT have High Speed ​​hardware (such as the S3 or P4),
+// we silently redirect High to Low speed requests.
+#if !SOC_LEDC_SUPPORT_HS_MODE
+    #define LEDC_HIGH_SPEED_MODE LEDC_LOW_SPEED_MODE
 #endif
 static ledc_mode_t lLedGetSpeedMode(lua_State* L, int ix)
 {

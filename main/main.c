@@ -611,15 +611,19 @@ void app_main(void)
 {
    // Disable the esp log system.
    esp_log_level_set("*", ESP_LOG_ERROR);
-   initComponents();
-   manageConsole(true);
+  
+   //vTaskDelay(pdMS_TO_TICKS(1000));
    
+manageConsole(true);
+    initComponents();
+
+// vTaskDelay(pdMS_TO_TICKS(500));
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
     * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.
     */
    luaLineBuffer.sem = xSemaphoreCreateBinary();
-   
+
    HttpTrace_printf(5,
                     "\n\n __   __        _            \n \\ \\ / /       | |"
                     "           \n  \\ V / ___  __| | __ _  ___ \n   > < / _"
@@ -627,7 +631,7 @@ void app_main(void)
                     " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
                     "__/ |     \n                  |___/      \n\n");
    HttpTrace_printf(5,"LuaShell32 ready.\n");
-    
+      
    /*
     * The app_main thread originally runs at low priority (ESP_TASK_MAIN_PRIO, or ESP_TASK_PRIO_MIN + 1).
     * The linenoise library uses the read() function that can block while waiting for USB/UART characters.
@@ -647,6 +651,9 @@ void app_main(void)
     * of task priorities is necessary to avoid other unexpected behavior or conflicts.
     */
    vTaskPrioritySet(NULL, uxTaskPriorityGet(NULL) + 4);  
+//fflush(stdout); 
+//   vTaskDelay(pdMS_TO_TICKS(200)); // 100ms es eterno para el hardware, garantiza el drenaje.
+//vTaskPrioritySet(NULL, uxTaskPriorityGet(NULL) + 4);
    for(;;)
    {
       char* line = linenoise("\033[0m> ");
