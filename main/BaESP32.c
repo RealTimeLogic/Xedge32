@@ -1477,10 +1477,6 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
    return hwakeup == pdTRUE;
 }
 
-
-#if CONFIG_IDF_TARGET_ESP32S3
-#define LEDC_HIGH_SPEED_MODE LEDC_SPEED_MODE_MAX
-#endif
 // If the current processor does NOT have High Speed ​​hardware (such as the S3 or P4),
 // we silently redirect High to Low speed requests.
 #if !SOC_LEDC_SUPPORT_HS_MODE
@@ -3076,7 +3072,7 @@ netConfig_t cfg = {0};
       cfg.spi.freq = (int)balua_checkIntField(L, 2, "freq");
       cfg.phyRstPin = balua_getIntField(L, 2, "rst", -1);
    }
-   // Load the parameters for Ethernet by RMII (only ESP32 legacy devices).
+   // Load the parameters for Ethernet by RMII (P4 and ESP32 legacy devices).
    else if(netIsAdapterRmii(cfg.adapter))
    {
       cfg.phyRstPin = (int)balua_checkIntField(L, 2, "rst");

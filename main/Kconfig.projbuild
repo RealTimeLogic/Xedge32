@@ -135,9 +135,9 @@ menu "Xedge config"
       if XEDGE_ETH_USE_SPI
           choice XEDGE_ETH_SPI_DEVICE
               prompt "SPI Ethernet Module"
-              default XEDGE_ETH_SPI_W5500
+              default XEDGE_ETH_PHY_W5500
 
-              config XEDGE_ETH_SPI_W5500
+              config XEDGE_ETH_PHY_W5500
                   bool "Wiznet W5500"
                   help
                      Enables support for the W5500 Ethernet chip.

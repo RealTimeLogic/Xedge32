@@ -13,8 +13,6 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "driver/uart.h"
 #include "driver/uart_vfs.h"
-#include "linenoise/linenoise.h"
-#include "esp_console.h"
 
 void manageConsole(bool start)
 {
@@ -53,7 +51,7 @@ void manageConsole(bool start)
    fsync(fileno(stdout));
 
    /* Install UART driver for interrupt-driven reads and writes */
-   ESP_ERROR_CHECK( uart_driver_install(hw_config.channel, 256, 0, 0, NULL, 0) );
+   ESP_ERROR_CHECK(uart_driver_install(hw_config.channel, 256, 0, 0, NULL, 0));
    ESP_ERROR_CHECK(uart_param_config(hw_config.channel, &uart_config));
    ESP_ERROR_CHECK(uart_set_pin(hw_config.channel, hw_config.tx_gpio_num, hw_config.rx_gpio_num, -1, -1));
    
@@ -71,7 +69,16 @@ void manageConsole(bool start)
    fcntl(fileno(stdout), F_SETFL, 0);
    fcntl(fileno(stdin), F_SETFL, 0);
 
-   usb_serial_jtag_driver_config_t usb_serial_jtag_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    /**
+     * THE BUFFER
+     * 4096 bytes absorb the entire boot log and ASCII art. 
+     * Picolibc instantly empties the text here and doesn't hang. 
+     * When Linux/Windows finally connects 2 seconds later, it drains this.
+     */
+    usb_serial_jtag_driver_config_t usb_serial_jtag_config = {
+        .tx_buffer_size = 4096, 
+        .rx_buffer_size = 256,
+    };
 
    /* Install USB-SERIAL-JTAG driver for interrupt-driven reads and writes */
    ESP_ERROR_CHECK( usb_serial_jtag_driver_install(&usb_serial_jtag_config) );
@@ -81,18 +88,6 @@ void manageConsole(bool start)
 #else
    #error Unsupported console type
 #endif
-   
-   /* Configure linenoise line completion library */
-   /* Enable multiline editing. If not set, long commands will scroll within
-    * single line.
-    */
-   linenoiseSetMultiLine(1);
-   /* Set command history size */
-   linenoiseHistorySetMaxLen(10);
-   /* Set command maximum length */
-   linenoiseSetMaxLineLen(256); 
-   /* Don't return empty lines */
-   linenoiseAllowEmpty(false);
    
    /* Disable buffering on stdin of the current task.
     * If the console is ran on a different UART than the default one,

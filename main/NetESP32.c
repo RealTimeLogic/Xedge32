@@ -29,7 +29,7 @@
 #include "NetESP32.h"
 
 // We check if there is ANY Ethernet hardware enabled in the current build
-#if defined(CONFIG_XEDGE_ETH_W5500) || defined(CONFIG_ETH_USE_ESP_EMAC) || defined(CONFIG_ETH_USE_ESP32_EMAC)
+#if defined(CONFIG_ETH_USE_SPI_ETHERNET) || defined(CONFIG_ETH_USE_ESP32_EMAC) 
     #define XEDGE_HAS_ACTIVE_ETHERNET 1
 #endif
 
@@ -60,7 +60,9 @@
 
 static const char TAG[]={"X"};
 
-static uint8_t gotIP = FALSE; /* if IP set */
+// We replaced 'gotIP' and 'semGotIp' with a single Event Group
+static EventGroupHandle_t netEventGroup = NULL;
+const int GOT_IP_BIT = BIT0;
 
 #ifdef XEDGE_HAS_ACTIVE_ETHERNET
 static esp_eth_handle_t s_eth_handle = NULL;
@@ -301,7 +303,9 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
    char* param1 = (char*)netCheckAlloc(baMalloc(16));
    char* param2 = (char*)netCheckAlloc(baMalloc(16));
    char* param3 = (char*)netCheckAlloc(baMalloc(16));
-   gotIP=TRUE;
+
+   xEventGroupSetBits(netEventGroup, GOT_IP_BIT);
+
    basprintf(param1, IPSTR,IP2STR(&ipInfo.ip));
    basprintf(param2, IPSTR,IP2STR(&ipInfo.netmask));
    basprintf(param3, IPSTR,IP2STR(&ipInfo.gw));
@@ -322,9 +326,6 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
    {
       netExecXedgeEvent("eth", param1, param2, param3);
    }
-
-//   if(semGotIp)
-//      xSemaphoreGive(semGotIp);
 }
 
 /**
@@ -353,7 +354,8 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       {
          wifi_event_sta_disconnected_t* d = (wifi_event_sta_disconnected_t*)eventData;
          HttpTrace_printf(9, "WiFi disconnect ev. %d\n", d->reason);
-         if(gotIP)
+
+         if(xEventGroupGetBits(netEventGroup) & GOT_IP_BIT)
          {
             netExecXedgeEvent("wifi", baStrdup("down"), baStrdup("sta"), 0);
          }
@@ -363,8 +365,8 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
             basnprintf(param, 20, "%d", d->reason);
             netExecXedgeEvent("wifi", param, 0, 0);
          }
-         gotIP=FALSE;
 
+         xEventGroupClearBits(netEventGroup, GOT_IP_BIT);
          // Check if AP mode was user-requested and manage transitions accordingly
          if(apMode == AP_MODE_USER_REQUESTED)
          {   
@@ -597,12 +599,11 @@ static esp_err_t netWifiApStop(void)
  * @brief Stop the Ethernet network on the ESP32.
  *
  * @note: It’s not recommended to uninstall Ethernet driver unless it won’t 
- *        get used any more in application code. To uninstall Ethernet driver, 
- *        you have to make sure, all references to the driver are released. 
- *        Ethernet driver can only be uninstalled successfully when reference 
- *        counter equals to one.
- *    
- * @return ESP_OK if the ethernet connection was stoped.
+ * get used any more in application code. To uninstall Ethernet driver, 
+ * you have to make sure, all references to the driver are released. 
+ * Ethernet driver can only be uninstalled successfully when reference 
+ * counter equals to one.
+ * * @return ESP_OK if the ethernet connection was stoped.
  */
 static esp_err_t netEthStop(void)
 {
@@ -611,22 +612,30 @@ static esp_err_t netEthStop(void)
    if((eth_netif != NULL) && (s_eth_handle != NULL)) 
    {
       ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
+      
       // We ask the operating system if the driver is actually running before attempting to stop it.
       if (esp_eth_stop(s_eth_handle) == ESP_ERR_INVALID_STATE)
       {
          ESP_LOGW(TAG, "Ethernet is already stopped"); 
       }      
+      
+      // 1. Detach lwIP from hardware
       ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
       s_eth_glue = NULL;
        
       vTaskDelay(pdMS_TO_TICKS(100));
+      
+      // 2. Destroy the netif WHILE the MAC and PHY are still alive.
+      esp_netif_destroy(eth_netif);
+      eth_netif = NULL;
+
+      // 3. Now, uninstall the driver and clean the hardware
       ESP_ERROR_CHECK(esp_eth_driver_uninstall(s_eth_handle));
       s_eth_handle = NULL;
+      
       ESP_ERROR_CHECK(s_phy->del(s_phy));
       ESP_ERROR_CHECK(s_mac->del(s_mac));
 
-      esp_netif_destroy(eth_netif);
-      eth_netif = NULL;
 #ifdef CONFIG_ETH_USE_SPI_ETHERNET     
       spi_bus_free(spiHostId);  
 #endif
@@ -634,7 +643,6 @@ static esp_err_t netEthStop(void)
 #endif   
    return ESP_OK;
 }
-
 #ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #ifdef CONFIG_ETH_USE_SPI_ETHERNET
 /**
@@ -788,7 +796,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    };
    eth_netif = esp_netif_new(&netif_config);
    assert(eth_netif);
-   printf("esp_netif_new, eth_netif=%p\n", eth_netif);
+
    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
    mac_config.rx_task_stack_size = CONFIG_ETHERNET_EMAC_TASK_STACK_SIZE;
    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
@@ -805,14 +813,11 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    esp32_emac_config.clock_config.rmii.clock_gpio = 50; 
 
    s_mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
-printf("esp_eth_mac_new_esp32, s_mac=%p\n", s_mac);
 #endif
-   
    if(!strcmp("IP101", cfg->adapter))
    {
 #if CONFIG_XEDGE_ETH_PHY_IP101
       s_phy = esp_eth_phy_new_ip101(&phy_config);
-printf("esp_eth_phy_new_ip101, s_mac=%p\n", s_phy);
 #else
    ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_IP101 undef");
    return ESP_ERR_INVALID_ARG;  
@@ -873,7 +878,7 @@ printf("esp_eth_phy_new_ip101, s_mac=%p\n", s_phy);
    /* w5500 ethernet driver is based on spi driver */
    else if(!strcmp("W5500", cfg->adapter))
    {
-#if CONFIG_XEDGE_ETH_W5500
+#if CONFIG_XEDGE_ETH_PHY_W5500
       spi_device_interface_config_t spi_devcfg = {0};
       netSpiInit(&cfg->spi, &spi_devcfg);
                                                                   
@@ -896,7 +901,6 @@ printf("esp_eth_phy_new_ip101, s_mac=%p\n", s_phy);
    // Install Ethernet driver
    esp_eth_config_t config = ETH_DEFAULT_CONFIG(s_mac, s_phy);
    esp_err_t err = esp_eth_driver_install(&config, &s_eth_handle);
-printf("esp_eth_driver_install, s_eth_handle=%p\n", s_eth_handle);
    if(err != ESP_OK)
    {
       return err;
@@ -910,6 +914,8 @@ printf("esp_eth_driver_install, s_eth_handle=%p\n", s_eth_handle);
    // combine driver with netif
    s_eth_glue = esp_eth_new_netif_glue(s_eth_handle);
    esp_netif_attach(eth_netif, s_eth_glue);
+#else
+   ESP_LOGE(TAG, "ETH is not compiled/supported on this hardware.");
 #endif
 
    return ESP_OK; 
@@ -947,13 +953,17 @@ bool netInit(void)
 {
    netConfig_t cfg;
    
+   if(netEventGroup == NULL) 
+   {
+      netEventGroup = xEventGroupCreate();
+   }
+
    ESP_ERROR_CHECK(esp_netif_init());
    ESP_ERROR_CHECK(esp_event_loop_create_default());
    
    gpio_install_isr_service(0);
     
    cfgGetNet(&cfg);
-    printf("netInit cfg.adapter=%s\n", cfg.adapter); 
  
    if(!strcmp("wifi", cfg.adapter))
    {   
@@ -973,15 +983,15 @@ bool netInit(void)
    esp_sntp_setservername(0, "pool.ntp.org");
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
-   printf("netInit end cfg.adapter=%s\n", cfg.adapter); 
+
    if(strcmp("close", cfg.adapter)) // STA mode if not equal
    {
       return true; // STA mode
    }
    // Start network in AP mode 
    netWifiApStart(true);
-   printf("netWifiApStart(true), return false\n"); 
-   return true; // false; // AP mode
+
+   return false; // AP mode
 }
 
 
@@ -1079,4 +1089,22 @@ esp_err_t ret = ESP_OK;
    return ret;
 }
 
+/** 
+ * @brief This code is called from xedge.c just before starting the socket
+ * dispatcher SoDisp. We need to prevent the dispatcher from running
+ * until we get an IP address, since there are spinlock race
+ * conditions deep within ESP IDF libs.
+ */
+void xedge32Wait4Network(void)
+{
+    // Wait up to 1.5 seconds for the GOT_IP_BIT. 
+    // If it is already set, it passes through immediately
+    xEventGroupWaitBits(
+        netEventGroup,
+        GOT_IP_BIT,
+        pdFALSE, // Do NOT clear the bit on exit (we want it to remain "connected")
+        pdTRUE,
+        pdMS_TO_TICKS(1500)
+    );
+}
 
