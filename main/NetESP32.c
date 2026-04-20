@@ -1094,6 +1094,7 @@ esp_err_t ret = ESP_OK;
  * dispatcher SoDisp. We need to prevent the dispatcher from running
  * until we get an IP address, since there are spinlock race
  * conditions deep within ESP IDF libs.
+ * Note: to enable use -DxedgeWait4Network=xedge32Wait4Network in the main/CMakeList.txt
  */
 void xedge32Wait4Network(void)
 {

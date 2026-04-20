@@ -13,6 +13,7 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "driver/uart.h"
 #include "driver/uart_vfs.h"
+#include "esp_console.h"
 
 void manageConsole(bool start)
 {

@@ -5,26 +5,41 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=4.1.0'
-  # # Put list of dependencies here
-  # # For components maintained by Espressif:
-  # component: "~1.0.0"
-  # # For 3rd party components:
-  # username/component: ">=1.0.0,<2.0.0"
-  # username2/component2:
-  #   version: "~1.0.0"
-  #   # For transient dependencies `public` flag can be set.
-  #   # `public` flag doesn't have an effect dependencies of the `main` component.
-  #   # All dependencies of `main` are public by default.
-  #   public: true
+  ## Driver for the camera via parallel port.
   espressif/esp32-camera: ^2
-  ## Driver W5500 (Only for ESP32-S3)
+  ## W5500 is a hardwired TCP/IP embedded Ethernet controller that enables easier internet connection for embedded systems using SPI.
   espressif/w5500:
     version: "^1.0.1"
     rules:
-      - if: "target == esp32s3"
-  ## Drivers PHY para Ethernet Interno (RMII)
+      - if: "target in [esp32s3]"
+  ## DM9051 is a single-chip 10/100Mbps Ethernet controller with an SPI interface. It integrates a 10/100Mbps Ethernet MAC and PHY.
+  espressif/dm9051:
+    version: "^1.1.0"
+    rules:
+      - if: "target in [esp32s3]"
+  ## The LAN87xx series are single-port 10/100 Mbps Ethernet PHY transceivers for RMII.
+  espressif/lan87xx:
+    version: "^1.0.0"
+    rules:
+      - if: "target in [esp32p4]"
+  ## IP101 is a single port 10/100 MII/RMII/TP/Fiber Fast Ethernet Transceiver.
   espressif/ip101:
     version: "^1.0.0"
     rules:
-      - if: "target == esp32p4"
+      - if: "target in [esp32p4]"
+  ## With the KSZ80xx series, Microchip offers single-chip 10BASE-T/100BASE-TX Ethernet Physical Layer Transceivers (PHY) for RMII.
+  espressif/ksz80xx:
+    version: "^1.0.0"
+    rules:
+      - if: "target in [esp32p4]"
+  ## The RTL8201F/SR8201F is a single port 10/100Mb Ethernet Transceiver with auto MDIX for RMII.
+  espressif/rtl8201:
+    version: "^1.0.1"
+    rules:
+      - if: "target in [esp32p4]"
+  ## DP83848 is a single port 10/100Mb/s Ethernet Physical Layer Transceiver for RMII.
+  espressif/dp83848:
+    version: "^1.0.0"
+    rules:
+      - if: "target in [esp32p4]"
 
