@@ -1,7 +1,7 @@
 menu "Xedge config"
    
    menu "Camera"
-   
+ #     depends on IDF_TARGET_ESP32 || IDF_TARGET_ESP32S3
       config CAM_ENABLED
 	      bool "Enable camera module"
 	      default n
@@ -87,16 +87,6 @@ menu "Xedge config"
               config XEDGE_ETH_PHY_RTL8201
                   bool "CoreChip RTL8201"
           endchoice
-
-          config XEDGE_ETH_MDC_PIN
-              int "SMI MDC GPIO"
-              default 31 if IDF_TARGET_ESP32P4
-              default 23
-              
-          config XEDGE_ETH_MDIO_PIN
-              int "SMI MDIO GPIO"
-              default 52 if IDF_TARGET_ESP32P4
-              default 18
       endif
 
       # PHY hardware devices for SPI interface (Only visible if native SPI Eth is enabled)
@@ -115,10 +105,8 @@ menu "Xedge config"
       config XEDGE_WIFI_ENABLED
          bool "Enable Wi-Fi features"
          default y
-         depends on !IDF_TARGET_ESP32P4
          help
             Enable native Wi-Fi support (Station and AP).
-            Currently disabled by default on the ESP32-P4.
 
       menu "Wifi AP"
        depends on XEDGE_WIFI_ENABLED

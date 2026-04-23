@@ -2,30 +2,24 @@
 CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
 CONFIG_ESP32P4_REV_MIN_1=y
 
-# 2. CPU Frequency 
+# CPU Frequency 
 # The 400 MHz option became available with ESP32-P4 chip revision v3.x, 
 # which upgraded the HP system's dual-core RISC-V processor, increasing the max frequency 
 # from 360 MHz to 400 MHz. [chip revision v3.x] The previous chip revision v1.x had a 
 # default clock of 360 MHz, with 400 MHz available only on request.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
-CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=360
 
-# 3. Flash Size 
+# Flash Size 
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 
-# 4. Console output
+# Console output
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
-# 5. Xedge32 Camera Settings
-CONFIG_GRAB_LATEST=y
-CONFIG_FB_TWO=y
-
-# 6. Partition Table
+# Flash Partition Table
+CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="ESP32p4-partitions.csv"
-CONFIG_PARTITION_TABLE_FILENAME="ESP32p4-partitions.csv"
 
-# 7. Ethernet
+# Ethernet
 CONFIG_ETH_ENABLED=y
 CONFIG_ETH_USE_ESP32_EMAC=y
 CONFIG_ETH_USE_SPI_ETHERNET=n
-

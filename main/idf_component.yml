@@ -6,40 +6,59 @@ dependencies:
   idf:
     version: '>=4.1.0'
   ## Driver for the camera via parallel port.
-  espressif/esp32-camera: ^2
+  espressif/esp32-camera: ^2 
+#    version: "^2"
+    #rules: 
+    #  - if: 'target in ["esp32", "esp32s3", "esp32p4"]'
   ## W5500 is a hardwired TCP/IP embedded Ethernet controller that enables easier internet connection for embedded systems using SPI.
   espressif/w5500:
     version: "^1.0.1"
     rules:
-      - if: "target in [esp32s3]"
+      - if: 'target in ["esp32", "esp32s3"]'
+      - if: "$CONFIG{ETH_USE_SPI_ETHERNET} == True && $CONFIG{XEDGE_ETH_PHY_W5500} == True"
   ## DM9051 is a single-chip 10/100Mbps Ethernet controller with an SPI interface. It integrates a 10/100Mbps Ethernet MAC and PHY.
   espressif/dm9051:
     version: "^1.1.0"
     rules:
-      - if: "target in [esp32s3]"
+      - if: 'target in ["esp32", "esp32s3"]'
+      - if: "$CONFIG{ETH_USE_SPI_ETHERNET} == True && $CONFIG{XEDGE_ETH_PHY_DM9051} == True"
   ## The LAN87xx series are single-port 10/100 Mbps Ethernet PHY transceivers for RMII.
   espressif/lan87xx:
     version: "^1.0.0"
     rules:
-      - if: "target in [esp32p4]"
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_LAN8720} == True'
   ## IP101 is a single port 10/100 MII/RMII/TP/Fiber Fast Ethernet Transceiver.
   espressif/ip101:
     version: "^1.0.0"
     rules:
-      - if: "target in [esp32p4]"
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_IP101} == True'
   ## With the KSZ80xx series, Microchip offers single-chip 10BASE-T/100BASE-TX Ethernet Physical Layer Transceivers (PHY) for RMII.
   espressif/ksz80xx:
     version: "^1.0.0"
     rules:
-      - if: "target in [esp32p4]"
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_KSZ8041} == True'
   ## The RTL8201F/SR8201F is a single port 10/100Mb Ethernet Transceiver with auto MDIX for RMII.
   espressif/rtl8201:
     version: "^1.0.1"
     rules:
-      - if: "target in [esp32p4]"
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_RTL8201} == True'
   ## DP83848 is a single port 10/100Mb/s Ethernet Physical Layer Transceiver for RMII.
   espressif/dp83848:
     version: "^1.0.0"
     rules:
-      - if: "target in [esp32p4]"
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_DP83848} == True'
+  espressif/esp_wifi_remote:
+    version: ">=0.10,<2.0"
+    rules:
+      - if: 'target in ["esp32p4"] && $CONFIG{XEDGE_WIFI_ENABLED} == True'
+  espressif/esp_hosted:
+    version: "~2"
+    rules:
+      - if: 'target in ["esp32p4"] && $CONFIG{XEDGE_WIFI_ENABLED} == True'
+
 
