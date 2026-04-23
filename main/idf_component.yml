@@ -52,10 +52,6 @@ dependencies:
     rules:
       - if: 'target in ["esp32", "esp32p4"]'
       - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_DP83848} == True'
-  espressif/esp_wifi_remote:
-    version: ">=0.10,<2.0"
-    rules:
-      - if: 'target in ["esp32p4"] && $CONFIG{XEDGE_WIFI_ENABLED} == True'
   espressif/esp_hosted:
     version: "==2.12.3"
     rules:
