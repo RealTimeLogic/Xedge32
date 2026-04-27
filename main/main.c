@@ -617,7 +617,7 @@ static void initComponents()
 void app_main(void)
 {
    // Disable the esp log system.
-   esp_log_level_set("*", ESP_LOG_ERROR);
+   //esp_log_level_set("*", ESP_LOG_ERROR);
    manageConsole(true);
    initComponents();
 

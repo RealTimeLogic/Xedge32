@@ -26,9 +26,9 @@ void wifiScan(int print, lua_State* L, /* main.c */
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel));
 void eventBrokerTask(void *params);
-#if CONFIG_CAM_ENABLED
+//#if CONFIG_CAM_ENABLED
 int lcam(lua_State* L);  /* BaCam.c */
-#endif
+//#endif
 void lInitConfigTable(lua_State* L, int ix);
 void* lNewUdata(lua_State *L,size_t size,const char *tname,const luaL_Reg *l);
 int lsdcard(lua_State* L);

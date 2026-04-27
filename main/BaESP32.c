@@ -3372,9 +3372,9 @@ static int lota(lua_State *L)
 
 static const luaL_Reg esp32Lib[] = {
    {"adc", ladc},
-#if CONFIG_CAM_ENABLED
+//#if CONFIG_CAM_ENABLED
    {"cam", lcam},
-#endif
+//#endif
    {"gpio", lgpio},
    {"i2cmaster", li2cMaster},
    {"pwmtimer", lLedTimer},

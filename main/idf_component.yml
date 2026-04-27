@@ -10,6 +10,16 @@ dependencies:
     version: "^2"
     rules: 
       - if: 'target in ["esp32", "esp32s3"]'
+  ## Driver for the camera via MIPI/V4L2 (ESP32-P4)
+  espressif/esp_video:
+    version: "*"
+    rules:
+      - if: 'target == "esp32p4"'
+  ## Drivers de los sensores de camara (OV5647, etc)
+  espressif/esp_cam_sensor:
+    version: "*"
+    rules:
+      - if: 'target == "esp32p4"'
   ## W5500 is a hardwired TCP/IP embedded Ethernet controller that enables easier internet connection for embedded systems using SPI.
   espressif/w5500:
     version: "^1.0.1"
