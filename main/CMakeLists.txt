@@ -68,7 +68,7 @@ if(IDF_TARGET STREQUAL "esp32" OR IDF_TARGET STREQUAL "esp32s3")
     list(APPEND main_priv_reqs "esp32-camera")
     list(APPEND main_srcs "BaCam.c")
 elseif(IDF_TARGET STREQUAL "esp32p4")
-    list(APPEND main_priv_reqs "esp_video" "example_video_common esp_cam_sensor")
+    list(APPEND main_priv_reqs "esp_video" "esp_cam_sensor" "esp_driver_jpeg")
     list(APPEND main_srcs "BaCamV4L2.c")
 endif()
 
