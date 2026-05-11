@@ -158,6 +158,7 @@ static esp_err_t hw_jpeg_encoder_init(LCAM *cam, uint32_t pixel_format, uint8_t 
             raw_size = cam->width * cam->height * 2;
             break;
         case V4L2_PIX_FMT_UYVY:
+        case V4L2_PIX_FMT_YUYV:
             cam->pic_cfg.src_type = JPEG_ENCODE_IN_FORMAT_YUV422;
             cam->pic_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
             raw_size = cam->width * cam->height * 2;
@@ -236,6 +237,7 @@ static int LCAM_lset_control(lua_State *L) {
     return 1;
 }
 
+/* old-
 static int LCAM_lread(lua_State *L) {
     LCAM *cam =  LCAM_checkUD(L);
 
@@ -266,6 +268,64 @@ static int LCAM_lread(lua_State *L) {
             lua_pushlstring(L, (const char *)cam->jpeg_out_buf, final_jpeg_size);
         } else { lua_pushnil(L); }
     } else { lua_pushnil(L); }
+
+    ioctl(cam->fd, VIDIOC_QBUF, &buf);
+    return 1;
+}
+*/
+
+static int LCAM_lread(lua_State *L) {
+    LCAM *cam =  LCAM_checkUD(L);
+
+    struct v4l2_buffer buf = {0};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+
+    if (ioctl(cam->fd, VIDIOC_DQBUF, &buf) != 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    uint32_t final_jpeg_size = 0;
+
+    if (buf.bytesused > 0) {
+        // ==========================================================
+        // EL BISTURÍ: SWAP DE CROMINANCIA (U <-> V)
+        // Convertimos UYVY a VYUY (o viceversa) para arreglar el Pitufo
+        // ==========================================================
+        uint8_t *ptr = (uint8_t *)cam->buffers[buf.index];
+        uint32_t len = buf.bytesused;
+        
+        // ==========================================================
+        // EL BISTURÍ V2: SWAP DE CROMINANCIA CORRECTO
+        // El hardware nos engañó: La Luma (Y) está en 0 y 2. 
+        // El color (U y V) está en 1 y 3. Intercambiamos 1 y 3.
+        // ==========================================================
+        for (uint32_t i = 0; i < len; i += 4) {
+            uint8_t temp_u = ptr[i + 1];     // Guardamos el canal U (Byte 1)
+            ptr[i + 1] = ptr[i + 3];         // Ponemos el canal V en el lugar de U
+            ptr[i + 3] = temp_u;             // Ponemos el canal U en el lugar de V
+        }
+        // ==========================================================
+
+        esp_err_t enc_res = jpeg_encoder_process(
+            cam->encoder_handle, 
+            &cam->pic_cfg, 
+            cam->buffers[buf.index], 
+            buf.bytesused,      // <--- ¡Esto nos salva de los 14KB fijos!
+            cam->jpeg_out_buf, 
+            cam->jpeg_out_buf_size, 
+            &final_jpeg_size
+        );
+
+        if (enc_res == ESP_OK && final_jpeg_size > 0) {
+            lua_pushlstring(L, (const char *)cam->jpeg_out_buf, final_jpeg_size);
+        } else { 
+            lua_pushnil(L); 
+        }
+    } else { 
+        lua_pushnil(L); 
+    }
 
     ioctl(cam->fd, VIDIOC_QBUF, &buf);
     return 1;
@@ -326,8 +386,28 @@ int lcam(lua_State *L) {
     int quality  = balua_getIntField(L, 1, "quality", 80);
     
     const char *format_str = balua_getStringField(L, 1, "format", "JPEG");
-    uint32_t pixel_format = V4L2_PIX_FMT_RGB565; // Asumimos Little Endian para P4
-    if (strcmp(format_str, "YUV422") == 0) pixel_format = V4L2_PIX_FMT_UYVY;
+
+    // VARIABLE MAESTRA: Lo que físicamente le pediremos al kernel de Linux
+    uint32_t sensor_pixel_format; 
+    bool use_hardware_jpeg = false;
+
+    if (strcmp(format_str, "JPEG") == 0) {
+       // Lua pide JPEG. Forzamos UYVY (el YUV soportado por el P4) y prendemos el motor.
+        sensor_pixel_format = V4L2_PIX_FMT_UYVY; 
+        use_hardware_jpeg = true;
+    } 
+    else if (strcmp(format_str, "YUV422") == 0) {
+        sensor_pixel_format = V4L2_PIX_FMT_UYVY; // O UYVY si lo preferís
+        use_hardware_jpeg = false;
+    }
+    else if (strcmp(format_str, "RGB565") == 0) {
+        sensor_pixel_format = V4L2_PIX_FMT_RGB565;
+        use_hardware_jpeg = false;
+    }
+    else {
+        // Fallback de seguridad
+        sensor_pixel_format = V4L2_PIX_FMT_UYVY;
+    }
 
     // LÓGICA HÍBRIDA DE RESOLUCIÓN
     uint32_t width = 640;
@@ -359,6 +439,23 @@ int lcam(lua_State *L) {
 
     int fd = open("/dev/video0", O_RDWR);
     if (fd < 0) return luaL_error(L, "No se pudo abrir /dev/video0");
+    
+    // ==========================================================
+    // EL DETECTOR DE VERDAD (Stop Guessing)
+    // ==========================================================
+    struct v4l2_fmtdesc fmtdesc = {0};
+    fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    printf("\n[DEBUG] --- FORMATOS SOPORTADOS POR EL DRIVER V4L2 ---\n");
+    while (ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0) {
+        printf("[DEBUG] Formato: %ld%ld%ld%ld | Descripcion: %s\n", 
+               fmtdesc.pixelformat & 0xFF, 
+               (fmtdesc.pixelformat >> 8) & 0xFF,
+               (fmtdesc.pixelformat >> 16) & 0xFF, 
+               (fmtdesc.pixelformat >> 24) & 0xFF,
+               fmtdesc.description);
+        fmtdesc.index++;
+    }
+    printf("[DEBUG] ------------------------------------------------\n\n");
 
     // 1. Leer lo que el sensor escupe físicamente
     struct v4l2_format native_fmt = {0};
@@ -368,28 +465,19 @@ int lcam(lua_State *L) {
         return luaL_error(L, "Error al leer formato nativo");
     }
 
-    // 2. Alinear el Endianness
-    uint32_t final_pixel_format = pixel_format;
-    if (native_fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_RGB565X) {
-        final_pixel_format = V4L2_PIX_FMT_RGB565; 
-    }
-
-    uint32_t real_w = native_fmt.fmt.pix.width;
-    uint32_t real_h = native_fmt.fmt.pix.height;
-
-    // 3. Forzar nuestra configuración con una ESTRUCTURA LIMPIA
+    // 2. CONFIGURAR EL SENSOR (Inyectamos nuestra variable maestra y la resolución de Lua)
     struct v4l2_format clean_fmt = {0};
     clean_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    clean_fmt.fmt.pix.width = real_w;
-    clean_fmt.fmt.pix.height = real_h;
-    clean_fmt.fmt.pix.pixelformat = final_pixel_format;
-    
+    clean_fmt.fmt.pix.width = width;   // Usamos el valor parseado de la tabla Lua
+    clean_fmt.fmt.pix.height = height; // Usamos el valor parseado de la tabla Lua
+    clean_fmt.fmt.pix.pixelformat = sensor_pixel_format; 
+
     if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) < 0) {
         close(fd);
-        return luaL_error(L, "Error en VIDIOC_S_FMT");
+        return luaL_error(L, "Error en VIDIOC_S_FMT: El sensor no soporta el formato o resolución");
     }
 
-    // 4. Pedir buffers
+    // 3. PEDIR BUFFERS A LINUX
     struct v4l2_requestbuffers req = {
         .count = P4_CAM_BUFFERS,
         .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
@@ -397,14 +485,16 @@ int lcam(lua_State *L) {
     };
     ioctl(fd, VIDIOC_REQBUFS, &req);
 
+    // 4. CREAR EL OBJETO CÁMARA (Acá nace 'cam')
     LCAM* cam = (LCAM*)lNewUdata(L, sizeof(LCAM), BACAM, camObjLib);
     memset(cam, 0, sizeof(LCAM));
     cam->fd = fd;
     
-    // ESTO ES CLAVE: Le decimos al JPEG que la foto es del tamaño real
-    cam->width = real_w; 
-    cam->height = real_h;
+    // Leemos la resolución final que el sensor aceptó (por si ajustó los valores)
+    cam->width = clean_fmt.fmt.pix.width;  
+    cam->height = clean_fmt.fmt.pix.height;
 
+    // 5. MAPEAR MEMORIA (DMA)
     for (int i = 0; i < P4_CAM_BUFFERS; i++) {
         struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP, .index = i };
         ioctl(fd, VIDIOC_QUERYBUF, &buf);
@@ -413,10 +503,15 @@ int lcam(lua_State *L) {
         ioctl(fd, VIDIOC_QBUF, &buf);
     }
 
-    if (hw_jpeg_encoder_init(cam, pixel_format, quality) != ESP_OK) {
-        close(fd); return luaL_error(L, "Error HW JPEG Init");
+    // 6. INICIALIZAR EL MOTOR JPEG
+    // Ahora sí es el lugar correcto: 'cam' existe y tiene su width/height definidos.
+    if (use_hardware_jpeg) {
+        if (hw_jpeg_encoder_init(cam, sensor_pixel_format, quality) != ESP_OK) {
+            close(fd); return luaL_error(L, "Error HW JPEG Init");
+        }
     }
 
+    // 7. ARRANCAR EL STREAM DE VIDEO
     int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     ioctl(fd, VIDIOC_STREAMON, &type);
 
