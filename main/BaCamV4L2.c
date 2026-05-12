@@ -15,13 +15,16 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <errno.h>
-#include <linux/videodev2.h>
 
+#include "esp_heap_caps.h"
+
+#include <linux/videodev2.h>
 #include "esp_video_init.h"
 #include "esp_cam_sensor_xclk.h"
 #include "driver/i2c_master.h"
-
+#include "driver/ppa.h"
 #include "driver/jpeg_encode.h"
+
 #include "lua.h"
 #include "lauxlib.h"
 
@@ -40,6 +43,12 @@ typedef struct {
     jpeg_encode_cfg_t pic_cfg;     // <--- ¡Acá guardamos los datos de la foto!
     uint8_t *jpeg_out_buf;       
     uint32_t jpeg_out_buf_size;  
+    // --- PPA para escalar la imagen a formatos no nativos del sensor.
+    ppa_client_handle_t ppa_srm_handle; // El manejador del motor 2D
+    uint8_t *ppa_out_buf;               // El buffer intermedio alineado a caché
+    uint32_t ppa_out_buf_size;          // Tamaño de ese buffer intermedio
+    uint32_t requested_w;               // El ancho final que pidió Lua
+    uint32_t requested_h;               // El alto final que pidió Lua
 } LCAM;
 
 static LCAM* LCAM_getUD(lua_State* L)
@@ -237,43 +246,6 @@ static int LCAM_lset_control(lua_State *L) {
     return 1;
 }
 
-/* old-
-static int LCAM_lread(lua_State *L) {
-    LCAM *cam =  LCAM_checkUD(L);
-
-    struct v4l2_buffer buf = {0};
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-
-    // ... [código anterior de lread] ...
-    if (ioctl(cam->fd, VIDIOC_DQBUF, &buf) != 0) {
-        lua_pushnil(L);
-        return 1;
-    }
-
-    uint32_t final_jpeg_size = 0;
-
-    if (buf.bytesused > 0) {
-        esp_err_t enc_res = jpeg_encoder_process(
-            cam->encoder_handle, 
-            &cam->pic_cfg, 
-            cam->buffers[buf.index], 
-            buf.bytesused,      // <--- ¡Esto nos salva de los 14KB fijos!
-            cam->jpeg_out_buf, 
-            cam->jpeg_out_buf_size, 
-            &final_jpeg_size
-        );
-
-        if (enc_res == ESP_OK && final_jpeg_size > 0) {
-            lua_pushlstring(L, (const char *)cam->jpeg_out_buf, final_jpeg_size);
-        } else { lua_pushnil(L); }
-    } else { lua_pushnil(L); }
-
-    ioctl(cam->fd, VIDIOC_QBUF, &buf);
-    return 1;
-}
-*/
-
 static int LCAM_lread(lua_State *L) {
     LCAM *cam =  LCAM_checkUD(L);
 
@@ -282,45 +254,84 @@ static int LCAM_lread(lua_State *L) {
     buf.memory = V4L2_MEMORY_MMAP;
 
     if (ioctl(cam->fd, VIDIOC_DQBUF, &buf) != 0) {
-        lua_pushnil(L);
-        return 1;
+        lua_pushnil(L); return 1;
     }
 
     uint32_t final_jpeg_size = 0;
 
     if (buf.bytesused > 0) {
         // ==========================================================
-        // EL BISTURÍ: SWAP DE CROMINANCIA (U <-> V)
-        // Convertimos UYVY a VYUY (o viceversa) para arreglar el Pitufo
+        // 1. EL ESCALADOR HARDWARE (PPA SRM)
         // ==========================================================
-        uint8_t *ptr = (uint8_t *)cam->buffers[buf.index];
-        uint32_t len = buf.bytesused;
-        
-        // ==========================================================
-        // EL BISTURÍ V2: SWAP DE CROMINANCIA CORRECTO
-        // El hardware nos engañó: La Luma (Y) está en 0 y 2. 
-        // El color (U y V) está en 1 y 3. Intercambiamos 1 y 3.
-        // ==========================================================
-        for (uint32_t i = 0; i < len; i += 4) {
-            uint8_t temp_u = ptr[i + 1];     // Guardamos el canal U (Byte 1)
-            ptr[i + 1] = ptr[i + 3];         // Ponemos el canal V en el lugar de U
-            ptr[i + 3] = temp_u;             // Ponemos el canal U en el lugar de V
-        }
-        // ==========================================================
+        ppa_srm_oper_config_t srm_config = {
+            .in = {
+                .buffer = cam->buffers[buf.index], // Lo que escupe el sensor
+                .pic_w = cam->width,
+                .pic_h = cam->height,
+                .block_w = cam->width,
+                .block_h = cam->height,
+                .block_offset_x = 0,
+                .block_offset_y = 0,
+                //.srm_cm = (ppa_srm_color_mode_t)ESP_COLOR_FOURCC_UYVY,
+                //.srm_cm = PPA_SRM_COLOR_MODE_YUV422, // UYVY nativo
+                .srm_cm = PPA_SRM_COLOR_MODE_RGB565,
+            },
+            .out = {
+                .buffer = cam->ppa_out_buf,        // Nuestro buffer alineado DMA
+                .buffer_size = cam->ppa_out_buf_size,
+                .pic_w = cam->requested_w,
+                .pic_h = cam->requested_h,
+                .block_offset_x = 0,
+                .block_offset_y = 0,
+                //.srm_cm = (ppa_srm_color_mode_t)ESP_COLOR_FOURCC_UYVY,
+                //.srm_cm = PPA_SRM_COLOR_MODE_YUV422,
+                .srm_cm = PPA_SRM_COLOR_MODE_RGB565,
+            },
+            .rotation_angle = PPA_SRM_ROTATION_ANGLE_0,
+            // Calculamos cuánto hay que achicar dinámicamente
+            .scale_x = (float)cam->requested_w / (float)cam->width,
+            .scale_y = (float)cam->requested_h / (float)cam->height,
+            .rgb_swap = 0,
+            .byte_swap = 0,
+            .mode = PPA_TRANS_MODE_BLOCKING, // Esperamos que termine el hardware
+        };
 
-        esp_err_t enc_res = jpeg_encoder_process(
-            cam->encoder_handle, 
-            &cam->pic_cfg, 
-            cam->buffers[buf.index], 
-            buf.bytesused,      // <--- ¡Esto nos salva de los 14KB fijos!
-            cam->jpeg_out_buf, 
-            cam->jpeg_out_buf_size, 
-            &final_jpeg_size
-        );
+        // Ejecutamos el motor 2D
+        if (ppa_do_scale_rotate_mirror(cam->ppa_srm_handle, &srm_config) == ESP_OK) {
+            
+            // ==========================================================
+            // 2. EL BISTURÍ V2 (Inyectado sobre la salida del PPA)
+            // Curamos el color intercambiando U (1) y V (3)
+            // ==========================================================
+           /* uint8_t *ptr = (uint8_t *)cam->ppa_out_buf;
+            uint32_t len = cam->requested_w * cam->requested_h * 2;
+            
+            for (uint32_t i = 0; i < len; i += 4) {
+                uint8_t temp_u = ptr[i + 1];
+                ptr[i + 1] = ptr[i + 3];
+                ptr[i + 3] = temp_u;
+            }
+            */
+            // ==========================================================
+            // 3. COMPRESIÓN JPEG (Le damos de comer el buffer PPA)
+            // ==========================================================
+            esp_err_t enc_res = jpeg_encoder_process(
+                cam->encoder_handle, 
+                &cam->pic_cfg, 
+                cam->ppa_out_buf, // <--- ¡La imagen ya recortada y curada!
+                //len, 
+                cam->ppa_out_buf_size,             
+                cam->jpeg_out_buf, 
+                cam->jpeg_out_buf_size, 
+                &final_jpeg_size
+            );
 
-        if (enc_res == ESP_OK && final_jpeg_size > 0) {
-            lua_pushlstring(L, (const char *)cam->jpeg_out_buf, final_jpeg_size);
-        } else { 
+            if (enc_res == ESP_OK && final_jpeg_size > 0) {
+                lua_pushlstring(L, (const char *)cam->jpeg_out_buf, final_jpeg_size);
+            } else { lua_pushnil(L); }
+            
+        } else {
+            // Falló el PPA
             lua_pushnil(L); 
         }
     } else { 
@@ -331,6 +342,7 @@ static int LCAM_lread(lua_State *L) {
     return 1;
 }
 
+/*
 static int LCAM_close(lua_State *L) {
     LCAM *cam = LCAM_getUD(L);
     if (cam->fd >= 0) {
@@ -346,6 +358,48 @@ static int LCAM_close(lua_State *L) {
         close(cam->fd);
         cam->fd = -1;
         p4_camera_hardware_deinit(); // Liberamos I2C y reloj
+    }
+    return 0;
+}
+*/
+static int LCAM_close(lua_State *L) {
+    LCAM *cam = LCAM_getUD(L);
+    
+    if (cam->fd >= 0) {
+        // 1. FRENAR EL STREAM (Fundamental para liberar el hardware del ISP)
+        int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        ioctl(cam->fd, VIDIOC_STREAMOFF, &type);
+        
+        // 2. DEINIT DEL ENCODER (Lo que ya tenías, perfecto)
+        hw_jpeg_encoder_deinit(cam);
+
+        // 3. LIBERAR PPA (El culpable del "unsupported color mode" o bloqueos de hardware)
+        if (cam->ppa_srm_handle) {
+            ppa_unregister_client(cam->ppa_srm_handle);
+            cam->ppa_srm_handle = NULL;
+        }
+
+        // 4. LIBERAR BUFFER DE ESCALADO (El culpable del "Failed to create buffer")
+        if (cam->ppa_out_buf) {
+            heap_caps_free(cam->ppa_out_buf);
+            cam->ppa_out_buf = NULL;
+        }
+
+        // 5. UNMAP DE BUFFERS V4L2 (Usamos la constante correcta)
+        for (int i = 0; i < P4_CAM_BUFFERS; i++) {
+            if (cam->buffers[i]) {
+                munmap(cam->buffers[i], cam->buf_lengths[i]);
+                cam->buffers[i] = NULL;
+            }
+        }
+
+        // 6. CIERRE DE DESCRIPTOR Y HARDWARE GLOBAL
+        close(cam->fd);
+        cam->fd = -1;
+        
+        // Esta función está bien si solo manejas una cámara a la vez.
+        // Si pensás en un sistema con múltiples cámaras, habría que tener cuidado.
+        p4_camera_hardware_deinit(); 
     }
     return 0;
 }
@@ -392,8 +446,11 @@ int lcam(lua_State *L) {
     bool use_hardware_jpeg = false;
 
     if (strcmp(format_str, "JPEG") == 0) {
-       // Lua pide JPEG. Forzamos UYVY (el YUV soportado por el P4) y prendemos el motor.
-        sensor_pixel_format = V4L2_PIX_FMT_UYVY; 
+        // Lua pide JPEG. Forzamos UYVY (el YUV soportado por el P4) y prendemos el motor.
+        //sensor_pixel_format = V4L2_PIX_FMT_UYVY; 
+        // El PPA del P4 rev 1.0 no escala YUV422. 
+        // Pasamos toda la tubería a RGB565.
+        sensor_pixel_format = V4L2_PIX_FMT_RGB565;
         use_hardware_jpeg = true;
     } 
     else if (strcmp(format_str, "YUV422") == 0) {
@@ -441,41 +498,93 @@ int lcam(lua_State *L) {
     if (fd < 0) return luaL_error(L, "No se pudo abrir /dev/video0");
     
     // ==========================================================
-    // EL DETECTOR DE VERDAD (Stop Guessing)
+    // AUTO-NEGOCIACIÓN (Fuerza Bruta V4L2)
+    // El driver esp_video 2.1.0 no soporta ENUM_FRAMESIZES.
+    // Iteramos e intentamos setear la resolución directamente.
     // ==========================================================
-    struct v4l2_fmtdesc fmtdesc = {0};
-    fmtdesc.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    printf("\n[DEBUG] --- FORMATOS SOPORTADOS POR EL DRIVER V4L2 ---\n");
-    while (ioctl(fd, VIDIOC_ENUM_FMT, &fmtdesc) == 0) {
-        printf("[DEBUG] Formato: %ld%ld%ld%ld | Descripcion: %s\n", 
-               fmtdesc.pixelformat & 0xFF, 
-               (fmtdesc.pixelformat >> 8) & 0xFF,
-               (fmtdesc.pixelformat >> 16) & 0xFF, 
-               (fmtdesc.pixelformat >> 24) & 0xFF,
-               fmtdesc.description);
-        fmtdesc.index++;
-    }
-    printf("[DEBUG] ------------------------------------------------\n\n");
+    uint32_t best_w = 0;
+    uint32_t best_h = 0;
 
-    // 1. Leer lo que el sensor escupe físicamente
-    struct v4l2_format native_fmt = {0};
-    native_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    if (ioctl(fd, VIDIOC_G_FMT, &native_fmt) < 0) {
-        close(fd);
-        return luaL_error(L, "Error al leer formato nativo");
-    }
+    // Tabla de resoluciones nativas típicas del OV5647
+    uint32_t fallbacks[][2] = {
+        {1920, 1080}, {1280, 960}, {1280, 720}, 
+        {1024, 768}, {800, 800}, {800, 640}, {640, 480}, {320, 240}
+    };
+    int num_fallbacks = sizeof(fallbacks) / sizeof(fallbacks[0]);
 
-    // 2. CONFIGURAR EL SENSOR (Inyectamos nuestra variable maestra y la resolución de Lua)
     struct v4l2_format clean_fmt = {0};
     clean_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    clean_fmt.fmt.pix.width = width;   // Usamos el valor parseado de la tabla Lua
-    clean_fmt.fmt.pix.height = height; // Usamos el valor parseado de la tabla Lua
+
+    // Buscamos la resolución óptima para que el PPA achique (Downscale)
+    for (int i = num_fallbacks - 1; i >= 0; i--) {
+        uint32_t try_w = fallbacks[i][0];
+        uint32_t try_h = fallbacks[i][1];
+        
+        if (try_w >= width && try_h >= height) {
+            clean_fmt.fmt.pix.width = try_w;
+            clean_fmt.fmt.pix.height = try_h;
+            clean_fmt.fmt.pix.pixelformat = sensor_pixel_format;
+            
+            if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) == 0) {
+                best_w = clean_fmt.fmt.pix.width;
+                best_h = clean_fmt.fmt.pix.height;
+                printf("[DEBUG] Exito (Upscale) seteando: %ldx%ld\n", best_w, best_h);
+                break;
+            }
+        }
+    }
+
+    // Modo Pánico (Upscale): si el sensor no tiene nada mayor a lo pedido
+    if (best_w == 0) {
+        for (int i = 0; i < num_fallbacks; i++) {
+            clean_fmt.fmt.pix.width = fallbacks[i][0];
+            clean_fmt.fmt.pix.height = fallbacks[i][1];
+            clean_fmt.fmt.pix.pixelformat = sensor_pixel_format;
+            
+            if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) == 0) {
+                best_w = clean_fmt.fmt.pix.width;
+                best_h = clean_fmt.fmt.pix.height;
+                break; 
+            }
+        }
+    }
+
+    if (best_w == 0) {
+        close(fd); return luaL_error(L, "El driver rechazo todas las resoluciones conocidas");
+    }
+
+    // ==========================================================
+    // SET FORMAT: Acá ocurre la magia del ISP de Espressif.
+    // Le pedimos la resolución física que encontramos, pero le exigimos
+    // nuestro querido sensor_pixel_format (UYVY) para el motor JPEG.
+    // ==========================================================
+   // struct v4l2_format clean_fmt = {0};
+    clean_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    clean_fmt.fmt.pix.width = best_w;
+    clean_fmt.fmt.pix.height = best_h;
+    clean_fmt.fmt.pix.pixelformat = sensor_pixel_format; // Forzamos UYVY
+
+    if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) < 0) {
+        close(fd); return luaL_error(L, "El driver rechazo la combinacion de tamaño y formato UYVY");
+    }
+    
+    // Guardamos la resolución física elegida para que el PPA sepa de dónde partir
+    //cam->width = best_w;
+    //cam->height = best_h;
+    // (Nota: el hardware ya quedó seteado correctamente gracias al ioctl del bucle)
+    // ==========================================================
+
+    // Ahora sí, le exigimos al hardware de Linux esa resolución exacta
+    //struct v4l2_format clean_fmt = {0};
+    clean_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    clean_fmt.fmt.pix.width = best_w;
+    clean_fmt.fmt.pix.height = best_h;
     clean_fmt.fmt.pix.pixelformat = sensor_pixel_format; 
 
     if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) < 0) {
-        close(fd);
-        return luaL_error(L, "Error en VIDIOC_S_FMT: El sensor no soporta el formato o resolución");
+        close(fd); return luaL_error(L, "Error en VIDIOC_S_FMT al setear Best Fit");
     }
+    // ==========================================================
 
     // 3. PEDIR BUFFERS A LINUX
     struct v4l2_requestbuffers req = {
@@ -489,10 +598,39 @@ int lcam(lua_State *L) {
     LCAM* cam = (LCAM*)lNewUdata(L, sizeof(LCAM), BACAM, camObjLib);
     memset(cam, 0, sizeof(LCAM));
     cam->fd = fd;
-    
+
+    // 1. Guardamos lo que el usuario de Lua pidió como destino final
+    cam->requested_w = width;  
+    cam->requested_h = height;
+
     // Leemos la resolución final que el sensor aceptó (por si ajustó los valores)
     cam->width = clean_fmt.fmt.pix.width;  
     cam->height = clean_fmt.fmt.pix.height;
+
+    // ==========================================================
+    // INICIALIZACIÓN DEL PPA (PIXEL-PROCESSING ACCELERATOR)
+    // ==========================================================
+    ppa_client_config_t ppa_srm_config = {
+        .oper_type = PPA_OPERATION_SRM,
+        .max_pending_trans_num = 1,
+    };
+    
+    if (ppa_register_client(&ppa_srm_config, &cam->ppa_srm_handle) != ESP_OK) {
+        close(fd); return luaL_error(L, "Error al registrar cliente PPA SRM");
+    }
+
+    // 3. Reservar memoria intermedia ALINEADA A CACHÉ para la salida del PPA
+    // Calculamos el tamaño para el formato YUV422 (2 bytes por píxel) del tamaño FINAL
+    cam->ppa_out_buf_size = cam->requested_w * cam->requested_h * 2; 
+    
+    // Usamos el flag mágico de Espressif que garantiza la alineación para DMA
+    cam->ppa_out_buf = heap_caps_calloc(1, cam->ppa_out_buf_size, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);
+    
+    if (!cam->ppa_out_buf) {
+        ppa_unregister_client(cam->ppa_srm_handle);
+        close(fd); return luaL_error(L, "Error: Sin RAM para el buffer del PPA");
+    }
+    // ==========================================================
 
     // 5. MAPEAR MEMORIA (DMA)
     for (int i = 0; i < P4_CAM_BUFFERS; i++) {
@@ -506,9 +644,20 @@ int lcam(lua_State *L) {
     // 6. INICIALIZAR EL MOTOR JPEG
     // Ahora sí es el lugar correcto: 'cam' existe y tiene su width/height definidos.
     if (use_hardware_jpeg) {
+        // ¡OJO ACÁ! Temporariamente pisamos el width/height de la cámara 
+        // para engañar al inicializador del JPEG con las dimensiones finales
+        uint32_t sensor_w = cam->width;
+        uint32_t sensor_h = cam->height;
+        cam->width = cam->requested_w;
+        cam->height = cam->requested_h;
+        
         if (hw_jpeg_encoder_init(cam, sensor_pixel_format, quality) != ESP_OK) {
+            // Faltaría liberar ppa acá si falla, pero para probar estamos bien
             close(fd); return luaL_error(L, "Error HW JPEG Init");
         }
+        // Restauramos el tamaño original para saber cuánto leemos de Linux
+        cam->width = sensor_w;
+        cam->height = sensor_h;
     }
 
     // 7. ARRANCAR EL STREAM DE VIDEO
