@@ -17,7 +17,8 @@
  */
 
 #include "BaESP32.h"
-#if CONFIG_CAM_ENABLED
+// If the camera is on AND it's NOT a P4
+#if defined(CONFIG_CAM_ENABLED) && !defined(CONFIG_IDF_TARGET_ESP32P4)
 
 #include "esp_camera.h"
 

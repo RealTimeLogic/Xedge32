@@ -12,4 +12,15 @@ if("$ENV{IDF_TARGET}" STREQUAL "esp32" OR "$ENV{IDF_TARGET}" STREQUAL "esp32s3")
 endif()
 # --- END CAMERA LOGIC ---
 
+# --- START P4 COMPONENTS BYPASS ---
+# WORKAROUND: The Component Manager currently throws compatibility errors if 
+# P4-exclusive components (like 'espressif/esp_ipa') are scanned during an S3 build.
+# This conditional hides them from the build system unless targeting esp32p4.
+# TODO: Re-evaluate and potentially remove this bypass once Espressif releases 
+# esp_ipa version > 2.0.0 with proper multi-target support in its manifest.
+if("$ENV{IDF_TARGET}" STREQUAL "esp32p4")
+    list(APPEND EXTRA_COMPONENT_DIRS "components_p4")
+endif()
+# --- END P4 COMPONENTS BYPASS ---
+
 project(xedge)

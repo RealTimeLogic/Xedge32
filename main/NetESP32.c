@@ -964,17 +964,14 @@ bool netInit(void)
    gpio_install_isr_service(0);
     
    cfgGetNet(&cfg);
- 
+   printf("netInit - adapter: %s - ssid: %s - password: %s\n", cfg.adapter, cfg.ssid, cfg.password);
    if(!strcmp("wifi", cfg.adapter))
    {   
       netWifiStart();
    }
    else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
    {
-      if(netEthStart(&cfg) == ESP_OK)
-      {
-         netEthConnect();
-      }      
+      netEthStart(&cfg);
    }
    
    netXedgeEventInit();

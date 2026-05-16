@@ -218,17 +218,19 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
     * semaphore is initialized within the installESP32Libs function.
     */
    cfgGetNet(&cfg);
-
-#if SOC_WIFI_SUPPORTED
+   printf("xedgeOpenAUX - adapter: %s - ssid: %s - password: %s\n", cfg.adapter, cfg.ssid, cfg.password);
    if(!strcmp("wifi", cfg.adapter))
    {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
       netWifiConnect(cfg.ssid, cfg.password);
+#endif
    }
    else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
    {
+#if defined(CONFIG_ETH_USE_SPI_ETHERNET) || defined(CONFIG_ETH_USE_ESP32_EMAC) 
       netEthConnect();
-   }  
 #endif
+   }  
 
    if(gotSdCard)
    {
