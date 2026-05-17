@@ -218,7 +218,6 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
     * semaphore is initialized within the installESP32Libs function.
     */
    cfgGetNet(&cfg);
-   printf("xedgeOpenAUX - adapter: %s - ssid: %s - password: %s\n", cfg.adapter, cfg.ssid, cfg.password);
    if(!strcmp("wifi", cfg.adapter))
    {
 #ifdef CONFIG_XEDGE_WIFI_ENABLED

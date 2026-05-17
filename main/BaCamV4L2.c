@@ -50,7 +50,11 @@ typedef struct {
     uint8_t *ppa_out_buf;               
     uint32_t ppa_out_buf_size;          
     uint32_t requested_w;               
-    uint32_t requested_h;               
+    uint32_t requested_h;   
+    
+    // --- PPA MIRROR STATE ---
+    bool mirror_x;
+    bool mirror_y;
 } LCAM;
 
 static LCAM* LCAM_getUD(lua_State* L) {
@@ -314,37 +318,21 @@ static esp_err_t setup_ppa_scaler(LCAM *cam) {
 // 3. LUA BINDINGS
 // =========================================================================
 
-static int LCAM_lset_control(lua_State *L) {
-    LCAM *cam =  LCAM_checkUD(L);
-    const char *ctrl_name = luaL_checkstring(L, 2);
-    int value = luaL_checkinteger(L, 3);
-
-    struct v4l2_ext_controls ctrls = {0};
-    struct v4l2_ext_control ctrl = {0};
-    ctrls.ctrl_class = V4L2_CID_USER_CLASS;
-    ctrls.count = 1;
-    ctrls.controls = &ctrl;
-
-    if (strcmp(ctrl_name, "vflip") == 0) ctrl.id = V4L2_CID_VFLIP;
-    else if (strcmp(ctrl_name, "hflip") == 0) ctrl.id = V4L2_CID_HFLIP;
-    else if (strcmp(ctrl_name, "brightness") == 0) ctrl.id = V4L2_CID_BRIGHTNESS;
-    else if (strcmp(ctrl_name, "contrast") == 0) ctrl.id = V4L2_CID_CONTRAST;
-    else if (strcmp(ctrl_name, "red_balance") == 0) ctrl.id = V4L2_CID_RED_BALANCE;
-    else if (strcmp(ctrl_name, "blue_balance") == 0) ctrl.id = V4L2_CID_BLUE_BALANCE;
-    else {
-        return luaL_error(L, "Unsupported control: %s", ctrl_name);
-    }
-
-    ctrl.value = value;
-    
-    if (ioctl(cam->fd, VIDIOC_S_EXT_CTRLS, &ctrls) != 0) {
-        lua_pushboolean(L, 0); 
-    } else {
-        lua_pushboolean(L, 1);
-    }
-    return 1;
-}
-
+/**
+ * @brief Lua binding for capturing and processing a single frame from the camera.
+ *
+ * Pipeline Execution Details:
+ * 1. Dequeues a raw frame buffer from the V4L2 subsystem (VIDIOC_DQBUF).
+ * 2. Feeds the raw buffer into the PPA (Pixel Processing Accelerator) SRM block.
+ * 3. The PPA performs zero-CPU-cost hardware scaling (if requested frame size 
+ * differs from sensor output) and applies the geometric mirroring (vflip/hmirror) 
+ * configured during initialization.
+ * 4. Re-queues the V4L2 buffer (VIDIOC_QBUF) to keep the video stream active.
+ *
+ * Returns the final processed binary image as a Lua string.
+ * Returns nil, err if the V4L2 capture, PPA processing, or DMA buffer management fails.
+ * Raises a Lua error if the camera object has not been initialized or is invalid.
+ */
 static int LCAM_lread(lua_State *L) {
     LCAM *cam =  LCAM_checkUD(L);
 
@@ -380,6 +368,8 @@ static int LCAM_lread(lua_State *L) {
                 .srm_cm = PPA_SRM_COLOR_MODE_RGB565,
             },
             .rotation_angle = PPA_SRM_ROTATION_ANGLE_0,
+            .mirror_x = cam->mirror_x, 
+            .mirror_y = cam->mirror_y,
             .scale_x = (float)cam->requested_w / (float)cam->width,
             .scale_y = (float)cam->requested_h / (float)cam->height,
             .rgb_swap = 0,
@@ -413,6 +403,22 @@ static int LCAM_lread(lua_State *L) {
     return 1;
 }
 
+/**
+ * @brief Lua binding for safely shutting down the camera and hardware accelerators.
+ *
+ * Resource Management:
+ * - Stops the V4L2 streaming thread (VIDIOC_STREAMOFF).
+ * - Unmaps and frees the DMA-capable frame buffers.
+ * - Closes the /dev/videoX file descriptor.
+ * - Destroys the PPA SRM handles to release the 2D accelerator hardware blocks.
+ *
+ * Proper invocation of this function is critical. Failing to release these resources 
+ * will result in severe DMA memory leaks and will lock the MIPI/CSI and PPA peripherals, 
+ * preventing subsequent camera initializations without a hard reset.
+ *
+ * Returns true on success, or nil, err if the hardware fails to release.
+ * Raises a Lua error if the camera has not been initialized or has already been closed.
+ */
 static int LCAM_close(lua_State *L) {
     LCAM *cam = LCAM_getUD(L);
     
@@ -455,7 +461,6 @@ static int LCAM_lclose(lua_State* L) {
 
 static const luaL_Reg camObjLib[] = {
     {"read", LCAM_lread},
-    {"set_control", LCAM_lset_control}, 
     {"close", LCAM_lclose},
     {"__close", LCAM_close},
     {"__gc", LCAM_close},
@@ -463,7 +468,29 @@ static const luaL_Reg camObjLib[] = {
 };
 
 /**
- * @brief Lua Constructor: esp32.cam({table})
+ * @brief Lua binding for initializing the ESP32-P4 camera module via V4L2 & PPA.
+ *        esp32.cam({table})
+ *
+ * Accepts a configuration table with the following optional fields:
+ * - format:  the pixel format of the image captured (e.g., "JPEG", "RGB565", "YUV422").
+ * - width:   the requested image width in pixels (e.g., 800).
+ * - height:  the requested image height in pixels (e.g., 800).
+ * - quality: JPEG compression quality (1-100).
+ * - scl:     the GPIO pin used for the I2C/SCCB clock (default depends on board, e.g., 8).
+ * - sda:     the GPIO pin used for the I2C/SCCB data (default depends on board, e.g., 7).
+ * - xclk:    the GPIO pin used for the master clock to the sensor (e.g., 22).
+ * - vflip:   vertical flip on final output, default false.
+ * - hmirror: horizontal mirror on final output, default false.
+ *
+ * ARCHITECTURAL NOTE (VFLIP / HMIRROR):
+ * Unlike legacy ESP32 camera drivers, hardware flipping commands (V4L2_CID_VFLIP / HFLIP) 
+ * are explicitly NOT sent to the sensor. Modifying the silicon readout direction on sensors 
+ * like the OV5647 misaligns the raw Bayer pattern, causing severe colorimetric distortion 
+ * (e.g., magenta/purple tint). Instead, these flags are cached in the LCAM struct and 
+ * applied downstream via the ESP32-P4 Pixel Processing Accelerator (PPA) during the read 
+ * phase, guaranteeing geometric mirroring with 100% color accuracy.
+ *
+ * Returns the instantiated camera userdatum object, or nil+error string on failure.
  */
 int lcam(lua_State *L) {
     luaL_checktype(L, 1, LUA_TTABLE);
@@ -472,7 +499,9 @@ int lcam(lua_State *L) {
     int pin_sda  = balua_getIntField(L, 1, "sda", 7);
     int pin_xclk = balua_getIntField(L, 1, "xclk", 22);
     int quality  = balua_getIntField(L, 1, "quality", 80);
-    
+    int mirror_y = balua_getBoolField(L, 1, "vflip", FALSE);
+    int mirror_x = balua_getBoolField(L, 1, "hmirror", FALSE);
+   
     const char *format_str = balua_getStringField(L, 1, "format", "JPEG");
     uint32_t sensor_pixel_format; 
     bool use_hardware_jpeg = false;
@@ -539,7 +568,9 @@ int lcam(lua_State *L) {
     cam->requested_h = req_h;
     cam->width = best_w;  
     cam->height = best_h;
-
+    cam->mirror_x = mirror_x;
+    cam->mirror_y = mirror_y;
+   
     // --- PHASE 4: V4L2 BUFFERS & PPA & JPEG ---
     // If any of these fail, we use the cleanup labels at the bottom.
     if (setup_v4l2_buffers(cam) != ESP_OK) {
