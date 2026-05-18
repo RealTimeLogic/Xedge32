@@ -1,7 +1,12 @@
 ## IDF Component Manager Manifest File
 dependencies:
   espressif/mdns: '*'
-  espressif/esp_linenoise: "^1.0.1"
+  ## Enhanced version of the linenoise line editing library.
+  ## fix(esp_linenoise): correct history index logic to prevent overwritin… (IEC-527)
+  espressif/esp_linenoise:
+    git: https://github.com/jjsch-dev/idf-extra-components.git
+    path: esp_linenoise
+    version: "fix/esp-linenoise-history-index"
   ## Required IDF version
   idf:
     version: '>=4.1.0'
