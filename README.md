@@ -59,76 +59,53 @@ chmod +x BuildESP32ResourceFile.sh
 ./BuildESP32ResourceFile.sh
 ```
 
-## Select one target. ESP32-P4 camera support is enabled by its defaults.
+## Select one target:
 
 ```bash
-export IDF_TARGET=esp32       # or esp32s3 or esp32p4
+   #set target to one of:
+   #idf.py set-target esp32
+   #idf.py set-target esp32s3
+   #idf.py set-target esp32p4
 ```
 
-## Use a target-specific build directory and sdkconfig file.
+## Configure and build
 
 ```bash
-idf.py -B build-$IDF_TARGET -D SDKCONFIG=sdkconfig.$IDF_TARGET build
+   # Configure Xedge32 options (See Configuring Xedge32 below)
+   #idf.py menuconfig
+
+   # Build the code
+   idf.py build
 ```
 
-When EIM is installed, `eim select v6.1` replaces the clone, install, and
-export steps. Confirm that `IDF_PATH` names the selected 6.1 installation before
-building.
+Windows: The code can be compiled in a Linux console, including the Windows Subsystem for Linux (WSL). If you use WSL, it's recommended to use generation one (WSL1), as it can be difficult to get the USB serial working in WSL2. For more information, see [the WSL documentation](https://docs.microsoft.com/en-us/windows/wsl/about).
 
-Windows builds can run in Windows Subsystem for Linux (WSL). WSL1 is the most
-direct option when the serial port is exposed as `/dev/ttyS<N>`. See the
-[WSL documentation](https://learn.microsoft.com/windows/wsl/) for installation
-and device details.
+To upload the firmware to your ESP32, follow these steps:
 
-After the build succeeds, flash and monitor the board. Replace the example port
-with the port assigned to your board.
-
-## Native Linux
-
-```bash
-idf.py -B build-$IDF_TARGET -p /dev/ttyUSB0 flash monitor
-```
-
-## WSL1 example for Windows COM4
-
-```bash
-idf.py -B build-$IDF_TARGET -p /dev/ttyS4 -b 115200 flash monitor
-```
-
-### ESP32-P4 Function EV Board
-
-The checked-in ESP32-P4 defaults target the ESP32-P4 Function EV Board with an
-OV5647 camera, onboard IP101 Ethernet PHY, and companion ESP32-C6 connected over
-Secure Digital Input Output (SDIO). The P4 defaults support chip revision 1.x
-and use the 360 MHz CPU setting so the image can run on pre-revision-3 silicon.
-
-Wi-Fi on ESP32-P4 is provided by ESP-Hosted, not by a radio in the P4. The
-companion ESP32-C6 must run slave firmware compatible with the pinned
-`espressif/esp_hosted` 2.12.3 host component. Flashing the P4 does not update
-the C6. Follow Espressif's
-[ESP32-P4 Function EV Board guide](https://github.com/espressif/esp-hosted-mcu/blob/main/docs/esp32_p4_function_ev_board.md)
-when preparing or updating the companion firmware. A different P4 board needs
-its own camera, Ethernet, ESP-Hosted transport, and GPIO configuration.
+1. Wait for the build process to complete.
+2. Upload the code using:
+   - Linux: idf.py flash monitor
+   - WSL: idf.py -p /dev/ttyS4 -b 115200 flash monitor
 
 
-# Configuring Xedge32
+## Configuring Xedge32
 
 To configure Xedge32, use the `idf.py menuconfig` command. This allows you to enable various features such as mDNS, Camera, OPC UA, and softTPM eFuse registers. Below is an overview of each feature, along with configuration tips.
 
-## Configuration Steps
+### Configuration Steps
 
-### 1. Enable mDNS
+#### 1. Enable mDNS
 
 mDNS (Multicast DNS) enables local network discovery, making it possible to access Xedge32 by navigating to `http://xedge32.local` in your browser. You can customize this name within your Lua script if desired.
 
-### 2. Enable OPC UA
+#### 2. Enable OPC UA
 
 [OPC UA](https://realtimelogic.com/products/opc-ua/) is an industrial protocol useful for machine-to-machine communication. To enable OPC UA:
 
 - Use `idf.py menuconfig` and select the OPC UA option.
 - After configuring through menuconfig, ensure that you also choose "Yes" when prompted by `BuildESP32ResourceFile.sh`.
 
-### 3. Enable softTPM eFuse
+#### 3. Enable softTPM eFuse
 
 The softTPM eFuse option allows for secure storage of secrets directly in eFuse registers, making them permanently accessible on the device. This feature is part of the advanced security configuration settings. For full details on available configuration options, refer to the configuration section in the [generic Xedge build documentation](https://realtimelogic.com/ba/examples/xedge/readme.html).
 
