@@ -3,107 +3,168 @@
 UART API
 ========
 
-This API provides a Lua API to the UART (Universal Asynchronous Receiver/Transmitter) subsystem `provided by esp-idf <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/index.html>`_.
+The UART API provides access to the ESP32's Universal Asynchronous
+Receiver/Transmitter hardware. Use it when you need serial communication with
+sensors, modems, external MCUs, industrial adapters, or RS-232/RS-485
+transceivers.
 
-To use the API, begin by creating a UART object through a call to `esp32.uart`, where you specify configuration options such as the UART port number and GPIO pins. It is recommended to use the asynchronous (interrupt-driven) API by providing a callback instead of pulling for received data using `uart:read`.
+Xedge32 supports both polling and callback-driven receive handling. In most
+cases, the callback-based approach is preferred because it is more responsive
+and avoids constant polling from Lua.
 
-The UART instance can operate in a semi-asynchronous mode. This mode enhances data handling efficiency by utilizing a callback for receiving RX data asynchronously and non-blocking mechanisms for sending data (TX) as long as the TX ring buffer can buffer the data being transmitted.
+The transmit side can also operate efficiently in a semi-asynchronous style as
+long as the TX ring buffer has enough free space to accept the outgoing data.
+
+.. important::
+
+   ESP32 UART pins use 3.3 V logic. Do not connect them directly to classic
+   RS-232 voltage levels. Use the correct level shifter, RS-232 transceiver, or
+   RS-485 transceiver for the device you are connecting.
 
 .. _uart-func:
 
-esp32.uart()
-----------------------------
+Creating a UART Object
+----------------------
+
+Function signature:
 
 .. code-block:: lua
 
-  uart = esp32.uart(port [,config])
+   uart = esp32.uart(port [, config])
 
-This function creates, configures, and returns a UART object.
+Parameters
+~~~~~~~~~~
 
-``port`` - UART port number, e.g., 0.
+``port``
+   UART port number, for example ``0``.
 
-``config`` - An optional table with the following options:
+   Be careful with UART0 on boards where it is also used for flashing or the
+   serial console. For external devices, UART1 or UART2 is often easier to
+   dedicate to the project.
 
-- ``callback`` - A callback function that enables interrupt mode.
-- ``databits`` - Data bits, ranging from 5 to 8. The default is 8.
-- ``baudrate`` - Default baud rate is 9600.
-- ``rxbufsize`` - The default receive buffer size is 1024.
-- ``txbufsize`` - The default transmit buffer size is 1024.
-- ``txpin`` - UART TX pin GPIO number, which defaults to the default pin used by the UART port.
-- ``rxpin`` - UART RX pin GPIO number, which defaults to the default pin used by the UART port.
-- ``rtspin`` - UART RTS pin GPIO number, which is disabled by default.
-- ``ctspin`` - UART CTS pin GPIO number, which is disabled by default.
-- ``stopbits`` - Stop bits, which can be 1, 2, 1.5, or 2. You cannot set the number to 1.5, but any value other than 1 and 2 sets the stop bits to 1.5. The default is 1.
-- ``parity`` - Parity, which can be either "EVEN" or "ODD". Disabled if not set.
-- ``flowctrl`` - Flow control, which can be either "RTS", "CTS", or "CTSRTS". Disabled if not set.
-- ``rs485`` - Enable RS-485 half duplex mode for use with an RS485 chip such as ADM483, where the RTS pin is used for driving the RS485 chip's collition detect. You need to set the ``rtspin`` for this to work.
-- ``timeout`` - Default 0 (not used). When used without setting the ``pattern`` option, specifies how long to wait before triggering the callback. The option is defined in terms of UART character times. One character time is the time it takes to transmit one character (bit) on the UART bus, which is determined by the baud rate of the UART. For example, at 9600 baud, one character time is approximately 104 microseconds.
-- ``pattern`` - Enable pattern detection. The pattern, which can be of any length, must be of the same type, e.g., "+++". A callback is required when setting this option.
-    The following additional flags may be set when pattern is enabled. For details, see the C code function `enable_pattern_det_baud_intr() <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/uart.html?highlight=enable_pattern_det_baud_intr#_CPPv433uart_enable_pattern_det_baud_intr11uart_port_tc7uint8_tiii>`_.
+``config``
+   Optional table with the following settings:
 
-    - ``maxlen`` - Default 0 (not used). Enable recording at most ``maxlen`` pattern positions.
-    - ``timeout`` -  Default 0. Used to determine if a series of received characters can be considered as part of the same pattern. If the gap between two characters exceeds this timeout, the ongoing pattern detection is reset. This prevents false positives from scattered similar characters over a long duration.
-    - ``postidle`` - Default 0. Defines the minimum duration of silence (no data received) after a pattern is detected. It's the idle period that must be observed following the last character of the pattern.
-    - ``preidle`` - Default 0. Sets the minimum idle period before a pattern starts. It's the duration of silence that must be observed before the first character of the pattern is received.
+- ``callback``: Receive callback function. Setting this enables interrupt-driven
+  RX handling.
+- ``databits``: Data bits from ``5`` to ``8``. Default is ``8``.
+- ``baudrate``: Baud rate. Default is ``9600``.
+- ``rxbufsize``: Receive buffer size. Default is ``1024``.
+- ``txbufsize``: Transmit buffer size. Default is ``1024``.
+- ``txpin``: TX GPIO. Defaults to the port's default pin.
+- ``rxpin``: RX GPIO. Defaults to the port's default pin.
+- ``rtspin``: RTS GPIO. Disabled by default.
+- ``ctspin``: CTS GPIO. Disabled by default.
+- ``stopbits``: Stop-bit setting. Use ``1`` or ``2`` explicitly. Values other
+  than ``1`` and ``2`` are interpreted as ``1.5``.
+- ``parity``: Either ``"EVEN"`` or ``"ODD"``.
+- ``flowctrl``: Either ``"RTS"``, ``"CTS"``, or ``"CTSRTS"``.
+- ``rs485``: Enables RS-485 half-duplex mode. Requires ``rtspin`` when used
+  with a suitable transceiver such as ADM483.
+- ``timeout``: Default ``0``. Without ``pattern``, this defines how long to
+  wait before triggering the callback, measured in UART character times.
+- ``pattern``: Enables pattern detection, for example ``"+++"``. Requires a
+  callback.
 
-The callback triggers when characters are received according to the pattern and timeout options. The callback function can receive the following arguments:
+Additional options when ``pattern`` is enabled:
 
-- ``function(data,pattern)`` - One or several characters packaged into the Lua string 'data'. The pattern argument is a boolean set to true if this is a pattern match.
-- ``function(nil, emsg)`` - An error or special character received; ``emsg`` can be one of:
+- ``maxlen``: Maximum number of recorded pattern positions. Default is ``0``.
+- ``timeout``: Maximum gap allowed between characters in the same pattern.
+- ``postidle``: Minimum idle time required after the pattern.
+- ``preidle``: Minimum idle time required before the pattern.
 
-  - ``full`` - UART RX buffer full event; queue was reset (UART_BUFFER_FULL).
-  - ``overflow`` - UART FIFO overflow event; queue was reset (UART_FIFO_OVF).
-  - ``frame`` - UART RX frame error event (UART_FRAME_ERR).
-  - ``parity`` - UART RX parity event (UART_PARITY_ERR).
-  - ``databreak`` - UART TX data and break event (UART_DATA_BREAK).
-  - ``break`` - UART break event (UART_BREAK).
+For the lower-level hardware behavior behind pattern detection, see the ESP-IDF
+function `uart_enable_pattern_det_baud_intr()
+<https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/uart.html?highlight=enable_pattern_det_baud_intr#_CPPv433uart_enable_pattern_det_baud_intr11uart_port_tc7uint8_tiii>`_.
+
+Receive Callback Signatures
+---------------------------
+
+When using a callback, Xedge32 calls one of the following forms:
+
+``function(data, pattern)``
+   ``data`` is a Lua string containing one or more received characters.
+   ``pattern`` is a boolean set to ``true`` when the data corresponds to a
+   detected pattern.
+
+``function(nil, emsg)``
+   Called for receive-side errors or special UART conditions.
+
+Possible ``emsg`` values:
+
+- ``"full"``: RX buffer full; queue reset.
+- ``"overflow"``: RX FIFO overflow; queue reset.
+- ``"frame"``: Framing error.
+- ``"parity"``: Parity error.
+- ``"databreak"``: Data-and-break event.
+- ``"break"``: Break event.
 
 UART Object Methods
 -------------------
 
-The UART object has the following methods:
-
-uart:read([timeout])
+``uart:read([timeout])``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-This method reads data from the RX queue and optionally waits for the specified ``timeout`` in milliseconds. Do not call this method if you have installed the RX callback.
+Reads data from the RX queue and optionally waits up to ``timeout``
+milliseconds. Do not combine this method with a receive callback on the same
+object.
 
-uart:write(data)
+Use ``read`` for quick tests or request/response protocols where your code
+knows when a reply should arrive. Use a callback when the device may send data
+at any time.
+
+``uart:write(data)``
 ~~~~~~~~~~~~~~~~~~~~
 
-This method sends data to the UART. It will not return until all the data have been pushed into the TX FIFO, which means that it blocks if the FIFO is full. Use method uart:txsize() to find the free space size.
+Writes data to the UART. The call blocks until the data has been pushed into
+the TX FIFO or TX ring buffer. If the transmit side is full, the call waits.
 
-uart:txsize()
-~~~~~~~~~~~~~~~~~~~~
+``uart:txsize()``
+~~~~~~~~~~~~~~~~~
 
-Returns the TX ring buffer's free space.
+Returns the remaining free space in the TX ring buffer. This is useful when you
+want to decide how much data you can queue without blocking.
 
-uart:close()
+``uart:close()``
 ~~~~~~~~~~~~~~~~
 
-This method releases the UART and frees the resources associated with it. Use this method when you have finished using the UART.
+Releases the UART object and its associated resources.
 
-UART Example
-------------
+UART Echo Example
+-----------------
 
-The following UART echo example demonstrates how to open a UART object and configure it for asynchronous receive mode:
+The following example opens UART port 2, configures GPIO 4 and GPIO 5 as TX and
+RX, and echoes all received data back to the sender.
 
 .. code-block:: lua
 
    local uart
    local cfg = {
-       baudrate = 115200,
-       txpin = 4,
-       rxpin = 5,
-       callback = function(data, err)
-           if data then
-               uart:write(data) -- Echo
-           else
-               trace("Err", err)
-           end
-       end
+      baudrate = 115200,
+      txpin = 4,
+      rxpin = 5,
+      callback = function(data, err)
+         if data then
+            uart:write(data)
+         else
+            trace("Err", err)
+         end
+      end
    }
+
    uart = esp32.uart(2, cfg)
 
-In the example, a UART object is created with a baud rate of 115200 and GPIO pins 4 and 5 for the TX and RX pins, respectively. The object is also set to operate in asynchronous receive mode using a callback function. When data is received, the callback function sends the same data back to the UART, effectively creating an echo effect.
+This callback-driven pattern is a good default when you need responsive serial
+input handling without writing your own polling loop.
 
+Practical Guidance
+------------------
+
+- Prefer callbacks over ``uart:read()`` when the device should react to incoming
+  serial data promptly.
+- Use ``uart:txsize()`` if you are streaming large bursts and want to avoid
+  unexpected blocking.
+- Enable ``rs485`` only when your hardware design specifically requires
+  half-duplex RS-485 control through RTS.
+- Match baud rate, parity, stop bits, and wiring to the external device before
+  troubleshooting higher-level protocol code.

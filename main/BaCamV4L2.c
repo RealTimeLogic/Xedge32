@@ -1,0 +1,769 @@
+/*
+ * BaCamV4L2.c
+ * Lua camera binding for Xedge32 using V4L2 (Exclusive for ESP32-P4)
+ * Maintains API compatibility with the legacy DVP/esp32-camera driver.
+ */
+
+#include "BaESP32.h"
+
+// If the camera is on and it's a P4
+#if defined(CONFIG_CAM_ENABLED) && defined(CONFIG_IDF_TARGET_ESP32P4)
+
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <errno.h>
+
+#include <linux/videodev2.h>
+#include "esp_video_init.h"
+#include "esp_cam_sensor_xclk.h"
+#include "driver/i2c_master.h"
+#include "driver/gpio.h"
+#include "driver/ppa.h"
+#include "driver/jpeg_encode.h"
+
+#include "lua.h"
+#include "lauxlib.h"
+
+#define BACAM "CAMV4L2"
+#define P4_CAM_BUFFERS 2 // Number of V4L2 buffers to mmap
+#define P4_CAM_MAX_WIDTH 1920
+#define P4_CAM_MAX_HEIGHT 1080
+
+typedef struct {
+    int fd;
+    uint8_t *buffers[P4_CAM_BUFFERS];
+    uint32_t buf_lengths[P4_CAM_BUFFERS];
+    uint32_t width;
+    uint32_t height;
+    ppa_srm_color_mode_t ppa_color_mode;
+    bool output_jpeg;
+    bool busy;
+    
+    // --- HW JPEG ENCODER STATE ---
+    jpeg_encoder_handle_t encoder_handle;
+    jpeg_encode_cfg_t pic_cfg;     
+    uint8_t *jpeg_out_buf;       
+    uint32_t jpeg_out_buf_size;  
+    
+    // --- PPA SCALER STATE ---
+    ppa_client_handle_t ppa_srm_handle; 
+    uint8_t *ppa_out_buf;               
+    uint32_t ppa_out_buf_size;          
+    uint32_t requested_w;               
+    uint32_t requested_h;   
+    
+    // --- PPA MIRROR STATE ---
+    bool mirror_x;
+    bool mirror_y;
+} LCAM;
+
+static LCAM* LCAM_getUD(lua_State* L) {
+    return (LCAM*)luaL_checkudata(L, 1, BACAM);
+}
+
+static LCAM* LCAM_checkUD(lua_State* L) {
+    LCAM* o = LCAM_getUD(L);
+    if (o->fd < 0) {
+        luaL_error(L, "Camera not initialized or already closed");
+    }
+    return o;
+}
+
+// =========================================================================
+// 0. HARDWARE INITIALIZATION (Clock & I2C Bus)
+// =========================================================================
+
+static i2c_master_bus_handle_t s_i2cbus_handle = NULL;
+static esp_cam_sensor_xclk_handle_t s_xclk_handle = NULL;
+static bool s_xclk_started = false;
+static bool s_video_initialized = false;
+
+/**
+ * @brief Initializes the physical ESP32-P4 hardware for the camera (I2C, XCLK, VFS).
+ */
+static esp_err_t p4_camera_hardware_init(int scl_pin, int sda_pin, int xclk_pin) {
+    esp_err_t err;
+
+    if (s_i2cbus_handle || s_xclk_handle || s_video_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    i2c_master_bus_config_t bus_config = {
+        .i2c_port = 0,
+        .sda_io_num = sda_pin,
+        .scl_io_num = scl_pin,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    err = i2c_new_master_bus(&bus_config, &s_i2cbus_handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+
+    esp_cam_sensor_xclk_config_t xclk_config = {
+        .esp_clock_router_cfg = {
+            .xclk_pin = xclk_pin,
+            .xclk_freq_hz = 24000000, 
+        }
+    };
+    err = esp_cam_sensor_xclk_allocate(ESP_CAM_SENSOR_XCLK_ESP_CLOCK_ROUTER, &s_xclk_handle);
+    if (err != ESP_OK) {
+        goto fail;
+    }
+    err = esp_cam_sensor_xclk_start(s_xclk_handle, &xclk_config);
+    if (err != ESP_OK) {
+        goto fail;
+    }
+    s_xclk_started = true;
+
+    esp_video_init_csi_config_t csi_config = {
+        .sccb_config = {
+            .init_sccb = false, 
+            .i2c_handle = s_i2cbus_handle,
+            .freq = 400000,
+        },
+        .reset_pin = -1, 
+        .pwdn_pin = -1,  
+    };
+    
+    esp_video_init_config_t cam_config = {
+        .csi = &csi_config,
+    };
+
+    err = esp_video_init(&cam_config);
+    if (err != ESP_OK) {
+        goto fail;
+    }
+    s_video_initialized = true;
+    return ESP_OK;
+
+fail:
+    if (s_xclk_handle) {
+        if (s_xclk_started) {
+            esp_cam_sensor_xclk_stop(s_xclk_handle);
+            s_xclk_started = false;
+        }
+        esp_cam_sensor_xclk_free(s_xclk_handle);
+        s_xclk_handle = NULL;
+    }
+    if (s_i2cbus_handle) {
+        i2c_del_master_bus(s_i2cbus_handle);
+        s_i2cbus_handle = NULL;
+    }
+    return err;
+}
+
+/**
+ * @brief Deinitializes the physical ESP32-P4 hardware, freeing pins and buses.
+ */
+static void p4_camera_hardware_deinit(void) {
+    if (s_video_initialized) {
+        esp_video_deinit();
+        s_video_initialized = false;
+    }
+    if (s_xclk_handle) {
+        if (s_xclk_started) {
+            esp_cam_sensor_xclk_stop(s_xclk_handle);
+            s_xclk_started = false;
+        }
+        esp_cam_sensor_xclk_free(s_xclk_handle);
+        s_xclk_handle = NULL;
+    }
+    if (s_i2cbus_handle) {
+        i2c_del_master_bus(s_i2cbus_handle);
+        s_i2cbus_handle = NULL;
+    }
+}
+
+// =========================================================================
+// 1. HARDWARE COMPRESSION ENGINE (JPEG)
+// =========================================================================
+
+/**
+ * @brief Initializes the hardware JPEG encoder with the target dimensions.
+ */
+static esp_err_t hw_jpeg_encoder_init(LCAM *cam, uint32_t pixel_format, uint8_t quality) {
+    jpeg_encode_engine_cfg_t eng_cfg = {
+        .timeout_ms = 1000,
+    };
+    
+    esp_err_t ret = jpeg_new_encoder_engine(&eng_cfg, &cam->encoder_handle);
+    if (ret != ESP_OK) return ret;
+
+    cam->pic_cfg.width = cam->requested_w;
+    cam->pic_cfg.height = cam->requested_h;
+    cam->pic_cfg.image_quality = quality;
+
+    uint32_t raw_size = 0;
+
+    switch (pixel_format) {
+        case V4L2_PIX_FMT_RGB565:
+            cam->pic_cfg.src_type = JPEG_ENCODE_IN_FORMAT_RGB565;
+            cam->pic_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
+            raw_size = cam->requested_w * cam->requested_h * 2;
+            break;
+        case V4L2_PIX_FMT_UYVY:
+        case V4L2_PIX_FMT_YUYV:
+            cam->pic_cfg.src_type = JPEG_ENCODE_IN_FORMAT_YUV422;
+            cam->pic_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV422;
+            raw_size = cam->requested_w * cam->requested_h * 2;
+            break;
+#if CONFIG_ESP32P4_REV_MIN_FULL >= 300
+        case V4L2_PIX_FMT_YUV420:
+            cam->pic_cfg.src_type = JPEG_ENCODE_IN_FORMAT_YUV420;
+            cam->pic_cfg.sub_sample = JPEG_DOWN_SAMPLING_YUV420;
+            raw_size = cam->requested_w * cam->requested_h * 3 / 2;
+            break;
+#endif
+        default:
+            jpeg_del_encoder_engine(cam->encoder_handle);
+            cam->encoder_handle = NULL;
+            return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    cam->jpeg_out_buf_size = raw_size;
+    jpeg_encode_memory_alloc_cfg_t mem_cfg = {
+        .buffer_direction = JPEG_ENC_ALLOC_OUTPUT_BUFFER,
+    };
+
+    size_t allocated_size = cam->jpeg_out_buf_size;
+    cam->jpeg_out_buf = (uint8_t *)jpeg_alloc_encoder_mem(
+        cam->jpeg_out_buf_size, &mem_cfg, &allocated_size);
+    if (!cam->jpeg_out_buf) {
+        jpeg_del_encoder_engine(cam->encoder_handle);
+        cam->encoder_handle = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+    cam->jpeg_out_buf_size = allocated_size;
+
+    return ESP_OK;
+}
+
+static void hw_jpeg_encoder_deinit(LCAM *cam) {
+    if (cam->encoder_handle) {
+        jpeg_del_encoder_engine(cam->encoder_handle);
+        cam->encoder_handle = NULL;
+    }
+    if (cam->jpeg_out_buf) {
+        free(cam->jpeg_out_buf);
+        cam->jpeg_out_buf = NULL;
+    }
+}
+
+// =========================================================================
+// 2. V4L2 & PPA HELPER FUNCTIONS
+// =========================================================================
+
+/**
+ * @brief Auto-negotiates the best available physical resolution from the sensor.
+ */
+static esp_err_t setup_v4l2_resolution(int fd, uint32_t target_w, uint32_t target_h, uint32_t format, uint32_t *out_w, uint32_t *out_h) {
+    uint32_t best_w = 0, best_h = 0;
+    uint32_t fallbacks[][2] = {
+        {1920, 1080}, {1280, 960}, {1280, 720}, 
+        {1024, 768}, {800, 800}, {800, 640}, {640, 480}, {320, 240}
+    };
+    int num_fallbacks = sizeof(fallbacks) / sizeof(fallbacks[0]);
+
+    struct v4l2_format clean_fmt = {0};
+    clean_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+    // 1. Try to find a resolution suitable for downscaling
+    for (int i = num_fallbacks - 1; i >= 0; i--) {
+        uint32_t try_w = fallbacks[i][0];
+        uint32_t try_h = fallbacks[i][1];
+        
+        if (try_w >= target_w && try_h >= target_h) {
+            clean_fmt.fmt.pix.width = try_w;
+            clean_fmt.fmt.pix.height = try_h;
+            clean_fmt.fmt.pix.pixelformat = format;
+            
+            if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) == 0 &&
+                clean_fmt.fmt.pix.pixelformat == format) {
+                best_w = clean_fmt.fmt.pix.width;
+                best_h = clean_fmt.fmt.pix.height;
+                break;
+            }
+        }
+    }
+
+    // 2. Panic Mode (Upscale)
+    if (best_w == 0) {
+        for (int i = 0; i < num_fallbacks; i++) {
+            clean_fmt.fmt.pix.width = fallbacks[i][0];
+            clean_fmt.fmt.pix.height = fallbacks[i][1];
+            clean_fmt.fmt.pix.pixelformat = format;
+            
+            if (ioctl(fd, VIDIOC_S_FMT, &clean_fmt) == 0 &&
+                clean_fmt.fmt.pix.pixelformat == format) {
+                best_w = clean_fmt.fmt.pix.width;
+                best_h = clean_fmt.fmt.pix.height;
+                break; 
+            }
+        }
+    }
+
+    if (best_w == 0) return ESP_FAIL;
+
+    *out_w = best_w;
+    *out_h = best_h;
+    return ESP_OK;
+}
+
+/**
+ * @brief Requests and memory-maps V4L2 capture buffers.
+ */
+static esp_err_t setup_v4l2_buffers(LCAM *cam) {
+    struct v4l2_requestbuffers req = {
+        .count = P4_CAM_BUFFERS,
+        .type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+        .memory = V4L2_MEMORY_MMAP,
+    };
+    if (ioctl(cam->fd, VIDIOC_REQBUFS, &req) < 0) return ESP_FAIL;
+    if (req.count < P4_CAM_BUFFERS) return ESP_ERR_NO_MEM;
+
+    for (int i = 0; i < P4_CAM_BUFFERS; i++) {
+        struct v4l2_buffer buf = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP, .index = i };
+        if (ioctl(cam->fd, VIDIOC_QUERYBUF, &buf) < 0) return ESP_FAIL;
+        
+        cam->buf_lengths[i] = buf.length;
+        cam->buffers[i] = mmap(NULL, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, cam->fd, buf.m.offset);
+        if (cam->buffers[i] == MAP_FAILED) {
+            cam->buffers[i] = NULL;
+            return ESP_FAIL;
+        }
+
+        if (ioctl(cam->fd, VIDIOC_QBUF, &buf) < 0) return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+/**
+ * @brief Configures the Pixel Processing Accelerator and allocates its DMA-aligned buffer.
+ */
+static esp_err_t setup_ppa_scaler(LCAM *cam) {
+    ppa_client_config_t ppa_srm_config = {
+        .oper_type = PPA_OPERATION_SRM,
+        .max_pending_trans_num = 1,
+    };
+    
+    if (ppa_register_client(&ppa_srm_config, &cam->ppa_srm_handle) != ESP_OK) return ESP_FAIL;
+
+    cam->ppa_out_buf_size = cam->requested_w * cam->requested_h * 2;
+    jpeg_encode_memory_alloc_cfg_t mem_cfg = {
+        .buffer_direction = JPEG_ENC_ALLOC_INPUT_BUFFER,
+    };
+    size_t allocated_size = cam->ppa_out_buf_size;
+    cam->ppa_out_buf = (uint8_t *)jpeg_alloc_encoder_mem(
+        cam->ppa_out_buf_size, &mem_cfg, &allocated_size);
+    if (!cam->ppa_out_buf) {
+        ppa_unregister_client(cam->ppa_srm_handle);
+        cam->ppa_srm_handle = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+    cam->ppa_out_buf_size = allocated_size;
+    return ESP_OK;
+}
+
+// =========================================================================
+// 3. LUA BINDINGS
+// =========================================================================
+
+/**
+ * @brief Lua binding for capturing and processing a single frame from the camera.
+ *
+ * Pipeline Execution Details:
+ * 1. Dequeues a raw frame buffer from the V4L2 subsystem (VIDIOC_DQBUF).
+ * 2. Feeds the raw buffer into the PPA (Pixel Processing Accelerator) SRM block.
+ * 3. The PPA performs zero-CPU-cost hardware scaling (if requested frame size 
+ * differs from sensor output) and applies the geometric mirroring (vflip/hmirror) 
+ * configured during initialization.
+ * 4. Re-queues the V4L2 buffer (VIDIOC_QBUF) to keep the video stream active.
+ *
+ * Returns the final processed binary image as a Lua string.
+ * Returns nil, err if the V4L2 capture, PPA processing, or DMA buffer management fails.
+ * Raises a Lua error if the camera object has not been initialized or is invalid.
+ */
+static int LCAM_lread(lua_State *L) {
+    LCAM *cam =  LCAM_checkUD(L);
+
+    if (cam->busy) {
+        return luaL_error(L, "Camera is busy");
+    }
+    cam->busy = true;
+
+    struct v4l2_buffer buf = {0};
+    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf.memory = V4L2_MEMORY_MMAP;
+
+    esp_err_t result = ESP_OK;
+    const char *operation = NULL;
+    int saved_errno = 0;
+    uint32_t output_size = 0;
+    bool dequeued = false;
+
+    /* Capture and hardware processing can block. Keep the BAS dispatcher
+       available and reacquire it before touching the Lua state. */
+    ThreadMutex_release(soDispMutex);
+
+    if (ioctl(cam->fd, VIDIOC_DQBUF, &buf) != 0) {
+        operation = "Camera dequeue failed";
+        saved_errno = errno;
+        result = ESP_FAIL;
+        goto completed;
+    }
+    dequeued = true;
+
+    if (buf.index >= P4_CAM_BUFFERS || !cam->buffers[buf.index] ||
+        !buf.bytesused || buf.bytesused > cam->buf_lengths[buf.index]) {
+        operation = "Camera returned an invalid frame";
+        result = ESP_ERR_INVALID_RESPONSE;
+        goto requeue;
+    }
+
+    {
+        ppa_srm_oper_config_t srm_config = {
+            .in = {
+                .buffer = cam->buffers[buf.index], 
+                .pic_w = cam->width,
+                .pic_h = cam->height,
+                .block_w = cam->width,
+                .block_h = cam->height,
+                .block_offset_x = 0,
+                .block_offset_y = 0,
+                .srm_cm = cam->ppa_color_mode,
+            },
+            .out = {
+                .buffer = cam->ppa_out_buf,        
+                .buffer_size = cam->ppa_out_buf_size,
+                .pic_w = cam->requested_w,
+                .pic_h = cam->requested_h,
+                .block_offset_x = 0,
+                .block_offset_y = 0,
+                .srm_cm = cam->ppa_color_mode,
+            },
+            .rotation_angle = PPA_SRM_ROTATION_ANGLE_0,
+            .mirror_x = cam->mirror_x, 
+            .mirror_y = cam->mirror_y,
+            .scale_x = (float)cam->requested_w / (float)cam->width,
+            .scale_y = (float)cam->requested_h / (float)cam->height,
+            .rgb_swap = 0,
+            .byte_swap = 0,
+            .mode = PPA_TRANS_MODE_BLOCKING, 
+        };
+
+        result = ppa_do_scale_rotate_mirror(cam->ppa_srm_handle, &srm_config);
+        if (result != ESP_OK) {
+            operation = "Camera PPA processing failed";
+            goto requeue;
+        }
+
+        if (cam->output_jpeg) {
+            result = jpeg_encoder_process(
+                cam->encoder_handle, 
+                &cam->pic_cfg, 
+                cam->ppa_out_buf, 
+                cam->ppa_out_buf_size,             
+                cam->jpeg_out_buf, 
+                cam->jpeg_out_buf_size, 
+                &output_size
+            );
+            if (result != ESP_OK || !output_size) {
+                operation = "Camera JPEG encoding failed";
+                if (result == ESP_OK) result = ESP_FAIL;
+                goto requeue;
+            }
+        } else {
+            output_size = cam->requested_w * cam->requested_h * 2;
+        }
+    }
+
+requeue:
+    if (dequeued && ioctl(cam->fd, VIDIOC_QBUF, &buf) != 0 && result == ESP_OK) {
+        operation = "Camera requeue failed";
+        saved_errno = errno;
+        result = ESP_FAIL;
+    }
+
+completed:
+    ThreadMutex_set(soDispMutex);
+    cam->busy = false;
+
+    if (result != ESP_OK) {
+        lua_pushnil(L);
+        if (saved_errno) {
+            lua_pushfstring(L, "%s: %s", operation, strerror(saved_errno));
+        } else {
+            lua_pushfstring(L, "%s: %s", operation, esp_err_to_name(result));
+        }
+        return 2;
+    }
+
+    lua_pushlstring(L,
+                    (const char *)(cam->output_jpeg ? cam->jpeg_out_buf : cam->ppa_out_buf),
+                    output_size);
+    return 1;
+}
+
+/**
+ * @brief Lua binding for safely shutting down the camera and hardware accelerators.
+ *
+ * Resource Management:
+ * - Stops the V4L2 streaming thread (VIDIOC_STREAMOFF).
+ * - Unmaps and frees the DMA-capable frame buffers.
+ * - Closes the /dev/videoX file descriptor.
+ * - Destroys the PPA SRM handles to release the 2D accelerator hardware blocks.
+ *
+ * Proper invocation of this function is critical. Failing to release these resources 
+ * will result in severe DMA memory leaks and will lock the MIPI/CSI and PPA peripherals, 
+ * preventing subsequent camera initializations without a hard reset.
+ *
+ * Returns true on success, or nil, err if the hardware fails to release.
+ * Raises a Lua error if the camera has not been initialized or has already been closed.
+ */
+static int LCAM_close(lua_State *L) {
+    LCAM *cam = LCAM_getUD(L);
+
+    if (cam->busy) {
+        return 0;
+    }
+    if (cam->fd >= 0) {
+        int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+        ioctl(cam->fd, VIDIOC_STREAMOFF, &type);
+        
+        hw_jpeg_encoder_deinit(cam);
+
+        if (cam->ppa_srm_handle) {
+            ppa_unregister_client(cam->ppa_srm_handle);
+            cam->ppa_srm_handle = NULL;
+        }
+
+        if (cam->ppa_out_buf) {
+            free(cam->ppa_out_buf);
+            cam->ppa_out_buf = NULL;
+        }
+
+        for (int i = 0; i < P4_CAM_BUFFERS; i++) {
+            if (cam->buffers[i]) {
+                munmap(cam->buffers[i], cam->buf_lengths[i]);
+                cam->buffers[i] = NULL;
+            }
+        }
+
+        close(cam->fd);
+        cam->fd = -1;
+        
+        p4_camera_hardware_deinit(); 
+    }
+    return 0;
+}
+
+static int LCAM_lclose(lua_State* L) {
+    LCAM *cam = LCAM_checkUD(L);
+    if (cam->busy) {
+        return luaL_error(L, "Camera is busy");
+    }
+    LCAM_close(L);
+    lua_pushboolean(L, TRUE);
+    return 1;
+}
+
+static const luaL_Reg camObjLib[] = {
+    {"read", LCAM_lread},
+    {"close", LCAM_lclose},
+    {"__close", LCAM_close},
+    {"__gc", LCAM_close},
+    {NULL, NULL}
+};
+
+/**
+ * @brief Lua binding for initializing the ESP32-P4 camera module via V4L2 & PPA.
+ *        esp32.cam({table})
+ *
+ * Accepts a configuration table with the following optional fields:
+ * - format:  the pixel format of the image captured (e.g., "JPEG", "RGB565", "YUV422").
+ * - width:   the requested image width in pixels (e.g., 800).
+ * - height:  the requested image height in pixels (e.g., 800).
+ * - quality: JPEG compression quality (1-100).
+ * - scl:     the GPIO pin used for the I2C/SCCB clock (default depends on board, e.g., 8).
+ * - sda:     the GPIO pin used for the I2C/SCCB data (default depends on board, e.g., 7).
+ * - xclk:    the GPIO pin used for the master clock to the sensor (e.g., 22).
+ * - vflip:   vertical flip on final output, default false.
+ * - hmirror: horizontal mirror on final output, default false.
+ *
+ * ARCHITECTURAL NOTE (VFLIP / HMIRROR):
+ * Unlike legacy ESP32 camera drivers, hardware flipping commands (V4L2_CID_VFLIP / HFLIP) 
+ * are explicitly NOT sent to the sensor. Modifying the silicon readout direction on sensors 
+ * like the OV5647 misaligns the raw Bayer pattern, causing severe colorimetric distortion 
+ * (e.g., magenta/purple tint). Instead, these flags are cached in the LCAM struct and 
+ * applied downstream via the ESP32-P4 Pixel Processing Accelerator (PPA) during the read 
+ * phase, guaranteeing geometric mirroring with 100% color accuracy.
+ *
+ * Returns the instantiated camera userdatum object, or nil+error string on failure.
+ */
+int lcam(lua_State *L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+
+    int pin_scl  = balua_getIntField(L, 1, "scl", 8);
+    int pin_sda  = balua_getIntField(L, 1, "sda", 7);
+    int pin_xclk = balua_getIntField(L, 1, "xclk", 22);
+    int quality  = balua_getIntField(L, 1, "quality", 80);
+    int mirror_y = balua_getBoolField(L, 1, "vflip", FALSE);
+    int mirror_x = balua_getBoolField(L, 1, "hmirror", FALSE);
+   
+    const char *format_str = balua_getStringField(L, 1, "format", "JPEG");
+    uint32_t sensor_pixel_format;
+    ppa_srm_color_mode_t ppa_color_mode;
+    bool use_hardware_jpeg;
+
+    if (strcmp(format_str, "JPEG") == 0) {
+        sensor_pixel_format = V4L2_PIX_FMT_RGB565;
+        ppa_color_mode = PPA_SRM_COLOR_MODE_RGB565;
+        use_hardware_jpeg = true;
+    } 
+    else if (strcmp(format_str, "YUV422") == 0) {
+        sensor_pixel_format = V4L2_PIX_FMT_UYVY; 
+        ppa_color_mode = PPA_SRM_COLOR_MODE_YUV422_UYVY;
+        use_hardware_jpeg = false;
+    }
+    else if (strcmp(format_str, "RGB565") == 0) {
+        sensor_pixel_format = V4L2_PIX_FMT_RGB565;
+        ppa_color_mode = PPA_SRM_COLOR_MODE_RGB565;
+        use_hardware_jpeg = false;
+    }
+    else {
+        return luaL_error(L, "invalid pixel format '%s'", format_str);
+    }
+
+    lua_Integer req_w = 640;
+    lua_Integer req_h = 480;
+    bool explicit_size = false;
+
+    lua_getfield(L, 1, "width");
+    if (!lua_isnil(L, -1)) {
+        req_w = luaL_checkinteger(L, -1);
+        explicit_size = true;
+    }
+    lua_pop(L, 1);
+
+    lua_getfield(L, 1, "height");
+    if (!lua_isnil(L, -1)) {
+        req_h = luaL_checkinteger(L, -1);
+        explicit_size = true;
+    }
+    lua_pop(L, 1);
+
+    if (!explicit_size) {
+        const char *frame_str = balua_getStringField(L, 1, "frame", "VGA");
+        if (strcmp(frame_str, "HD") == 0)        { req_w = 1280; req_h = 720; }
+        else if (strcmp(frame_str, "SVGA") == 0) { req_w = 800;  req_h = 600; }
+        else if (strcmp(frame_str, "VGA") == 0)  { req_w = 640;  req_h = 480; }
+        else if (strcmp(frame_str, "QVGA") == 0) { req_w = 320;  req_h = 240; }
+        else return luaL_error(L, "invalid frame size '%s'", frame_str);
+    }
+
+    if (req_w < 2 || req_w > P4_CAM_MAX_WIDTH ||
+        req_h < 2 || req_h > P4_CAM_MAX_HEIGHT ||
+        (req_w & 1) || (req_h & 1)) {
+        return luaL_error(L, "camera width and height must be even and within 2..1920 by 2..1080");
+    }
+    if (use_hardware_jpeg && (quality < 1 || quality > 100)) {
+        return luaL_error(L, "camera JPEG quality must be in the range 1..100");
+    }
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(pin_scl) ||
+        !GPIO_IS_VALID_OUTPUT_GPIO(pin_sda) ||
+        !GPIO_IS_VALID_OUTPUT_GPIO(pin_xclk)) {
+        return luaL_error(L, "invalid camera SCCB/XCLK GPIO");
+    }
+
+    // --- PHASE 1: HARDWARE INIT ---
+    esp_err_t init_result = p4_camera_hardware_init(pin_scl, pin_sda, pin_xclk);
+    if (init_result != ESP_OK) {
+        return luaL_error(L, "Camera hardware init failed: %s", esp_err_to_name(init_result));
+    }
+
+    int fd = open("/dev/video0", O_RDWR);
+    if (fd < 0) {
+        p4_camera_hardware_deinit();
+        return luaL_error(L, "Failed to open /dev/video0");
+    }
+
+    // --- PHASE 2: RESOLUTION NEGOTIATION ---
+    uint32_t best_w, best_h;
+    if (setup_v4l2_resolution(fd, (uint32_t)req_w, (uint32_t)req_h,
+                              sensor_pixel_format, &best_w, &best_h) != ESP_OK) {
+        close(fd);
+        p4_camera_hardware_deinit();
+        return luaL_error(L, "Driver rejected all known resolutions");
+    }
+
+    // --- PHASE 3: ALLOCATE LUA OBJECT ---
+    LCAM* cam = (LCAM*)lNewUdata(L, sizeof(LCAM), BACAM, camObjLib);
+    memset(cam, 0, sizeof(LCAM));
+    cam->fd = fd;
+    cam->requested_w = (uint32_t)req_w;
+    cam->requested_h = (uint32_t)req_h;
+    cam->width = best_w;  
+    cam->height = best_h;
+    cam->ppa_color_mode = ppa_color_mode;
+    cam->output_jpeg = use_hardware_jpeg;
+    cam->mirror_x = mirror_x;
+    cam->mirror_y = mirror_y;
+   
+    // --- PHASE 4: V4L2 BUFFERS & PPA & JPEG ---
+    // If any of these fail, we use the cleanup labels at the bottom.
+    if (setup_v4l2_buffers(cam) != ESP_OK) {
+        goto err_buffers;
+    }
+
+    if (setup_ppa_scaler(cam) != ESP_OK) {
+        goto err_ppa;
+    }
+
+    if (use_hardware_jpeg) {
+        if (hw_jpeg_encoder_init(cam, sensor_pixel_format, quality) != ESP_OK) {
+            goto err_jpeg;
+        }
+    }
+
+    // --- PHASE 5: START STREAM ---
+    int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    if (ioctl(fd, VIDIOC_STREAMON, &type) < 0) {
+        goto err_jpeg; // Stream failed, clean everything
+    }
+
+    // Warm-up loop (Auto Exposure adjustment)
+    for(int i=0; i<5; i++) {
+        struct v4l2_buffer dump = { .type = V4L2_BUF_TYPE_VIDEO_CAPTURE, .memory = V4L2_MEMORY_MMAP };
+        if(ioctl(fd, VIDIOC_DQBUF, &dump) == 0) {
+            ioctl(fd, VIDIOC_QBUF, &dump);
+        }
+    }
+
+    return 1; // Success!
+
+// --- CLEANUP LABELS (Executed in reverse order on failure) ---
+err_jpeg:
+    hw_jpeg_encoder_deinit(cam);
+    if (cam->ppa_srm_handle) { ppa_unregister_client(cam->ppa_srm_handle); cam->ppa_srm_handle = NULL; }
+    if (cam->ppa_out_buf) { free(cam->ppa_out_buf); cam->ppa_out_buf = NULL; }
+err_ppa:
+err_buffers:
+    for (int i = 0; i < P4_CAM_BUFFERS; i++) {
+        if (cam->buffers[i] && cam->buffers[i] != MAP_FAILED) {
+            munmap(cam->buffers[i], cam->buf_lengths[i]);
+            cam->buffers[i] = NULL;
+        }
+    }
+    close(fd);
+    cam->fd = -1;
+    p4_camera_hardware_deinit();
+    return luaL_error(L, "Failed to initialize video pipeline components");
+}
+
+#endif // CONFIG_IDF_TARGET_ESP32P4

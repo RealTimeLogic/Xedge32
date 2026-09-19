@@ -1,9 +1,9 @@
 local commands=...
 local busy=false
 
-local function senderror(cmd,msg)
+local function senderror(cmd,msg,status)
    cmd:setheader("X-Error",msg)
-   cmd:senderror(503, msg)
+   cmd:senderror(status or 503,msg)
    cmd:abort()
 end
 
@@ -11,24 +11,26 @@ function commands.getfwver(cmd)
    if esp32.ota then
       local v=esp32.ota()
       v.sha256=nil
-      cmd:json(v)
+      return cmd:json(v)
    end
-   cmd:json{err="No OTA API"}
+   return cmd:json{err="No OTA API"}
 end
 
 function commands.uploadfw(cmd)
    cmd:allow{"PUT"}
    local fn = cmd:header"X-File-Name"
-   if not fn then cmd:senderror(400) cmd:abort() end
+   if not fn then senderror(cmd,"Missing file name",400) end
    local n,ext=fn:match"(.-)%.([^%./]+)$"
-   if not n or not ext then cmd:senderror(400,"Invalid file name") cmd:abort() end
+   if not n or not ext or fn:find("/",1,true) or fn:find("\\",1,true) then
+      senderror(cmd,"Invalid file name",400)
+   end
    ext=ext:lower()
    if "zip" == ext then
       local rsp
       fn=n.."."..ext
-      local io=ba.openio"disk"
+      local io=mako and ba.openio"home" or ba.openio"disk"
       if io:stat(n) then
-	 rsp={err="<p><b>Conflict Detected:</b> The server has found an existing directory with the same name as your uploaded zip file, indicating a non-deployed application already exists with this name. Deployed applications are uploaded and managed as zip files, whereas non-deployed applications exist as directories on the server.</p><p>To resolve this:</p><ul><li>If you intend to update or replace the existing non-deployed application, please delete the corresponding directory on the server first, then attempt the upload again.</li><li>If deploying a new application, rename your zip file to avoid naming conflicts and upload it again.</li></ul>"}
+	 rsp={err="An application directory with this name already exists. Delete it before replacing it, or rename the ZIP file."}
       else
 	 local upgrade = io:stat(fn) and true or false
 	 local fp,err = io:open(fn,"w")
@@ -47,7 +49,9 @@ function commands.uploadfw(cmd)
       cmd:json(rsp)
       cmd:abort()
    end
+   if "bin" ~= ext then senderror(cmd,"Expected a .bin firmware file",400) end
    if busy then senderror(cmd,"Busy: processing firmware update") end
+   busy=true
    local ok
    local ota,err=esp32.ota"begin"
    if ota then
@@ -69,10 +73,8 @@ end
 local started
 local function cb(ip)
    if not started then started=true return end
-   local dns=package.loaded["acme/dns"]
-   if dns then dns.setip(ip) end
+   if xedge.acmeRuntime then xedge.acmeRuntime:setIpAddress(ip) end
    xedge.elog({ts=true},"New IP %s",ip)
 end
 xedge.event("wip",cb)
 xedge.event("eth",cb)
-

@@ -1,7 +1,6 @@
 menu "Xedge config"
    
    menu "Camera"
-   
       config CAM_ENABLED
 	      bool "Enable camera module"
 	      default n
@@ -58,18 +57,59 @@ menu "Xedge config"
       config ETHERNET_EMAC_TASK_STACK_SIZE
          int "emac_rx task stack size"
          default 2048
+         depends on ETH_USE_ESP32_EMAC || ETH_USE_SPI_ETHERNET
          help
             This set stack size for emac_rx task
 
       config ETHERNET_PHY_ADDR
          int "PHY Address"
-         range 0 31 if EXAMPLE_USE_INTERNAL_ETHERNET
+         range 0 31 if ETH_USE_ESP32_EMAC
          default 1
+         depends on ETH_USE_ESP32_EMAC || ETH_USE_SPI_ETHERNET
          help
-             Set PHY address according your board schematic.
-     
-      menu "Wifi AP"
+            Set PHY address according your board schematic.
 
+      # PHY hardware devices for RMII internal interface (Only visible if native EMAC is enabled)
+      if ETH_USE_ESP32_EMAC
+          choice XEDGE_ETH_INTERNAL_PHY
+              prompt "Internal EMAC PHY Device"
+              default XEDGE_ETH_PHY_IP101
+
+              config XEDGE_ETH_PHY_IP101
+                  bool "IC Plus IP101"
+              config XEDGE_ETH_PHY_LAN8720
+                  bool "Microchip LAN8720"
+              config XEDGE_ETH_PHY_DP83848
+                  bool "TI DP83848"
+              config XEDGE_ETH_PHY_KSZ8041
+                  bool "Microchip KSZ8041"
+              config XEDGE_ETH_PHY_RTL8201
+                  bool "CoreChip RTL8201"
+          endchoice
+      endif
+
+      # PHY hardware devices for SPI interface (Only visible if native SPI Eth is enabled)
+      if ETH_USE_SPI_ETHERNET
+          choice XEDGE_ETH_SPI_DEVICE
+              prompt "SPI Ethernet Module"
+              default XEDGE_ETH_PHY_W5500
+
+              config XEDGE_ETH_PHY_W5500
+                  bool "Wiznet W5500"
+              config XEDGE_ETH_PHY_DM9051
+                  bool "Davicom DM9051"
+          endchoice
+      endif
+     
+      config XEDGE_WIFI_ENABLED
+         bool "Enable Wi-Fi features"
+         default y
+         help
+            Enable native Wi-Fi support (Station and AP).
+
+      menu "Wifi AP"
+       depends on XEDGE_WIFI_ENABLED
+      	
        config WIFI_AP_SSID
            string "WiFi SSID"
            default "xedge32"
@@ -135,16 +175,14 @@ menu "Xedge config"
       help
              Use Efuse for storing soft TPM (Trusted Platform Module) key
    endmenu
-
    
    menu "Debug Threads"
       config DEBUG_THREADS
          bool "Enable Debug Threads"
-      default n
-      help
+         default n
+         select FREERTOS_USE_TRACE_FACILITY
+         help
              Enable this option to enable debugging of threads.
-
-      # Automatically set CONFIG_FREERTOS_USE_TRACE_FACILITY to y when DEBUG_THREADS is enabled
-      select FREERTOS_USE_TRACE_FACILITY if DEBUG_THREADS
+             Automatically sets CONFIG_FREERTOS_USE_TRACE_FACILITY to y.
    endmenu
 endmenu

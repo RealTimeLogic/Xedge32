@@ -1,4 +1,13 @@
 # -*- mode: gitignore; -*-
 *~
 doc/_build
+doc/build
 Build-Resources
+managed_components
+build
+sdkconfig
+tests
+
+# This multi-target project regenerates one target-specific component lock.
+dependencies.lock
+

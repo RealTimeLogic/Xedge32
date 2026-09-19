@@ -32,54 +32,77 @@ As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.c
 
 **Note:** [Xedge32](https://realtimelogic.com/ba/ESP32/) is built on the more generic [Xedge](https://realtimelogic.com/products/xedge/), which itself is based on the [Barracuda App Server library](https://realtimelogic.com/products/barracuda-application-server/). Xedge32, Xedge, and the Barracuda App Server are OEM software components designed for easy integration into OEM products. All components are [designed to be extended](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code).
 
-To compile the source code, you must use the latest ESP-IDF, which can be found on [GitHub](https://github.com/espressif/esp-idf).
+This branch requires ESP-IDF 6.1.x. The component manifest rejects earlier or
+later minor releases so an SDK change cannot silently select an untested API
+set. Install ESP-IDF from the
+[official repository](https://github.com/espressif/esp-idf), or select version
+6.1 with Espressif Installation Manager (EIM).
 
-The following Linux commands show all steps required for installing the development tools, downloading the required source code, and compiling the code:
+The following Linux commands install ESP-IDF 6.1 and build Xedge32. They do not
+remove another installed SDK.
 
-```
-   sudo apt -y update
-   sudo apt -y install git wget zip flex bison gperf python3 python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+```bash
+sudo apt -y update
+sudo apt -y install git wget zip flex bison gperf python3 python3-venv \
+  cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-   cd
-   # remove old installation, if any
-   rm -rf .espressif esp/esp-idf
+# Install ESP-IDF 6.1 in its own directory.
+mkdir -p ~/esp
+cd ~/esp
+git clone -b v6.1 --recursive https://github.com/espressif/esp-idf.git esp-idf-v6.1
+./esp-idf-v6.1/install.sh esp32,esp32s3,esp32p4
+. ./esp-idf-v6.1/export.sh
 
-   # Install the esp-idf
-   mkdir esp
-   cd esp
-   git clone -b v5.5.3 --recursive https://github.com/espressif/esp-idf.git
-   esp-idf/install.sh
-   source esp-idf/export.sh
+# Clone Xedge32 and initialize its submodules.
+git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
+cd xedge
+git submodule update --init --recursive
 
-   # Download and update Xedge32; You can install it in any directory
-   cd ~/esp
-   git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
-   cd xedge
-   git submodule update --init --remote
+# Rebuild the embedded Xedge.zip resource after changing its Lua resources.
+chmod +x BuildESP32ResourceFile.sh
+./BuildESP32ResourceFile.sh
 
-   # Build the Xedge resource Xedge.zip, convert it to C, and copy the C file to the Xedge directory
-   chmod +x BuildESP32ResourceFile.sh
-   ./BuildESP32ResourceFile.sh
+# Select one target. ESP32-P4 camera support is enabled by its defaults.
+export IDF_TARGET=esp32       # or esp32s3 or esp32p4
 
-   #set target to one of:
-   #idf.py set-target esp32
-   #idf.py set-target esp32s3
-
-   # Configure Xedge32 options such as enabling CAM and mDNS. Details below.
-   #idf.py menuconfig
-
-   # Build the code
-   idf.py build
+# Use a target-specific build directory and sdkconfig file.
+idf.py -B build-$IDF_TARGET -D SDKCONFIG=sdkconfig.$IDF_TARGET build
 ```
 
-Windows: The code can be compiled in a Linux console, including the Windows Subsystem for Linux (WSL). If you use WSL, it's recommended to use generation one (WSL1), as it can be difficult to get the USB serial working in WSL2. For more information, see [the WSL documentation](https://docs.microsoft.com/en-us/windows/wsl/about).
+When EIM is installed, `eim select v6.1` replaces the clone, install, and
+export steps. Confirm that `IDF_PATH` names the selected 6.1 installation before
+building.
 
-To upload the firmware to your ESP32, follow these steps:
+Windows builds can run in Windows Subsystem for Linux (WSL). WSL1 is the most
+direct option when the serial port is exposed as `/dev/ttyS<N>`. See the
+[WSL documentation](https://learn.microsoft.com/windows/wsl/) for installation
+and device details.
 
-1. Wait for the build process to complete.
-2. Upload the code using:
-   - Linux: idf.py flash monitor
-   - WSL: idf.py -p /dev/ttyS4 -b 115200 flash monitor
+After the build succeeds, flash and monitor the board. Replace the example port
+with the port assigned to your board.
+
+```bash
+# Native Linux
+idf.py -B build-$IDF_TARGET -p /dev/ttyUSB0 flash monitor
+
+# WSL1 example for Windows COM4
+idf.py -B build-$IDF_TARGET -p /dev/ttyS4 -b 115200 flash monitor
+```
+
+### ESP32-P4 Function EV Board
+
+The checked-in ESP32-P4 defaults target the ESP32-P4 Function EV Board with an
+OV5647 camera, onboard IP101 Ethernet PHY, and companion ESP32-C6 connected over
+Secure Digital Input Output (SDIO). The P4 defaults support chip revision 1.x
+and use the 360 MHz CPU setting so the image can run on pre-revision-3 silicon.
+
+Wi-Fi on ESP32-P4 is provided by ESP-Hosted, not by a radio in the P4. The
+companion ESP32-C6 must run slave firmware compatible with the pinned
+`espressif/esp_hosted` 2.12.3 host component. Flashing the P4 does not update
+the C6. Follow Espressif's
+[ESP32-P4 Function EV Board guide](https://github.com/espressif/esp-hosted-mcu/blob/main/docs/esp32_p4_function_ev_board.md)
+when preparing or updating the companion firmware. A different P4 board needs
+its own camera, Ethernet, ESP-Hosted transport, and GPIO configuration.
 
 
 # Configuring Xedge32

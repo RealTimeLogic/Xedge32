@@ -1,490 +1,644 @@
 RMT API
-========
+=======
 
-The RMT (Remote Control) Module
---------------------------------
+The ESP32 RMT peripheral, short for **Remote Control**, is a timing-oriented
+signal engine that can both transmit and receive precisely timed digital pulse
+sequences. It was originally introduced for infrared remote-control protocols,
+but it is far more general than the name suggests.
 
-The ESP32's RMT (Remote Control) module is a versatile and powerful feature initially designed for handling remote control signal encoding and decoding. Its primary use was for infrared communication, enabling devices to send and receive IR signals commonly used in remote controls.
+In practice, the RMT peripheral is a very useful tool whenever a protocol is
+defined in terms of pulse widths rather than bytes on a conventional bus. This
+makes it a strong fit for:
 
-However, the RMT module's capabilities extend far beyond its original purpose with its highly flexible design and precision in pulse generation and timing control. With the ability to generate and interpret digital signals with an accuracy as fine-grained as 12.5 nanoseconds, the RMT module has found extensive use in various digital communication scenarios.
+- infrared protocols,
+- 1-wire devices,
+- addressable LED strips such as WS2812B,
+- custom pulse-encoded signaling,
+- pulse measurement and decoding tasks, and
+- other applications where sub-microsecond timing matters.
+
+Because the peripheral handles timing in hardware, it is often a better choice
+than trying to generate or measure pulse trains directly from Lua.
+
+For beginners, the easiest way to decide whether RMT is the right API is to ask
+whether the protocol is described by pulse widths. If the device talks in bytes,
+try UART, I2C, or another bus first. If the device talks in high/low timings,
+RMT is usually the correct tool.
 
 Application Examples
------------------------
+--------------------
 
-The RMT module is not limited to infrared signals; it has a broad range of applications, including:
+Two especially common uses for RMT in Xedge32 projects are:
 
-- **1-Wire Communication:** Often used in temperature sensors and other simple digital sensors, 1-wire communication can be implemented using the RMT module, allowing for precise timing and reliable data transfer.
-
-- **Addressable LED Strips:** The precise timing control offered by the RMT module makes it ideal for controlling addressable LED strips, such as the popular WS2812B. Users can create complex lighting effects with accurate color representation and timing.
+- **1-wire communication**
+  Timing is critical in 1-wire protocols, and RMT provides the precision needed
+  for reliable reads and writes.
+- **Addressable LED strips**
+  LED strips such as WS2812B require very specific pulse timing. RMT lets you
+  generate those waveforms in hardware instead of bit-banging them from Lua.
 
 .. _rmt-symbol-layout:
 
-RMT-Symbol Layout
-------------------
+RMT Symbol Layout
+-----------------
 
-The RMT hardware defines data according to its unique RMT-symbol pattern. An RMT-symbol encodes the duration and level of a digital signal pulse, which are critical for accurate signal generation and reception.
+The RMT hardware represents a waveform as a sequence of **RMT symbols**. Each
+symbol contains timing and logic-level information describing two consecutive
+pulse segments.
 
 .. figure:: img/RMT-Symbol-Layout.png
    :align: center
    :alt: RMT-symbol layout
 
-   The bit fields of an RMT-symbol as defined by the hardware.
+   Bit fields in an RMT symbol as defined by the hardware.
 
-As illustrated in the figure above, each RMT-symbol consists of the following components:
+Each RMT symbol contains:
 
-- **Duration Value (15 bits):** Represents the length of time the signal maintains a specific logic level. This duration is measured in RMT clock ticks.
+- a **duration value** for the first segment,
+- a **logic level** for the first segment,
+- a **duration value** for the second segment, and
+- a **logic level** for the second segment.
 
-- **Logic Level Value (1 bit):** Indicates the logic level of the signal, either high (`1`) or low (`0`) for the corresponding duration.
+Duration values are expressed in **RMT clock ticks**, not in seconds directly.
+The tick duration depends on the configured channel resolution.
 
-Each RMT-symbol is divided into two pairs of these values, allowing a single RMT-symbol to represent a sequence of high and low signals in a compact form.
+Understanding Tick Resolution
+-----------------------------
 
-Lua RMT-Symbol
-----------------
+The configured ``resolution`` determines how to interpret durations:
 
-An *RMT-symbol* encapsulates the timing information for a digital signal. It is a composite of four values: two for the signal's logic level and two for the duration of these levels. The frequency at which the RMT module is configured determines a tick's duration. For a frequency of 1MHz, each tick translates to one microsecond because there are 1 million microseconds (us) in a second. As an example, a waveform that remains high for 350us followed by a low period of 800us can be represented by the following RMT-symbol:
+- at ``1,000,000`` Hz, one tick is ``1 us``,
+- at ``10,000,000`` Hz, one tick is ``0.1 us``,
+- at ``80,000,000`` Hz, one tick is ``12.5 ns``.
+
+This is one of the most important ideas when working with RMT. The symbol data
+does not store human-friendly time units. It stores counts that are meaningful
+only when combined with the selected resolution.
+
+Lua RMT Symbol Representation
+-----------------------------
+
+In Lua, a single RMT symbol is represented as a four-element table:
 
 .. code-block:: lua
 
-    {
-      1, 350, 0, 800  -- High for 350us, then Low for 800us
-    }
+   { level0, duration0, level1, duration1 }
 
-The above represents a Lua table consisting of four elements in a sequence. This table is a simple array where each element is indexed numerically, starting with 1.
+Example:
+
+.. code-block:: lua
+
+   {
+      1, 350, 0, 800
+   }
+
+If the channel resolution is ``1 MHz``, the symbol above means:
+
+- drive the line high for ``350 us``,
+- then drive it low for ``800 us``.
+
+This table format is compact, but it is helpful to think of it as a small
+waveform fragment rather than as generic numeric data.
 
 Lua RMT Byte Encoding
------------------------
+---------------------
 
-In many protocols, including 1-wire, a stream of bits is transmitted by defining specific timing for signal pulses. For instance, a protocol may represent a '0' bit as a short high pulse (e.g., 0.4us) followed by a long low pulse (e.g., 0.85us). Conversely, a '1' bit might be represented by a long high pulse (e.g., 0.8us) followed by a short low pulse (e.g., 0.45us).
+Many pulse protocols define how each data bit is encoded as a pair of pulses.
+For example:
 
-To implement this in Lua, create the following structure:
+- a binary ``0`` might be sent as a short-high then long-low pulse pair,
+- a binary ``1`` might be sent as a long-high then short-low pulse pair.
 
-.. code-block:: lua
-
-   {
-     boolean msb, -- Determines the order of bit transmission;
-                  -- if true, sends the most significant bit first.
-     RMT-symbol for bit 0, -- Defines timing for transmitting a '0' bit.
-     RMT-symbol for bit 1, -- Defines timing for transmitting a '1' bit.
-     { array of byte values } -- Array of data to be transmitted.
-   }
-
-For example, to send data using a frequency of 10,000,000 Hz, the structure would look like this:
+Xedge32 supports a convenient Lua structure for describing this pattern at the
+byte level:
 
 .. code-block:: lua
 
    {
-     -- Send the most significant bit first.
-     true,
-     -- RMT-symbol for bit 0: high for 0.4us, low for 0.8us.
-     {1, 4, 0, 8},
-     -- RMT-symbol for bit 1: high for 0.8us, low for 0.4us.
-     {1, 8, 0, 4},
-     { 0x00, 0x55, 0xFF }
+      booleanMsbFirst,
+      symbolForBit0,
+      symbolForBit1,
+      { byteArray }
    }
 
+Fields:
+
+- ``booleanMsbFirst``: ``true`` to transmit the most-significant bit first,
+  ``false`` for least-significant-bit first.
+- ``symbolForBit0``: RMT symbol that represents a transmitted zero bit.
+- ``symbolForBit1``: RMT symbol that represents a transmitted one bit.
+- ``{ byteArray }``: Array of bytes to encode and transmit.
+
+Example at ``10 MHz`` resolution:
+
+.. code-block:: lua
+
+   {
+      true,
+      {1, 4, 0, 8},
+      {1, 8, 0, 4},
+      {0x00, 0x55, 0xFF}
+   }
+
+With a resolution of ``10,000,000`` Hz, the values ``4`` and ``8`` correspond
+to ``0.4 us`` and ``0.8 us`` respectively.
 
 RMT TX API
------------
+----------
 
-esp32.rmttx(cfg [,rx])
-~~~~~~~~~~~~~~~~~~~~~~~
-   This function initializes and returns a new RMT TX (Remote Control Module Transmission) instance for transmitting signals. It requires a configuration table, `cfg`, with various options that configure the RMT instance.
+Creating a TX Channel
+---------------------
 
-   :param table cfg: Configuration options for the RMT transmitter.
-   :param RMT-RX rx: An RX instance can be provided to create a bi-directional bus (e.g., 1-wire). For this to work, the GPIO pin must be the same for the RX and TX instances.
-   :return: RMT TX instance. The instance is in a disabled state and must be enabled before being used.
+Function signature:
 
-   **Configuration Options (cfg)**
+.. code-block:: lua
 
-   - ``gpio`` (*required*): The GPIO pin number used for transmission.
-   - ``resolution`` (*required*): Sets the resolution of the internal tick counter. The timing parameter of the RMT signal is calculated based on this tick.
-   - ``mem`` (optional, default 64): Has a different meaning based on whether DMA is enabled or not. If DMA is enabled, this field controls the size of the internal DMA buffer. If DMA is not used, it controls the size of the dedicated memory block owned by the channel.
-   - ``queue`` (optional, default 4): Sets the depth of the internal transaction queue. A deeper queue allows more transactions to be prepared in the backlog.
-   - ``invert`` (optional, default false): Decides whether to invert the RMT signal before sending it to the GPIO pad.
-   - ``DMA`` (optional, default false): Enables the DMA backend for the channel, offloading a significant workload from the CPU.
-   - ``opendrain`` (optional, default false): Configures the GPIO pad in open-drain mode.
-   - ``callback`` (optional): The function to be called when the transmission completes.
+   rmttx, err = esp32.rmttx(cfg [, rx])
 
-   **Optional Carrier Modulation Options**
+This function creates a transmit channel object. The channel starts out
+disabled, so you must call ``rmttx:enable()`` before transmitting.
 
-   For applications requiring carrier modulation, the following additional parameters can be set:
+The optional ``rx`` argument lets you pair a TX and RX channel on the same GPIO
+so they can cooperate on a bidirectional bus such as 1-wire.
 
-   - ``dutycycle`` : Sets the carrier duty cycle.
-   - ``frequency`` : Sets the carrier frequency in Hertz (Hz). Max frequency is 80000000.
-   - ``polaritylow`` : Determines the carrier polarity, i.e., on which level the carrier is applied.
+TX Configuration Options
+------------------------
+
+Required fields:
+
+- ``gpio``: Output GPIO pin.
+- ``resolution``: Tick resolution in Hertz.
+
+Optional fields:
+
+- ``mem``: Memory or DMA buffer sizing. Default is ``64``.
+- ``queue``: Transaction queue depth. Default is ``4``.
+- ``invert``: Invert the outgoing logic level. Default is ``false``.
+- ``dma``: Enable DMA backend. Default is ``false``.
+- ``opendrain``: Configure the GPIO in open-drain mode. Default is ``false``.
+- ``callback``: Function called when transmission completes.
+
+Optional carrier modulation fields:
+
+- ``dutycycle``: Carrier duty cycle.
+- ``frequency``: Carrier frequency in Hertz. Maximum is ``80000000``.
+- ``polaritylow``: Select the logic level on which the carrier is applied.
 
 TX Object Methods
+-----------------
+
+``rmttx:enable()``
+~~~~~~~~~~~~~~~~~~
+
+Enables the RMT TX channel and prepares it for transmission.
+
+``rmttx:disable()``
+~~~~~~~~~~~~~~~~~~~
+
+Disables the TX channel and stops further activity. This is especially useful
+for transmissions that were started in loop mode.
+
+``rmttx:transmit(cfg, symbols)``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Queues or starts transmission of one or more RMT symbols.
+
+Parameters:
+
+- ``cfg``: Transmission options.
+- ``symbols``: Either an array of direct RMT symbols or one or more byte-encode
+  structures as described earlier.
+
+Supported ``cfg`` fields:
+
+- ``loop``: Number of repeat loops. Use ``-1`` for infinite looping.
+- ``eot``: Output level to hold at end of transmission.
+
+``rmttx:close()``
 ~~~~~~~~~~~~~~~~~
 
-The RMT TX instance provides several methods for managing the transmission channel and sending data.
+Closes the TX channel and releases its resources.
 
-.. method:: rmttx:enable()
+TX Example 1: Musical Score
+---------------------------
 
-   Prepares the channel for data transmission. This method must be called before any transmission occurs. It enables a specific interrupt and readies the hardware to dispatch transactions.
-
-.. method:: rmttx:disable()
-
-   Disables the RMT channel by turning off the associated interrupt and clearing any pending interrupts. This method should be called to stop any ongoing transmission, especially if the transmission is set to loop indefinitely.
-
-.. method:: rmttx:transmit(cfg, symbols)
-
-   Initiates the transmission of signals defined by RMT-symbols.
-
-   :param table cfg: Configuration options for the transmission process.
-   :param table symbols: An array of RMT-symbols or bytes to transmit.
-
-   The `cfg` table may include the following options:
-
-   - **loop** (optional, default 0): Sets the number of transmission loops. A value of -1 indicates an infinite loop, which will require `rmttx:disable()` to be called to stop the transmission.
-   - **eot** (optional, default 0): Determines the output level when transmission is complete or stopped.
-
-.. method:: rmttx:close()
-
-   Closes and releases the RMT TX channel
-
-   Example:
-
-TX Examples
-~~~~~~~~~~~~~~~~~
-
-Musical Score Example:
-************************
-
-The following Lua script shows how to use the RMT TX API to play a musical score, specifically Beethoven's "Ode to Joy". Each note in the score is represented by a frequency (in Hertz) and duration (in milliseconds), forming a simple melody. The score table below has been copied from the C code example `Musical Buzzer <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/rmt/musical_buzzer>`_.
+The following example plays a simple melody, Beethoven's *Ode to Joy*, by
+transmitting a square wave for each note frequency. The score table is adapted
+from Espressif's `musical buzzer example
+<https://github.com/espressif/esp-idf/tree/master/examples/peripherals/rmt/musical_buzzer>`_.
 
 .. code-block:: lua
 
-    local score = { -- Beethoven's Ode to joy
-        {740, 400}, {740, 600}, {784, 400}, {880, 400},
-        {880, 400}, {784, 400}, {740, 400}, {659, 400},
-        {587, 400}, {587, 400}, {659, 400}, {740, 400},
-        {740, 400}, {740, 200}, {659, 200}, {659, 800},
-    
-        {740, 400}, {740, 600}, {784, 400}, {880, 400},
-        {880, 400}, {784, 400}, {740, 400}, {659, 400},
-        {587, 400}, {587, 400}, {659, 400}, {740, 400},
-        {659, 400}, {659, 200}, {587, 200}, {587, 800},
-    
-        {659, 400}, {659, 400}, {740, 400}, {587, 400},
-        {659, 400}, {740, 200}, {784, 200}, {740, 400}, {587, 400},
-        {659, 400}, {740, 200}, {784, 200}, {740, 400}, {659, 400},
-        {587, 400}, {659, 400}, {440, 400}, {440, 400},
-    
-        {740, 400}, {740, 600}, {784, 400}, {880, 400},
-        {880, 400}, {784, 400}, {740, 400}, {659, 400},
-        {587, 400}, {587, 400}, {659, 400}, {740, 400},
-        {659, 400}, {659, 200}, {587, 200}, {587, 800},
-    }
-    
-    local resolution=1000000
-    
-    local function play(rmt)
-       for _,note in ipairs(score) do
-          local freq,duration = note[1],note[2]
-          local symbolDuration=resolution/freq/2
-          rmt:transmit({loop=duration*freq/1000},
-                       {
-                          {0,symbolDuration,1,symbolDuration}
-                       })
-          coroutine.yield()
-       end
-       rmt:close()
-    end
-    
-    local coro=coroutine.create(play)
-    
-    local rmt,err=esp32.rmttx{
-       gpio=0,
-       resolution=resolution,
-       callback=function() coroutine.resume(coro) end
-    }
-    if rmt then
-       rmt:enable()
-       coroutine.resume(coro,rmt)
-    end
-    
-    function onunload()
-       rmt:close()
-    end
+   local score = {
+      {740, 400}, {740, 600}, {784, 400}, {880, 400},
+      {880, 400}, {784, 400}, {740, 400}, {659, 400},
+      {587, 400}, {587, 400}, {659, 400}, {740, 400},
+      {740, 400}, {740, 200}, {659, 200}, {659, 800},
 
-The `play()` function executes as a Lua coroutine. It plays through Beethoven's "Ode to Joy" by iterating over the `score` table. Each entry in this table is a tuple, comprising a frequency and a duration, which together define a musical note.
+      {740, 400}, {740, 600}, {784, 400}, {880, 400},
+      {880, 400}, {784, 400}, {740, 400}, {659, 400},
+      {587, 400}, {587, 400}, {659, 400}, {740, 400},
+      {659, 400}, {659, 200}, {587, 200}, {587, 800},
 
-Key elements of the play() Function:
+      {659, 400}, {659, 400}, {740, 400}, {587, 400},
+      {659, 400}, {740, 200}, {784, 200}, {740, 400}, {587, 400},
+      {659, 400}, {740, 200}, {784, 200}, {740, 400}, {659, 400},
+      {587, 400}, {659, 400}, {440, 400}, {440, 400},
 
-- **Note Representation:** Each tuple in the `score` table encapsulates two key aspects of a musical note:
+      {740, 400}, {740, 600}, {784, 400}, {880, 400},
+      {880, 400}, {784, 400}, {740, 400}, {659, 400},
+      {587, 400}, {587, 400}, {659, 400}, {740, 400},
+      {659, 400}, {659, 200}, {587, 200}, {587, 800},
+   }
 
-  - The **frequency** determines the pitch of the note.
-  - The **duration** specifies the length of time the note is played.
+   local resolution = 1000000
 
-- **Coroutine Behavior:** The function operates as a coroutine, enabling it to pause (yield) its execution after transmitting each note. 
+   local function play(rmt)
+      for _, note in ipairs(score) do
+         local freq, duration = note[1], note[2]
+         local symbolDuration = resolution / freq / 2
+         rmt:transmit({loop = duration * freq / 1000}, {
+            {0, symbolDuration, 1, symbolDuration}
+         })
+         coroutine.yield()
+      end
+      rmt:close()
+   end
 
-- **Synchronization with Transmit Callback:** After transmitting a note, the coroutine yields (temporarily halts its execution). It resumes only when the transmit callback function is triggered, signaling the completion of the note's playback. This mechanism ensures that each note is played for its full duration before moving on to the next one.
+   local coro = coroutine.create(play)
 
-The orchestration of the `play()` function with the RMT TX API's transmit callback creates an accurate rendition of the musical Score. The coroutine yields after sending each note, allowing the hardware to complete the transmission of the RMT-symbol representing the note. Once the transmission is complete and the callback function is invoked, the coroutine resumes, proceeding to the next note in the Score.
+   local rmt, err = esp32.rmttx{
+      gpio = 0,
+      resolution = resolution,
+      callback = function()
+         coroutine.resume(coro)
+      end
+   }
 
-WS2812B LED strip Example:
-***************************
+   if rmt then
+      rmt:enable()
+      coroutine.resume(coro, rmt)
+   else
+      trace(err)
+   end
 
-The following fully functional example can be run as an xlua file. The example sets a random color combination for a WS2812B LED Strip. 
+   function onunload()
+      rmt:close()
+   end
 
-- ``local leds = 10``: Sets the number of LEDs on the strip to 10. Change this value to reflect the number of LEDs on your specific LED strip.
-- ``local gpioPin = 1``: Defines the GPIO pin on the ESP32 to which the LED strip's data line is connected.
+How the Musical Example Works
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``play()`` function runs as a Lua coroutine. That lets the code look
+sequential even though the actual note timing is event-driven.
+
+For each note:
+
+1. The frequency is converted into a half-period duration.
+2. A single RMT symbol is transmitted in a loop to generate a square wave.
+3. The coroutine yields.
+4. The TX callback resumes the coroutine after the note duration finishes.
+
+This is a useful general RMT pattern: let hardware perform the timing while Lua
+coordinates higher-level sequencing.
+
+TX Example 2: WS2812B LED Strip
+-------------------------------
+
+The following example drives a WS2812B-compatible LED strip by defining the
+timing for bit ``0`` and bit ``1`` and then repeatedly retransmitting updated
+color data.
 
 .. code-block:: lua
 
-    local leds=1 -- Set to the number of LED's e.g. 30
-    local gpioPin=48 -- pin 48 works with the one LED on ESP32-S3-WROOM
-    local rmt,err
-    
-    local data={}
-    for i=1,leds*3 do
-       table.insert(data,ba.rnd(0,0xFF))
-    end
-    
-    local function transmit()
-       rmt:transmit({},{
-          {
-             true, -- Send the most significant bit first.
-             -- RMT-symbol for bit 0: high for 0.4us, low for 0.8us.
-             {1, 4, 0, 8},
-             -- RMT-symbol for bit 1: high for 0.8us, low for 0.4us.
-             {1, 8, 0, 4},
-             data -- Data to send; data length is 3 x LEDs, each LED uses 24 bits.
-          },
-          {0,150,0,150} -- Reset: low for 30 us
-       })
-    end
-    
-    rmt,err=esp32.rmttx{
-       gpio=gpioPin,
-       resolution=10000000, -- 10Mhz, each tick is 0.1us
-       callback=function() -- On TX done callback
-          -- Change color values
-          for i=1,#data do
-             local c = data[i]
-             c=c+1
-             if c > 0xFF then c=0 end
-             data[i]=c
-          end
-          transmit()
-       end
-    }
-    if rmt then
-       rmt:enable()
-       transmit()
-    end
-    
-    function onunload()
-       trace"Stopping wled"
-       if rmt then
-          -- Turn off all LEDS
-          for i=1,#data do data[i]=0 end
-          transmit()
-          -- Set to func that closes RMT after turning LEDs off
-          transmit=function() rmt:close() end
-       end
-    end
+   local leds = 1
+   local gpioPin = 48
+   local rmt, err
 
-Preparing Color Data
-#####################
+   local data = {}
+   for i = 1, leds * 3 do
+      table.insert(data, ba.rnd(0, 0xFF))
+   end
 
-- A table ``data = {}`` is created to hold the color data for each LED.
-- A loop iterates through each LED's color component (Red, Green, Blue): ``for i = 1, leds * 3 do``.
-- Random color values are generated and inserted into the ``data`` table: ``table.insert(data, ba.rnd(0, 0xFF))``.
+   local function transmit()
+      rmt:transmit({}, {
+         {
+            true,
+            {1, 4, 0, 8},
+            {1, 8, 0, 4},
+            data
+         },
+         {0, 150, 0, 150}
+      })
+   end
 
-Transmit Function
-##################
+   rmt, err = esp32.rmttx{
+      gpio = gpioPin,
+      resolution = 10000000,
+      callback = function()
+         for i = 1, #data do
+            local c = data[i] + 1
+            if c > 0xFF then
+               c = 0
+            end
+            data[i] = c
+         end
+         transmit()
+      end
+   }
 
-- The ``transmit`` function sends data to the LEDs using the RMT module.
-- The RMT module's ``transmit`` function includes a configuration for the timing of bits 0 and 1. See a WS2812B datasheet for more information on the values.
-- A reset sequence ``{0, 150, 0, 150}`` is included, ensuring the LED strip is reset for 30us and ready to receive new data.
+   if rmt then
+      rmt:enable()
+      transmit()
+   else
+      trace(err)
+   end
 
-Initializing the RMT Module
-############################
+   function onunload()
+      trace"Stopping wled"
+      if rmt then
+         for i = 1, #data do
+            data[i] = 0
+         end
+         transmit()
+         transmit = function()
+            rmt:close()
+         end
+      end
+   end
 
-- The RMT module is initialized with the specified GPIO pin and timing resolution: ``esp32.rmttx{...}``.
-- The callback function updates the color data and calls the transmit function, causing a continuous cyclical dynamic lighting effect.
-- The script checks if the RMT module is successfully initialized and initiates the cyclical sequence by calling the ``transmit`` function. Each time a transmission completes, the ``TX callback`` function initiates a new transmission with new color values.
+Breaking Down the LED Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Clean-Up Function
-##################
-When the xlua file is stopped or re-started, the previous version will not automatically stop unless we call the rmt:close() method. Function ``onunload`` handles this condition.
+Preparing color data:
 
+- ``data`` contains three bytes per LED.
+- Each group of three bytes represents one RGB color value.
 
+Transmit function:
 
+- The first item in the transmit table describes byte encoding for the LED
+  protocol.
+- ``true`` selects MSB-first transmission.
+- ``{1, 4, 0, 8}`` defines the waveform for a zero bit.
+- ``{1, 8, 0, 4}`` defines the waveform for a one bit.
+- ``{0, 150, 0, 150}`` adds the reset pulse after the color data.
+
+Continuous animation:
+
+- The TX callback updates the color table after each completed transfer.
+- The callback then starts the next frame.
+- This creates a continuous animation loop without a separate timer.
+
+Cleanup:
+
+- ``onunload()`` turns the LEDs off before closing the channel.
+- This matters when the code runs as an ``.xlua`` page and may be reloaded or
+  stopped while the previous transmission is still active.
 
 RMT RX API
------------
+----------
 
-esp32.rmtrx(cfg)
-~~~~~~~~~~~~~~~~~
+Creating an RX Channel
+----------------------
 
-This function initializes and returns a new RMT RX instance for receiving RMT-symbols. The function requires a configuration table, cfg, with various options for configuring the RMT RX instance.
-
-**Parameters:**
-   :param table cfg: This parameter is a configuration table comprising various required and optional options.
-   :return: RMT TX instance. 
-
-**Configuration Options (cfg):**
-
-1. **gpio (required)**: 
-   - Specifies the GPIO pin number used for signal reception.
-
-2. **resolution (required)**: 
-   - Determines the resolution of the internal tick counter. The RMT signal's timing parameter is calculated based on this resolution.
-
-3. **mem (optional, default: 64)**: 
-   - Has a different meaning based on whether DMA is enabled or not. If DMA is enabled, this field controls the size of the internal DMA buffer. If DMA is not used, it controls the size of the dedicated memory block owned by the channel.
-
-4. **invert (optional, default: false)**: 
-   - When set to true, inverts the input signals prior to processing by the RMT receiver.
-
-5. **DMA (optional, default: false)**: 
-   - Activates the DMA backend for the channel, significantly reducing CPU workload.
-
-6. **callback (required)**: 
-   - Designates a function to be called upon the completion of reception.
-   - **Function Structure**: 
-   ``function callback(symbols, overflow)``
-
-      - **symbols**: A list of RMT-symbols.
-      - **overflow**: Indicates whether the receive buffer overflowed. Refer to the ``rmtrx:receive`` method for details on setting the receive buffer size.
-
-RX Object Methods
-~~~~~~~~~~~~~~~~~
-
-The RMT RX instance provides one method for activating the reception of RMT-symbols.
-
-.. method:: rmtrx:receive(cfg)
-
-   The function initiates a new receive job and then returns.
-
-   - **Parameters:**
-     - **cfg (table, required)**: A configuration table that includes required and optional settings.
-
-   **Configuration Options (cfg):**
-
-     - **min (required)**: Specifies the minimum valid pulse duration in nanoseconds for either high or low logic levels. Pulses shorter than this are considered glitches and ignored.
-     - **max (required)**: Determines the maximum valid pulse duration for high or low logic levels. Pulses longer than this are treated as a Stop Signal, triggering an immediate receive-complete event.
-     - **len (optional, default 512)**: Sets the length of the receive buffer in terms of RMT-symbols.
-     - **defer (optional, boolean false)**: This parameter comes into play when an RX and TX instance are linked to the same GPIO pin number. 
-
-           - **false**: RMT-symbol reception is activated immediately, causing transmitted symbols to be included in the received symbols.
-           - **true**: RMT-symbol reception is deferred until the TX instance has transmitted all symbols.
-
-.. method:: rmtrx:close()
-
-   Closes and releases the RMT RX channel
-
-RX Example: 1-Wire Reading Temperature
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The example below shows how to implement the 1-wire protocol for reading temperature from a DS18B20 sensor. To understand this example, you must have some understanding of the 1-Wire protocol. The 1-Wire protocol is a communication method designed for minimal wiring, typically involving just a single data wire plus ground. 
-
-Communication begins with a 'bus reset', which entails pulling the data line low for at least 480 microseconds. This signals the connected sensors to initiate communication, and in response, these sensors pull the bus low for a brief period to indicate presence.
-
-During data transmission, timing is critical: to send a 'bit 0', the line is held low for about 60 microseconds, while for a 'bit 1', it is held low for approximately 6 microseconds. These specific durations are crucial as they allow sensors on the bus to differentiate between the two binary states accurately, ensuring precise data communication.
-
-In the decodeBytes function, the application of this timing principle is evident. This function receives an array of RMT-symbols and iterates through them, decoding each received bit. A bit is identified as binary 1 if the data line has been held low for less than 16 microseconds and as binary 0 if it is held low for longer. Each bit is then shifted into a byte using little-endian bit notation. Once a full byte is decoded, it is added to an array, which is then returned by the function.
-
-The core of the implementation resides in the readTemp function, which encompasses the inner function tempThread. This internal function executes as a Lua coroutine, a feature that simplifies coding of the event-based nature of this example by making the code sequential. In this implementation, the coroutine actively manages 1-wire data transmission and then pauses, awaiting the RX event callback to reactivate it.
-
-The coroutine enters a waiting state using coroutine.yield(). It remains in this state until the RX event callback invokes coroutine.resume(). Notice how the RMT-symbol argument from the RX event callback is passed directly to coroutine.resume(). This argument is then conveniently received by the coroutine when coroutine.yield() returns. This mechanism ensures a straightforward handover of event data to the sequential code.
-
+Function signature:
 
 .. code-block:: lua
-  :linenos:
 
-    local tInsert=table.insert
-    local cResume,cYield=coroutine.resume,coroutine.yield
-    
-    local function decodeBytes(symbols)
-       local mask,byte,t=1,0,{}
-       for i,sym in ipairs(symbols) do
-          -- sym[2] is the duration low level
-          if sym[2] <= 15 then byte = byte | mask end
-          mask = mask << 1
-          if 256 == mask then
-             tInsert(t,byte)
-             mask,byte = 1,0
-          end
-       end
-       return t
-    end
-    
-    local function readTemp(gpio,callback)
-       local coro
-       local function tempThread()
-          local txCfg={eot=1}
-          local rx <close> = esp32.rmtrx{
-             gpio=gpio,
-             resolution=1000000,
-             callback=function(symbols) cResume(coro,symbols) end
-          }
-          local tx <close> = esp32.rmttx({
-             gpio=gpio,
-             opendrain=true,
-             resolution=1000000,
-          },rx) -- Second arg. Link RX and TX
-    
-          local function busReset()
-             rx:receive{min=2000,max=480*2*1000}
-             tx:transmit(txCfg, { {0,480,1,70} })
-             local symbols=cYield()
-             if #symbols < 2 then
-                callback(nil,"No sensors connected")
-             end
-             return #symbols < 2 -- true means failed
-          end
-    
-          local function sendCommand(cmd)
-             rx:receive{min=900,max=70*1000}
-             tx:transmit(txCfg, {
-                            {
-                               false, -- least significant first
-                               {0,60,1,2}, -- binary 0
-                               {0,6,1,56}, -- binary 1
-                               cmd
-                            }
-                         })
-             return cYield()
-          end
-    
-          local function readBytes(len)
-             local t={}
-             for i=1,len do tInsert(t,0xFF) end
-             return sendCommand(t)
-          end
-    
-          tx:enable()
-          -- release the HW by sending a special RMT-symbol
-          tx:transmit(txCfg, { {1,1,1,0} })
-          if busReset() then return end -- failed
-          -- Skip rom, Start temp measurement
-          sendCommand{0xCC,0x44}
-          ba.timer(function() cResume(coro) end):set(1000,true)
-          cYield() -- wait for timer (temperature conversion to finish)
-          if busReset() then return end -- failed
-          -- Skip rom, read scratchpad
-          sendCommand{0xCC,0xBE}
-          local data=decodeBytes(readBytes(2))
-          local raw = (data[2] << 8) + data[1]
-          callback(raw * 0.0625)
-       end
-       coro = coroutine.create(tempThread)
-       cResume(coro) -- Start
-    end
-    
-    readTemp(1, function(temp,err) trace(temp,err) end)
+   rmtrx, err = esp32.rmtrx(cfg)
 
-The tempThread function initiates its process by creating RX and TX instances on the same GPIO port, which is required for 1-wire communication. When using 1-wire, a special HW reset is necessary to make the Esp32's RMT HW counters work correctly. This command is sent on line 64.
+This creates a receive channel that captures incoming pulse timings as RMT
+symbols.
 
-Within the tempThread coroutine, two 1-wire commands are transmitted: 0x44 to start the temperature reading and 0xBE to read the scratchpad - a register where the temperature sensor stores its measurements. Notice the one-second delay, managed by the timer, between these two commands, a required pause allowing the sensor to complete the temperature measurement. A long duration is required when powering the sensor using parasitic power mode.
+RX Configuration Options
+------------------------
 
-Both commands commence with 0xCC, informing the sensor to bypass sensor addressing. This approach implies that only one 1-wire sensor can be connected to the bus.
+Required fields:
 
-When the code initiates TX, the RX callback is activated when the data has been transmitted. See method rmtrx:receive() and the "defer "option for details. The coroutine uses this event to resume from coroutine.yield(). However, the received data is generally not used, with the exception of the code on line 73. 
+- ``gpio``: Input GPIO pin.
+- ``resolution``: Tick resolution in Hertz.
+- ``callback``: Lua function called when a receive job completes.
 
-After issuing the 0x44 command to read the temperature, the sensor responds by sending data over the bus. However, each bit transfer must be initiated by the master, in this case, the ESP32. If you look at the readBytes function at line 56, you'll notice that it takes the number of bytes to receive, creates an array of 0xFF with this length, and calls sendCommand. Remember, sending a one bit involves pulling the bus low for a brief period, which in turn prompts the sensor to transmit each bit. If the sensor intends to send a zero bit, it maintains the bus in a low state for an extended duration. Consequently, the RX callback receives the symbols transmitted by the ESP32, but these are formatted by the sensor, resulting in the accurate reception of the temperature as a 16-bit value.
+Optional fields:
 
-If you are familiar with Lua and its efficient, incremental garbage collector (GC), you might have identified a potential issue in the above code. The concern lies with the absence of explicit references, or 'anchors', for the coroutine. While an internal network of references exists, there's no persistent reference to the main object - the coroutine - during its execution. This omission leaves the coroutine vulnerable to being garbage-collected. In such a case, the callback reporting the temperature would never be triggered. While it's unlikely for the coroutine to be collected during testing, real-world applications require a more robust approach. Ensuring a reference to the coroutine is necessary to prevent its premature collection. The presented code serves as a base for designing a 1-wire protocol. In a fully developed implementation, the coroutine should be encapsulated within an instance of the 1-wire library. This encapsulation guarantees that the coroutine remains active and is not garbage-collected while in use, thereby ensuring the reliability and stability of the application.
+- ``mem``: Memory or DMA buffer sizing. Default is ``64``.
+- ``invert``: Invert input levels before processing. Default is ``false``.
+- ``dma``: Enable DMA backend. Default is ``false``.
+
+RX callback signature:
+
+.. code-block:: lua
+
+   function callback(symbols, overflow)
+
+Arguments:
+
+- ``symbols``: Array of received RMT symbols.
+- ``overflow``: Boolean indicating whether the receive buffer overflowed.
+
+RX Object Methods
+-----------------
+
+``rmtrx:receive(cfg)``
+~~~~~~~~~~~~~~~~~~~~~~
+
+Starts a receive job and returns immediately.
+
+Receive ``cfg`` fields:
+
+- ``min``: Minimum valid pulse duration in nanoseconds. Shorter pulses are
+  treated as glitches.
+- ``max``: Maximum valid pulse duration in nanoseconds. Longer pulses are
+  treated as a stop signal and end the receive operation.
+- ``len``: Optional receive buffer length in RMT symbols. Default is ``512``.
+- ``defer``: Optional boolean. Relevant when TX and RX are linked to the same
+  GPIO.
+
+When ``defer`` is used with a linked TX/RX pair:
+
+- ``false`` means reception starts immediately, so transmitted symbols may also
+  appear in the receive result.
+- ``true`` delays reception until the linked TX channel finishes transmitting.
+
+``rmtrx:close()``
+~~~~~~~~~~~~~~~~~
+
+Closes the RX channel and releases its resources.
+
+RX Example: 1-Wire Temperature Read
+-----------------------------------
+
+The following example shows how RMT can be used to implement a 1-wire
+temperature transaction against a DS18B20-style sensor.
+
+.. code-block:: lua
+   :linenos:
+
+   local tInsert = table.insert
+   local cResume, cYield = coroutine.resume, coroutine.yield
+
+   local function decodeBytes(symbols)
+      local mask, byte, t = 1, 0, {}
+      for _, sym in ipairs(symbols) do
+         if sym[2] <= 15 then
+            byte = byte | mask
+         end
+         mask = mask << 1
+         if 256 == mask then
+            tInsert(t, byte)
+            mask, byte = 1, 0
+         end
+      end
+      return t
+   end
+
+   local function readTemp(gpio, callback)
+      local coro
+
+      local function tempThread()
+         local txCfg = {eot = 1}
+
+         local rx <close> = esp32.rmtrx{
+            gpio = gpio,
+            resolution = 1000000,
+            callback = function(symbols)
+               cResume(coro, symbols)
+            end
+         }
+
+         local tx <close> = esp32.rmttx({
+            gpio = gpio,
+            opendrain = true,
+            resolution = 1000000,
+         }, rx)
+
+         local function busReset()
+            rx:receive{min = 2000, max = 480 * 2 * 1000}
+            tx:transmit(txCfg, {{0, 480, 1, 70}})
+            local symbols = cYield()
+            if #symbols < 2 then
+               callback(nil, "No sensors connected")
+            end
+            return #symbols < 2
+         end
+
+         local function sendCommand(cmd)
+            rx:receive{min = 900, max = 70 * 1000}
+            tx:transmit(txCfg, {
+               {
+                  false,
+                  {0, 60, 1, 2},
+                  {0, 6, 1, 56},
+                  cmd
+               }
+            })
+            return cYield()
+         end
+
+         local function readBytes(len)
+            local t = {}
+            for i = 1, len do
+               tInsert(t, 0xFF)
+            end
+            return sendCommand(t)
+         end
+
+         tx:enable()
+         tx:transmit(txCfg, {{1, 1, 1, 0}})
+         if busReset() then
+            return
+         end
+
+         sendCommand{0xCC, 0x44}
+         ba.timer(function()
+            cResume(coro)
+         end):set(1000, true)
+         cYield()
+
+         if busReset() then
+            return
+         end
+
+         sendCommand{0xCC, 0xBE}
+         local data = decodeBytes(readBytes(2))
+         local raw = (data[2] << 8) + data[1]
+         callback(raw * 0.0625)
+      end
+
+      coro = coroutine.create(tempThread)
+      cResume(coro)
+   end
+
+   readTemp(1, function(temp, err)
+      trace(temp, err)
+   end)
+
+Understanding the 1-Wire Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example is dense, so it helps to break it into pieces.
+
+1-wire background:
+
+- A bus reset begins communication by pulling the line low for at least
+  ``480 us``.
+- A device indicates presence by pulling the line low in response.
+- Bit timing determines whether the transmitted or received value is a zero or
+  a one.
+
+How the Lua code is organized:
+
+- ``tempThread()`` is written as a coroutine so the protocol can be expressed in
+  sequential steps.
+- The RX callback resumes the coroutine whenever a receive operation completes.
+- TX and RX share the same GPIO pin, which is required for 1-wire signaling.
+
+What ``decodeBytes()`` does:
+
+- It examines the low-duration part of each received symbol.
+- Short low pulses are interpreted as binary ``1``.
+- Longer low pulses are interpreted as binary ``0``.
+- Bits are shifted into bytes in least-significant-bit-first order.
+
+Protocol flow:
+
+1. Reset the bus.
+2. Send ``0xCC`` and ``0x44`` to skip ROM selection and start temperature
+   conversion.
+3. Wait for the conversion to complete.
+4. Reset the bus again.
+5. Send ``0xCC`` and ``0xBE`` to read the scratchpad.
+6. Decode the returned bytes into a temperature value.
+
+Why the example uses ``0xFF`` during reads:
+
+In 1-wire, the master must still generate timing slots while reading. Sending a
+series of one bits creates those read slots, and the sensor alters the observed
+pulse widths to encode its response.
+
+Garbage-Collection Consideration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One subtle issue in coroutine-driven code like this is object lifetime. The
+example intentionally keeps the logic focused on protocol flow, but a production
+implementation should keep an explicit reference to the coroutine or wrap the
+entire behavior in a long-lived object.
+
+Without a stable reference, Lua's garbage collector could reclaim the coroutine
+while it is waiting for an event. If that happened, the callback would never
+resume the protocol.
+
+Practical Guidance
+------------------
+
+- Start by choosing a resolution that makes your protocol timing easy to reason
+  about.
+- Use direct symbols when you are hand-crafting pulse sequences.
+- Use byte encoding when the protocol naturally describes timing for bit ``0``
+  and bit ``1``.
+- Pair TX and RX channels on the same GPIO for bidirectional single-wire buses.
+- Always think about cleanup and object lifetime when running long-lived RMT
+  activity from LSP or hot-reloaded code.
+- If your timing values are hard to read, lower the resolution so common pulse
+  widths convert to simple integer tick counts.

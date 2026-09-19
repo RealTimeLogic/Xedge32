@@ -9,10 +9,15 @@
  * terms and conditions of the included License Agreement.
  */
 #include <sys/param.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
 #include <esp_sntp.h>
+
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
 #include <esp_wifi.h>
+#endif
 
 #include <esp_mac.h>
 #include <esp_event.h>
@@ -25,23 +30,53 @@
 #include "CfgESP32.h"
 #include "NetESP32.h"
 
-#ifdef CONFIG_ETH_ENABLED
+// We check if there is ANY Ethernet hardware enabled in the current build
+#if defined(CONFIG_ETH_USE_SPI_ETHERNET) || defined(CONFIG_ETH_USE_ESP32_EMAC) 
+    #define XEDGE_HAS_ACTIVE_ETHERNET 1
+#endif
+
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #include <esp_eth_mac.h>
 #include <esp_eth.h>
 #endif
+
+#if CONFIG_XEDGE_ETH_PHY_LAN8720
+    #include "esp_eth_phy_lan87xx.h"
+#elif CONFIG_XEDGE_ETH_PHY_IP101
+    #include "esp_eth_phy_ip101.h"  
+#elif CONFIG_XEDGE_ETH_PHY_KSZ8041
+    #include "esp_eth_phy_ksz80xx.h" 
+#elif CONFIG_XEDGE_ETH_PHY_RTL8201
+    #include "esp_eth_phy_rtl8201.h" 
+#elif CONFIG_XEDGE_ETH_PHY_DP83848
+    #include "esp_eth_phy_dp83848.h"
+#elif CONFIG_XEDGE_ETH_PHY_W5500
+    #include "esp_eth_mac_w5500.h"
+    #include "esp_eth_phy_w5500.h"
+#elif CONFIG_XEDGE_ETH_PHY_DM9051 
+    #include "esp_eth_phy_dm9051.h"
+    #include "esp_eth_mac_dm9051.h"
+#endif 
 
 #define WIFI_SCAN_LIST_SIZE 10
 
 static const char TAG[]={"X"};
 
-static uint8_t gotIP = FALSE; /* if IP set */
+// We replaced 'gotIP' and 'semGotIp' with a single Event Group
+static EventGroupHandle_t netEventGroup = NULL;
+const int GOT_IP_BIT = BIT0;
+#define WIFI_DISCONNECT_REQUESTED_BIT BIT1
 
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_eth_mac_t *s_mac = NULL;
 static esp_eth_phy_t *s_phy = NULL;
 static esp_eth_netif_glue_handle_t s_eth_glue = NULL;
+static bool s_eth_event_registered = false;
+#ifdef CONFIG_ETH_USE_SPI_ETHERNET
 static spi_host_device_t spiHostId = 0;
+static bool s_spi_bus_initialized = false;
+#endif
 #endif
 
 static esp_netif_t *wifi_netif = NULL;
@@ -140,18 +175,63 @@ static void netExecXedgeEvent(const char* cmd, char* param1, char* param2, char*
    xQueueSend(eventBrokerQueue, &n, 0);
 }
 
-static void netXedgeEventInit(void)
+/* HttpTrace can schedule Lua ontrace callbacks. IDF event tasks must
+   neither call it directly nor wait for the BAS dispatcher mutex. */
+typedef struct {
+   int prio;
+   char text[160];
+} NetTraceMessage;
+
+static void netTraceCB(EventBrokerCallbackArg arg)
+{
+   NetTraceMessage* msg = (NetTraceMessage*)arg.ptr;
+   ThreadMutex_set(soDispMutex);
+   HttpTrace_printf(msg->prio, "%s", msg->text);
+   ThreadMutex_release(soDispMutex);
+   baFree(msg);
+}
+
+static void netTrace(int prio, const char* fmt, ...)
+{
+   NetTraceMessage* msg = (NetTraceMessage*)baMalloc(sizeof(NetTraceMessage));
+   if(msg)
+   {
+      va_list args;
+      msg->prio = prio;
+      va_start(args, fmt);
+      vsnprintf(msg->text, sizeof(msg->text), fmt, args);
+      va_end(args);
+      EventBrokerQueueNode node = {.callback=netTraceCB, .arg.ptr=msg};
+      if(xQueueSend(eventBrokerQueue, &node, 0) != pdTRUE)
+         baFree(msg);
+   }
+}
+
+static esp_err_t netXedgeEventInit(void)
 {
 static StaticQueue_t xStaticQueue;
 
+   if(eventBrokerQueue != NULL)
+      return ESP_OK;
+
    eventBrokerQueue = xQueueCreateStatic(20, sizeof(EventBrokerQueueNode), 
                                          eventBrokerQueueBuf, &xStaticQueue);
-   
-   xTaskCreate(eventBrokerTask, "eventBroker", 2048, 0, configMAX_PRIORITIES-1, 0);
+   if(eventBrokerQueue == NULL)
+      return ESP_ERR_NO_MEM;
+
+   if(xTaskCreate(eventBrokerTask, "eventBroker", 2048, 0,
+                  configMAX_PRIORITIES-1, 0) != pdPASS)
+   {
+      vQueueDelete(eventBrokerQueue);
+      eventBrokerQueue = NULL;
+      return ESP_ERR_NO_MEM;
+   }
+   return ESP_OK;
 }
 
 const char* wifiAuthMode(int authmode, int print)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    const char* msg;
    const char pre[]={"Authmode \t"};
    switch (authmode)
@@ -170,10 +250,14 @@ const char* wifiAuthMode(int authmode, int print)
    if(print)
       HttpTrace_printf(0,"%s%s\n",pre,msg);
    return msg;
+#else
+   return NULL;
+#endif
 }
 
 const char* wifiCipherType(int pcipher, int gcipher, int print, const char** pciphers)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    const char* msg;
    const char* pre="Pairwise Cipher\t";
    switch(pcipher)
@@ -203,6 +287,9 @@ const char* wifiCipherType(int pcipher, int gcipher, int print, const char** pci
    if(print)
       HttpTrace_printf(0,"%s%s\n",pre,msg);
    return msg;
+#else
+   return NULL;
+#endif
 }
 
 
@@ -211,6 +298,7 @@ void wifiScan(int print, lua_State* L,
                         const char* authmode,const char*  pchiper,
                         const char* gcipher, int channel))
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    uint16_t number = WIFI_SCAN_LIST_SIZE;
    wifi_ap_record_t apInfo[WIFI_SCAN_LIST_SIZE];
    uint16_t apCount = 0;
@@ -242,6 +330,7 @@ void wifiScan(int print, lua_State* L,
       cb(L,apInfo[i].ssid,apInfo[i].rssi,authmode,pcipher,gcipher,
          apInfo[i].primary);
    }
+#endif
 }
 
 static void onSntpSync(struct timeval *tv)
@@ -263,14 +352,16 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
    char* param1 = (char*)netCheckAlloc(baMalloc(16));
    char* param2 = (char*)netCheckAlloc(baMalloc(16));
    char* param3 = (char*)netCheckAlloc(baMalloc(16));
-   gotIP=TRUE;
+
+   xEventGroupSetBits(netEventGroup, GOT_IP_BIT);
+
    basprintf(param1, IPSTR,IP2STR(&ipInfo.ip));
    basprintf(param2, IPSTR,IP2STR(&ipInfo.netmask));
    basprintf(param3, IPSTR,IP2STR(&ipInfo.gw));
 
    if(esp_log_level_get("*") < ESP_LOG_INFO) 
    {
-      HttpTrace_printf(0, "\033[32m\nip: %d.%d.%d.%d, mask: %d.%d.%d.%d, gw: %d.%d.%d.%d\033[0m\n", 
+      netTrace(0, "\033[32m\nip: %d.%d.%d.%d, mask: %d.%d.%d.%d, gw: %d.%d.%d.%d\033[0m\n",
                            IP2STR(&ipInfo.ip),
                            IP2STR(&ipInfo.netmask),
                            IP2STR(&ipInfo.gw));
@@ -284,9 +375,6 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
    {
       netExecXedgeEvent("eth", param1, param2, param3);
    }
-
-//   if(semGotIp)
-//      xSemaphoreGive(semGotIp);
 }
 
 /**
@@ -306,6 +394,7 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
    {
       if(WIFI_EVENT_STA_CONNECTED == eventId)
       {
+         xEventGroupClearBits(netEventGroup, WIFI_DISCONNECT_REQUESTED_BIT);
          netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("sta"), 0);
          
          // Disable AP mode upon successful Wi-Fi connection.
@@ -314,8 +403,9 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       else if(WIFI_EVENT_STA_DISCONNECTED == eventId) 
       {
          wifi_event_sta_disconnected_t* d = (wifi_event_sta_disconnected_t*)eventData;
-         HttpTrace_printf(9, "WiFi disconnect ev. %d\n", d->reason);
-         if(gotIP)
+         netTrace(9, "WiFi disconnect ev. %d\n", d->reason);
+
+         if(xEventGroupGetBits(netEventGroup) & GOT_IP_BIT)
          {
             netExecXedgeEvent("wifi", baStrdup("down"), baStrdup("sta"), 0);
          }
@@ -325,7 +415,16 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
             basnprintf(param, 20, "%d", d->reason);
             netExecXedgeEvent("wifi", param, 0, 0);
          }
-         gotIP=FALSE;
+
+         xEventGroupClearBits(netEventGroup, GOT_IP_BIT);
+         /* Reason 8 can also come from the AP. Suppress the retry only
+          * when we requested a disconnect to replace the configuration. */
+         if(d->reason == WIFI_REASON_ASSOC_LEAVE &&
+            (xEventGroupGetBits(netEventGroup) & WIFI_DISCONNECT_REQUESTED_BIT))
+         {
+            xEventGroupClearBits(netEventGroup, WIFI_DISCONNECT_REQUESTED_BIT);
+            return;
+         }
 
          // Check if AP mode was user-requested and manage transitions accordingly
          if(apMode == AP_MODE_USER_REQUESTED)
@@ -359,18 +458,20 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          }
          else 
          {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
             esp_wifi_connect();
+#endif
          }
       }
       else if(eventId == WIFI_EVENT_AP_STACONNECTED) 
       {
          wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) eventData;
-         HttpTrace_printf(9, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
+         netTrace(9, "station "MACSTR" join, AID=%d", MAC2STR(event->mac), event->aid);
       } 
       else if(eventId == WIFI_EVENT_AP_STADISCONNECTED) 
       {
          wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) eventData;
-         HttpTrace_printf(9, "station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
+         netTrace(9, "station "MACSTR" leave, AID=%d", MAC2STR(event->mac), event->aid);
       } 
       else
       {
@@ -382,7 +483,7 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
    {
       ip_event_got_ip_t* event = (ip_event_got_ip_t*)eventData;
       netEventGotIP(eventId, event->ip_info);
-      HttpTrace_printf(9, "Interface \"%s\" up\n",
+      netTrace(9, "Interface \"%s\" up\n",
                        esp_netif_get_desc(event->esp_netif));
    }
 }
@@ -394,6 +495,8 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
  */
 static esp_err_t netWifiStart(void)
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
+
    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &onNetEvent, NULL));
    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &onNetEvent, NULL));
       
@@ -408,8 +511,12 @@ static esp_err_t netWifiStart(void)
    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
    ESP_ERROR_CHECK(esp_wifi_start());
-
+   
    return ESP_OK;
+#else
+   ESP_LOGE(TAG, "Wi-Fi is not compiled/supported on this hardware.");
+   return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -421,6 +528,7 @@ static esp_err_t netWifiStart(void)
  */
 static esp_err_t netWifiStop(bool unregHandler) 
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    printf("Closing Wi-Fi connection\n");
   
    if(wifi_netif != NULL) 
@@ -439,6 +547,7 @@ static esp_err_t netWifiStop(bool unregHandler)
       esp_netif_destroy(wifi_netif);
       wifi_netif = NULL;
    }
+#endif
 
    return ESP_OK;
 }
@@ -452,7 +561,7 @@ static esp_err_t netWifiStop(bool unregHandler)
  */ 
 esp_err_t netWifiApStart(bool regHandler)
 {
-   ESP_ERROR_CHECK(esp_netif_init());
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    ap_netif = esp_netif_create_default_wifi_ap();
 
    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -510,7 +619,11 @@ esp_err_t netWifiApStart(bool regHandler)
    netExecXedgeEvent("wifi", baStrdup("up"), baStrdup("ap"), 0);
    netEventGotIP(IP_EVENT_STA_GOT_IP, ipInfo);
    
-   return ESP_OK;          
+   return ESP_OK;
+#else
+   ESP_LOGE(TAG, "Wi-Fi is not compiled/supported on this hardware.");
+   return ESP_ERR_NOT_SUPPORTED;
+#endif          
 }
 
 /**
@@ -520,6 +633,7 @@ esp_err_t netWifiApStart(bool regHandler)
  */ 
 static esp_err_t netWifiApStop(void) 
 {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
    printf("Closing Wi-Fi AP connection\n");
   
    if(ap_netif != NULL) 
@@ -534,6 +648,7 @@ static esp_err_t netWifiApStop(void)
       esp_netif_destroy(ap_netif);
       ap_netif = NULL;
    }
+#endif
 
    return ESP_OK;
 }
@@ -542,55 +657,89 @@ static esp_err_t netWifiApStop(void)
  * @brief Stop the Ethernet network on the ESP32.
  *
  * @note: It’s not recommended to uninstall Ethernet driver unless it won’t 
- *        get used any more in application code. To uninstall Ethernet driver, 
- *        you have to make sure, all references to the driver are released. 
- *        Ethernet driver can only be uninstalled successfully when reference 
- *        counter equals to one.
- *    
- * @return ESP_OK if the ethernet connection was stoped.
+ * get used any more in application code. To uninstall Ethernet driver, 
+ * you have to make sure, all references to the driver are released. 
+ * Ethernet driver can only be uninstalled successfully when reference 
+ * counter equals to one.
+ * * @return ESP_OK if the ethernet connection was stoped.
  */
-static esp_err_t netEthStop(void)
+static esp_err_t netEthRelease(void)
 {
-   printf("Closing Ethernet connection\n");
-#ifdef CONFIG_ETH_ENABLED    
-   if((eth_netif != NULL) && (s_eth_handle != NULL)) 
-   {
-      ESP_ERROR_CHECK(esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent));
-      ESP_ERROR_CHECK(esp_eth_stop(s_eth_handle));
-      ESP_ERROR_CHECK(esp_eth_del_netif_glue(s_eth_glue));
-      s_eth_glue = NULL;
-       
-      vTaskDelay(pdMS_TO_TICKS(100));
-      ESP_ERROR_CHECK(esp_eth_driver_uninstall(s_eth_handle));
-      s_eth_handle = NULL;
-      ESP_ERROR_CHECK(s_phy->del(s_phy));
-      ESP_ERROR_CHECK(s_mac->del(s_mac));
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
+   esp_err_t err;
 
+   if(s_eth_event_registered)
+   {
+      err = esp_event_handler_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent);
+      if(err != ESP_OK)
+         return err;
+      s_eth_event_registered = false;
+   }
+
+   if(s_eth_handle != NULL)
+   {
+      err = esp_eth_stop(s_eth_handle);
+      if((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+         return err;
+   }
+
+   if(s_eth_glue != NULL)
+   {
+      err = esp_eth_del_netif_glue(s_eth_glue);
+      if(err != ESP_OK)
+         return err;
+      s_eth_glue = NULL;
+   }
+
+   if(eth_netif != NULL)
+   {
       esp_netif_destroy(eth_netif);
       eth_netif = NULL;
-      
-      spi_bus_free(spiHostId);  
    }
-#endif   
+
+   if(s_eth_handle != NULL)
+   {
+      err = esp_eth_driver_uninstall(s_eth_handle);
+      if(err != ESP_OK)
+         return err;
+      s_eth_handle = NULL;
+   }
+
+   if(s_phy != NULL)
+   {
+      err = s_phy->del(s_phy);
+      if(err != ESP_OK)
+         return err;
+      s_phy = NULL;
+   }
+
+   if(s_mac != NULL)
+   {
+      err = s_mac->del(s_mac);
+      if(err != ESP_OK)
+         return err;
+      s_mac = NULL;
+   }
+
+#ifdef CONFIG_ETH_USE_SPI_ETHERNET
+   if(s_spi_bus_initialized)
+   {
+      err = spi_bus_free(spiHostId);
+      if(err != ESP_OK)
+         return err;
+      s_spi_bus_initialized = false;
+   }
+#endif
+#endif
    return ESP_OK;
 }
 
-#if CONFIG_ETH_USE_ESP32_EMAC
-/**
- * @brief Initialize the Ethernet interface using RMII mode.
- *
- * @param mdcPin The GPIO pin number for the MDC (Management Data Clock) signal.
- * @param mdioPin The GPIO pin number for the MDIO (Management Data Input/Output) signal.
- */
-static void netRmiiInit(int mdcPin, int mdioPin)
+static esp_err_t netEthStop(void)
 {
-   eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
-   esp32_emac_config.smi_mdc_gpio_num = mdcPin; 
-   esp32_emac_config.smi_mdio_gpio_num = mdioPin; 
-   s_mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
-} 
-#endif
-
+   printf("Closing Ethernet connection\n");
+   return netEthRelease();
+}
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 #ifdef CONFIG_ETH_USE_SPI_ETHERNET
 /**
  * @brief Initialize the Ethernet interface using SPI mode.
@@ -598,7 +747,7 @@ static void netRmiiInit(int mdcPin, int mdioPin)
  * @param spi Pointer to the SPI pin configurations.
  * @param spi_devcfg Pointer to the SPI device configurations.
  */
-static void netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
+static esp_err_t netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
 {
    spi_bus_config_t buscfg = {
       .miso_io_num = spi->miso, 
@@ -608,17 +757,22 @@ static void netSpiInit(netSpi_t* spi, spi_device_interface_config_t* spi_devcfg)
       .quadhd_io_num = -1,
    };
    
-   spiHostId = spi->hostId;                                   
-   ESP_ERROR_CHECK(spi_bus_initialize(spiHostId, &buscfg, SPI_DMA_CH_AUTO));
+   spiHostId = spi->hostId;
+   esp_err_t err = spi_bus_initialize(spiHostId, &buscfg, SPI_DMA_CH_AUTO);
+   if(err != ESP_OK)
+      return err;
+   s_spi_bus_initialized = true;
    
    spi_devcfg->mode = 0;
    spi_devcfg->clock_speed_hz = spi->freq; 
    spi_devcfg->spics_io_num = spi->cs;
    spi_devcfg->queue_size = 20;
+   return ESP_OK;
 }
 #endif
+#endif
 
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
 /**
  * @brief Sets the MAC address for the ESP32's internal Ethernet MAC.
  *
@@ -652,53 +806,54 @@ uint8_t mac[6];  // Array to store the MAC address
  */
 esp_err_t netWifiConnect(char* ssid, char* password)
 {
-esp_err_t ret = ESP_OK;
-
-   esp_wifi_disconnect();
-   
-   if(ssid)
-   {
-      // FIXME esp_wifi_set_country_code
-
-      wifi_config_t cfg = {
-         .sta = {
-            .scan_method = WIFI_FAST_SCAN,
-            .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
-            .threshold.rssi = CONFIG_WIFI_SCAN_RSSI_THRESHOLD,
-            .threshold.authmode = WIFI_AUTH_OPEN
-         }
-      };
-      
-      if(strlen(ssid) < sizeof(cfg.sta.ssid) &&
-         strlen(password) < sizeof(cfg.sta.password))
-      {
-         printf("Connecting to: %s\n", ssid);
-         
-         strcpy((char*)cfg.sta.ssid, ssid);
-         strcpy((char*)cfg.sta.password, password);
-
-         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &cfg));
-         ret = esp_wifi_connect();
-         if(ESP_ERR_WIFI_NOT_STARTED == ret)
-         {
-            esp_wifi_start();
-            ret = esp_wifi_connect();
-         }
-         
-         if(ESP_OK != ret)
-         {  
-            ESP_LOGD(TAG, "WiFi connect failed: %x\n", ret);
-            ret = ESP_ERR_WIFI_SSID;
-         }
-      } 
-      else
-      {
-         esp_wifi_stop();
-         ret = ESP_ERR_INVALID_ARG;
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
+   esp_err_t ret;
+   wifi_config_t cfg = {
+      .sta = {
+         .scan_method = WIFI_FAST_SCAN,
+         .sort_method = WIFI_CONNECT_AP_BY_SIGNAL,
+         .threshold.rssi = CONFIG_WIFI_SCAN_RSSI_THRESHOLD,
+         .threshold.authmode = WIFI_AUTH_OPEN
       }
+   };
+
+   /* Reject invalid input before disturbing the current connection. */
+   if(ssid && (!password || strlen(ssid) >= sizeof(cfg.sta.ssid) ||
+               strlen(password) >= sizeof(cfg.sta.password)))
+      return ESP_ERR_INVALID_ARG;
+
+   xEventGroupSetBits(netEventGroup, WIFI_DISCONNECT_REQUESTED_BIT);
+   ret = esp_wifi_disconnect();
+   if(ret != ESP_OK)
+   {
+      xEventGroupClearBits(netEventGroup, WIFI_DISCONNECT_REQUESTED_BIT);
+      if(ret != ESP_ERR_WIFI_NOT_STARTED && ret != ESP_ERR_WIFI_NOT_CONNECT)
+         return ret;
    }
-   
+   if(!ssid)
+      return ESP_OK;
+
+   printf("Connecting to: %s\n", ssid);
+   strcpy((char*)cfg.sta.ssid, ssid);
+   strcpy((char*)cfg.sta.password, password);
+
+   /* A queued retry or a driver failure is recoverable, not a firmware panic.
+    * Preserve the error so the Lua caller can report or retry the operation. */
+   ret = esp_wifi_set_config(WIFI_IF_STA, &cfg);
+   if(ret != ESP_OK)
+      return ret;
+
+   ret = esp_wifi_connect();
+   if(ret == ESP_ERR_WIFI_NOT_STARTED)
+   {
+      ret = esp_wifi_start();
+      if(ret == ESP_OK)
+         ret = esp_wifi_connect();
+   }
    return ret;
+#else
+   return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
 
 /**
@@ -709,12 +864,9 @@ esp_err_t ret = ESP_OK;
  */
 esp_err_t netEthConnect(void)
 {
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
    if(s_eth_handle != NULL)
-   {
-      esp_eth_start(s_eth_handle);
-      return ESP_OK;
-   }
+      return esp_eth_start(s_eth_handle);
 #endif
    
    return ESP_ERR_INVALID_ARG;
@@ -728,7 +880,13 @@ esp_err_t netEthConnect(void)
  */
 static esp_err_t netEthStart(netConfig_t* cfg)
 {
-#ifdef CONFIG_ETH_ENABLED
+#ifdef XEDGE_HAS_ACTIVE_ETHERNET
+   esp_err_t err = ESP_OK;
+
+   if((eth_netif != NULL) || (s_eth_handle != NULL) ||
+      (s_mac != NULL) || (s_phy != NULL))
+      return ESP_ERR_INVALID_STATE;
+
    esp_netif_inherent_config_t esp_netif_config = ESP_NETIF_INHERENT_DEFAULT_ETH();
    esp_netif_config.if_desc = "Ethernet";
    esp_netif_config.route_prio = 64;
@@ -736,127 +894,171 @@ static esp_err_t netEthStart(netConfig_t* cfg)
      .base = &esp_netif_config,
      .stack = ESP_NETIF_NETSTACK_DEFAULT_ETH
    };
-
    eth_netif = esp_netif_new(&netif_config);
-   assert(eth_netif);
-   
+   if(eth_netif == NULL)
+   {
+      err = ESP_ERR_NO_MEM;
+      goto fail;
+   }
+
    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
    mac_config.rx_task_stack_size = CONFIG_ETHERNET_EMAC_TASK_STACK_SIZE;
    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
    phy_config.phy_addr = CONFIG_ETHERNET_PHY_ADDR;
    phy_config.reset_gpio_num = cfg->phyRstPin; 
 
-   
+#if CONFIG_ETH_USE_ESP32_EMAC
+   eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
+   if(cfg->phyMdcPin >= 0)
+      esp32_emac_config.smi_gpio.mdc_num = cfg->phyMdcPin;
+   if(cfg->phyMdioPin >= 0)
+      esp32_emac_config.smi_gpio.mdio_num = cfg->phyMdioPin;
+
+   s_mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
+#endif
    if(!strcmp("IP101", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_IP101
       s_phy = esp_eth_phy_new_ip101(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_IP101 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif  
    }
    else if(!strcmp("RTL8201", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_RTL8201
       s_phy = esp_eth_phy_new_rtl8201(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_RTL8201 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
    else if(!strcmp("LAN87XX", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_LAN8720
       s_phy = esp_eth_phy_new_lan87xx(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_LAN8720 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
    else if(!strcmp("DP83848", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_DP83848
       s_phy = esp_eth_phy_new_dp83848(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_DP83848 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
    else if(!strcmp("KSZ80XX", cfg->adapter))
    {
-#if CONFIG_ETH_USE_ESP32_EMAC
-      netRmiiInit(cfg->phyMdcPin, cfg->phyMdioPin);
+#if CONFIG_XEDGE_ETH_PHY_KSZ8041
       s_phy = esp_eth_phy_new_ksz80xx(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_USE_ESP32_EMAC undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_KSZ8041 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
    /* dm9051 ethernet driver is based on spi driver */
    else if(!strcmp("DM9051", cfg->adapter))
    {
-#if CONFIG_ETH_SPI_ETHERNET_DM9051
-      spi_device_interface_config_t spi_devcfg;
-      netSpiInit(&cfg->spi, &spi_devcfg);
+#if CONFIG_XEDGE_ETH_PHY_DM9051
+      spi_device_interface_config_t spi_devcfg = {0};
+      err = netSpiInit(&cfg->spi, &spi_devcfg);
+      if(err != ESP_OK)
+         goto fail;
                                                                      
       eth_dm9051_config_t dm9051_config = ETH_DM9051_DEFAULT_CONFIG(cfg->spi.hostId, &spi_devcfg);
       dm9051_config.int_gpio_num = cfg->spi.irq; 
       s_mac = esp_eth_mac_new_dm9051(&dm9051_config, &mac_config);
       s_phy = esp_eth_phy_new_dm9051(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_DM9051 undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_PHY_DM9051 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
    /* w5500 ethernet driver is based on spi driver */
    else if(!strcmp("W5500", cfg->adapter))
    {
-#if CONFIG_ETH_SPI_ETHERNET_W5500
+#if CONFIG_XEDGE_ETH_PHY_W5500
       spi_device_interface_config_t spi_devcfg = {0};
-      netSpiInit(&cfg->spi, &spi_devcfg);
+      err = netSpiInit(&cfg->spi, &spi_devcfg);
+      if(err != ESP_OK)
+         goto fail;
                                                                   
       eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(cfg->spi.hostId, &spi_devcfg);
       w5500_config.int_gpio_num = cfg->spi.irq; 
       s_mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
       s_phy = esp_eth_phy_new_w5500(&phy_config);
 #else
-   ESP_LOGD(TAG, "CONFIG_ETH_SPI_ETHERNET_W5500 undef");
-   return ESP_ERR_INVALID_ARG;  
+   ESP_LOGD(TAG, "CONFIG_XEDGE_ETH_W5500 undef");
+   err = ESP_ERR_NOT_SUPPORTED;
+   goto fail;
 #endif 
    }
-  
    else 
    {
-      return ESP_ERR_INVALID_ARG;
+      err = ESP_ERR_INVALID_ARG;
+      goto fail;
    }
-   
-   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent, NULL));
+
+   if((s_mac == NULL) || (s_phy == NULL))
+   {
+      err = ESP_ERR_NO_MEM;
+      goto fail;
+   }
+
+   err = esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &onNetEvent, NULL);
+   if(err != ESP_OK)
+      goto fail;
+   s_eth_event_registered = true;
    
    // Install Ethernet driver
    esp_eth_config_t config = ETH_DEFAULT_CONFIG(s_mac, s_phy);
-   esp_err_t err = esp_eth_driver_install(&config, &s_eth_handle);
-
+   err = esp_eth_driver_install(&config, &s_eth_handle);
    if(err != ESP_OK)
-   {
-      return err;
-   }
+      goto fail;
       
    if(netIsAdapterSpi(cfg->adapter))
    {
-      netSetMac();
+      err = netSetMac();
+      if(err != ESP_OK)
+         goto fail;
    }
    
    // combine driver with netif
    s_eth_glue = esp_eth_new_netif_glue(s_eth_handle);
-   esp_netif_attach(eth_netif, s_eth_glue);
-#endif
+   if(s_eth_glue == NULL)
+   {
+      err = ESP_ERR_NO_MEM;
+      goto fail;
+   }
+   err = esp_netif_attach(eth_netif, s_eth_glue);
+   if(err != ESP_OK)
+      goto fail;
 
-   return ESP_OK; 
+   return ESP_OK;
+
+fail:
+   ESP_LOGE(TAG, "Ethernet initialization failed: %s", esp_err_to_name(err));
+   {
+      esp_err_t cleanup_err = netEthRelease();
+      if(cleanup_err != ESP_OK)
+         ESP_LOGE(TAG, "Ethernet cleanup failed: %s", esp_err_to_name(cleanup_err));
+   }
+   return err;
+#else
+   ESP_LOGE(TAG, "ETH is not compiled/supported on this hardware.");
+   return ESP_ERR_NOT_SUPPORTED;
+#endif
 }
     
 /**
@@ -885,42 +1087,66 @@ int netIsAdapterRmii(char* adapter)
  * @brief Initialize and start the network interfaces.
  *        If it the configuration has a valid adapter starts the appropriate network interface.
  *        Sets up SNTP (Simple Network TimeProtocol) configuration for time synchronization.
- * @return false if there are no configured adapters, otherwise true.
+ * @return ESP_OK when the selected interface was initialized.
  */   
-bool netInit(void) 
+esp_err_t netInit(void)
 {
-   netConfig_t cfg;
+   netConfig_t cfg = {0};
+   esp_err_t err;
    
-   ESP_ERROR_CHECK(esp_netif_init());
-   ESP_ERROR_CHECK(esp_event_loop_create_default());
-   
-   gpio_install_isr_service(0);
-    
-   cfgGetNet(&cfg);
-  
+   if(netEventGroup == NULL) 
+   {
+      netEventGroup = xEventGroupCreate();
+      if(netEventGroup == NULL)
+         return ESP_ERR_NO_MEM;
+   }
+
+   err = esp_netif_init();
+   if(err != ESP_OK)
+      return err;
+   err = esp_event_loop_create_default();
+   if(err != ESP_OK)
+      return err;
+
+   err = gpio_install_isr_service(0);
+   if((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))
+      return err;
+
+   err = netXedgeEventInit();
+   if(err != ESP_OK)
+      return err;
+
+   err = cfgGetNet(&cfg);
+   if(err != ESP_OK)
+      return err;
+
    if(!strcmp("wifi", cfg.adapter))
    {   
-      netWifiStart();
+      err = netWifiStart();
    }
    else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
    {
-      netEthStart(&cfg);      
+      err = netEthStart(&cfg);
    }
-   
-   netXedgeEventInit();
-         
+   else if(!strcmp("close", cfg.adapter))
+   {
+      err = netWifiApStart(true);
+   }
+   else
+   {
+      ESP_LOGE(TAG, "Unknown network adapter: %s", cfg.adapter);
+      return ESP_ERR_INVALID_ARG;
+   }
+
+   if(err != ESP_OK)
+      return err;
+
    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
    esp_sntp_setservername(0, "pool.ntp.org");
    esp_sntp_init();
    sntp_set_time_sync_notification_cb(onSntpSync);
-   
-   if(strcmp("close", cfg.adapter)) // STA mode if not equal
-   {
-      return true; // STA mode
-   }
-   // Start network in AP mode 
-   netWifiApStart(true);
-   return false; // AP mode
+
+   return ESP_OK;
 }
 
 
@@ -1018,4 +1244,23 @@ esp_err_t ret = ESP_OK;
    return ret;
 }
 
+/** 
+ * @brief This code is called from xedge.c just before starting the socket
+ * dispatcher SoDisp. We need to prevent the dispatcher from running
+ * until we get an IP address, since there are spinlock race
+ * conditions deep within ESP IDF libs.
+ * Note: to enable use -DxedgeWait4Network=xedge32Wait4Network in the main/CMakeList.txt
+ */
+void xedge32Wait4Network(void)
+{
+    // Wait up to 1.5 seconds for the GOT_IP_BIT. 
+    // If it is already set, it passes through immediately
+    xEventGroupWaitBits(
+        netEventGroup,
+        GOT_IP_BIT,
+        pdFALSE, // Do NOT clear the bit on exit (we want it to remain "connected")
+        pdTRUE,
+        pdMS_TO_TICKS(1500)
+    );
+}
 

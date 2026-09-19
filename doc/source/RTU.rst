@@ -1,105 +1,189 @@
 Modbus RTU Module
-====================
+=================
 
-This Lua module extends the functionality of the Barracuda App Server's Modbus TCP Client by adding support for RTU (RS-232 and RS-485) communication. Essentially, it acts as a driver that enables the Modbus TCP Client to operate as a Modbus RTU Client. This module uses the :ref:`uart-api`.
+This Lua module extends the Barracuda App Server Modbus TCP client so it can
+communicate over Modbus RTU on serial links such as RS-232 and RS-485. In
+practice, the module acts as a transport adapter: it keeps the familiar Modbus
+client API while using the :ref:`UART API <uart-api>` for the underlying serial
+communication.
 
-.. note:: The Lua module is included in the Xedge32 firmware but may be removed in later versions and provided as a separate module.
+.. note::
 
-.. code-block:: lua
+   The module is currently included in the Xedge32 firmware, but it may be
+   moved into a separately distributed Lua module in a future release.
 
-   rtu=require"modbus.rtu".connect(port, config)
+Creating an RTU Client
+----------------------
 
-Create a Modbus RTU object.
-
-**Parameters:**
-
-The port and config parameters are sent to the :ref:`uart-func` function. The config table takes one additional option, which optionally sets the `Modbus TCP Client's onclose configuration option <https://realtimelogic.com/ba/doc/?url=Modbus.html#onclose>`_.
-
-**Returns:**
-
-- A new Modbus RTU object with the same API methods as provided by the `Modbus TCP Client <https://realtimelogic.com/ba/doc/?url=Modbus.html>`_. The returned Modbus object is pre-configured for asynchronous cosocket mode, thus a callback is required for all method operations. See the example below for details.
-
-**Example:**
+Function signature:
 
 .. code-block:: lua
 
-    local cfg = {
-        baudrate = 9600,
-        txpin = 42,
-        rxpin = 41,
-        onclose=function(err) trace("Serial Comm. Err.",err) end
-    }
+   mb = require"modbus.rtu".connect(port [,config])
 
-    -- Does not return errors, but may throw on incorrect settings
-    mb=require"modbus.rtu".connect(1,cfg)
- 
-    local function mycallback(data, err, transaction, mb)
-       trace("table" == type(data) and ba.json.encode(data) or data, err)
-    end
-    local unitId=1 -- Optional for RS232, required for multidrop RS485.
-    mb:wholding(0, {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, unitId, mycallback)
-    mb:rholding(0, 20, unitId, mycallback)
+Parameters
+~~~~~~~~~~
 
-The above callback prints the following, which are the Modbus server's return values for the calls to mb:wholding() and mb:rholding(). The nil value at the end is from the ``err`` argument.
+* ``port`` (integer): required UART port identifier; see :ref:`uart-func`.
+* ``config`` (table): optional UART configuration, with the additional fields
+  below. The adapter copies the table rather than modifying it.
+* ``config.timeout`` (number): response timeout in milliseconds; defaults to
+  1000. It starts when a queued request is transmitted. The adapter separately
+  sets the UART receive timeout to 4 symbol periods for frame collection.
+* ``config.onclose`` (function): optional callback receiving ``err`` (string or
+  number) and ``mb`` (client table) when communication ends with an error. See
+  the `Modbus client callback rules
+  <https://realtimelogic.com/ba/doc/?url=Modbus.html#onclose>`_.
+
+Other settings are forwarded to :ref:`uart-func`. The adapter supplies its own
+UART callback and disables pattern matching, so ``config.callback`` and
+``config.pattern`` are not used by this connection.
+
+Return values
+~~~~~~~~~~~~~
+
+The result ``mb`` (table) is a Modbus object with the same method set as the `Modbus
+TCP client <https://realtimelogic.com/ba/doc/?url=Modbus.html>`_.
+
+The returned object is preconfigured for asynchronous cosocket operation, which
+means you should provide a callback for each Modbus operation.
+The adapter creates and starts its receiving coroutine internally. Its public
+connect() function does not return a start function.
+
+Throws
+~~~~~~
+
+Invalid configuration can throw in the UART constructor. Failure to create the
+UART or start the receiving coroutine also throws. Errors raised by a response
+callback are reported through Xedge's error reporting and the client is closed.
+RTU request methods require a unit identifier from 1 through 247, defaulting to
+1. Unit 0 broadcasts are unsupported and throw before the request is queued or
+transmitted. A rejected request leaves the client usable.
+
+Responses and closure
+--------------------
+
+Requests are transmitted one at a time. After a response is validated and its
+callback returns, the next queued request can transmit. Closing from the callback
+prevents that transmission. CRC errors, short invalid replies and timeouts close the
+client; a valid Modbus exception response is delivered as its numeric error code.
+The next queued request is not transmitted after a CRC error or exception.
+Frames addressed to a different unit are ignored. They do not complete the
+pending request, release the next queued request, or restart its response timer.
+Replies from the requested unit must also match the requested operation and
+payload size. The shared Modbus client reports mismatches as ``invalidresponse``.
+
+Calling ``mb:close()`` closes the UART, cancels the response timer, releases
+queued outgoing data and wakes a suspended receiver. With the updated Modbus
+client, pending callbacks receive ``nil, "closed", transaction, mb`` and
+``onclose`` is suppressed for explicit closure. Here ``transaction`` is an
+integer identifier and ``mb`` is the client table. The receiving coroutine
+delivers these notifications; repeated close calls do not repeat them.
+
+Basic Example
+-------------
+
+.. code-block:: lua
+
+   local cfg = {
+      baudrate = 9600,
+      txpin = 42,
+      rxpin = 41,
+      onclose = function(err)
+         trace("Serial Comm. Err.", err)
+      end
+   }
+
+   -- Does not return errors, but may throw on incorrect settings
+   local mb = require"modbus.rtu".connect(1, cfg)
+
+   local function mycallback(data, err, transaction, client)
+      trace("table" == type(data) and ba.json.encode(data) or data, err)
+   end
+
+   local unitId = 1
+   mb:wholding(0, {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20}, unitId, mycallback)
+   mb:rholding(0, 20, unitId, mycallback)
+
+The callback above prints results similar to:
 
 .. code-block:: text
 
-    true  nil
-    [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  nil
+   true  nil
+   [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]  nil
 
-The above example configures the UART for RS232 mode or full duplex RS485. Half duplex (two-wire) RS485 communication requires collision detection and a chip such as ADM483 wired to the RTS GPIO pin. See the UART option ``rs485`` for details. Half duplex RS485 mode can be configured as follows:
+RS-232, Full-Duplex RS-485, and Half-Duplex RS-485
+--------------------------------------------------
+
+The first example configures the UART for RS-232 or full-duplex RS-485.
+
+For half-duplex two-wire RS-485, you also need collision-detection support and
+a suitable transceiver such as ADM483 wired to the RTS GPIO pin. In that case,
+enable the UART ``rs485`` option:
 
 .. code-block:: lua
 
-    local cfg = {
-        baudrate = 9600,
-        txpin = 42,
-        rxpin = 41,
-        rtspin=40,
-        rs485=true
-    }
+   local cfg = {
+      baudrate = 9600,
+      txpin = 42,
+      rxpin = 41,
+      rtspin = 40,
+      rs485 = true
+   }
 
-Modbus Test Bench:
--------------------
+Modbus Test Bench
+-----------------
 
-(How to set up a two-wire RS485 Modbus test bench)
-
-
-The following image shows our test bench.
+The image below shows a simple two-wire RS-485 test setup.
 
 .. image:: img/Modbus-test-bench.jpg
    :align: center
+   :alt: Modbus RTU test bench
 
+Test Bench Components
+~~~~~~~~~~~~~~~~~~~~~
 
-We used the following components for our test bench:
+- ESP32-S3
+- ANMBEST MAX485 RS485 transceiver module
+- USB-to-RS485 converter
+- A Modbus slave simulator running on Windows and connected to the converter
 
-- ESP32s3
-- ANMBEST MAX485 RS485 Transceiver Module
-- USB to RS485 converter
-- Modbus Slave Simulator running on Windows (connected to the USB to RS485 converter)
+Wiring Example
+~~~~~~~~~~~~~~
 
-How to wire the components:
-############################
+The following wiring matches the half-duplex configuration shown earlier.
 
-The following wiring matches the above configuration table.
+Power connections:
 
-Power Connections
-^^^^^^^^^^^^^^^^^
+- **VCC** on MAX485 to **5V** on the ESP32
+- **GND** on MAX485 to **GND** on the ESP32
 
-- **VCC** on MAX485 to **5V** on ESP32
-- **GND** on MAX485 to **GND** on ESP32
+Data connections:
 
-Data Connections
-^^^^^^^^^^^^^^^^
+- **DI** on MAX485 to GPIO 42 on the ESP32 for **TX**
+- **RO** on MAX485 to GPIO 41 on the ESP32 for **RX**
 
-- **DI** on MAX485 to GPIO pin 42 on the ESP32: **TX**
-- **RO** on MAX485 to GPIO pin 41 on the ESP32: **RX**
+Control pin:
 
-Control Pins
-^^^^^^^^^^^^
-- **RE and DE** on MAX485 connected together, then to GPIO pin 40: **RTS**
+- **RE** and **DE** connected together, then wired to GPIO 40 for **RTS**
 
-RS485 Terminals
-^^^^^^^^^^^^^^^
+RS-485 bus terminals:
 
-- **A and B** terminals on MAX485 to the A and B lines on the USB to RS485 converter
+- **A** and **B** on the MAX485 to the matching **A** and **B** lines on the
+  USB-to-RS485 converter
+
+For longer RS-485 wiring, also consider termination and biasing. Short bench
+tests may work without them, but production wiring should follow normal RS-485
+bus design rules.
+
+Practical Guidance
+------------------
+
+- Use RS-232 or full-duplex RS-485 when the wiring and hardware already support
+  separate send and receive paths.
+- Use half-duplex RS-485 when you need a multidrop industrial bus, but make
+  sure your transceiver and RTS wiring are configured correctly.
+- Keep the callback-based programming style from the Modbus client API; the RTU
+  transport layer is designed around asynchronous requests and responses.
+- If requests time out, first verify baud rate, parity, slave unit ID, A/B
+  polarity, and shared ground before changing the Lua code.

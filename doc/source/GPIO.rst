@@ -1,108 +1,170 @@
-
 GPIO API
-===========
+========
 
-This API provides access to the GPIO (General Purpose Input/Output) subsystem.
+The GPIO API provides access to the ESP32's general-purpose input and output
+pins. This is the API you use to read buttons, drive LEDs, control enable pins,
+and react to digital edge transitions.
 
-esp32.gpio(pin, mode, cfg)
------------------------------------
+The API supports both simple polling and interrupt-driven operation. For
+interactive applications and responsive hardware handling, the callback-based
+approach is usually the better choice.
 
-The `gpio.init()` function initializes a GPIO pin and returns a `gpio` object.
+For simple maker projects, GPIO is often the first API to try. Use it for
+low-current logic signals, buttons, relays with proper driver circuits, and LED
+experiments with a current-limiting resistor. Do not connect motors, LED strips,
+or other high-current loads directly to an ESP32 GPIO pin.
 
-:param pin: A valid GPIO pin number.
-:param mode: The GPIO mode must be set to one of the following strings:
+Creating a GPIO Object
+----------------------
 
- - ``IN``: input-only mode.
- - ``OUT``: output-only mode.
- - ``OUTOD``: output-only mode with open-drain.
- - ``INOUTOD``: input/output mode with open-drain.
- - ``INOUT``: input/output mode.
+Function signature:
 
-:param cfg: An optional table with the following options:
+.. code-block:: lua
 
- - ``pullup``: Enables a GPIO pull-up. Defaults to ``false``.
- - ``pulldown``: Enables a GPIO pull-down. Defaults to ``false``.
- - ``callback``: A callback function. Enables interrupt mode. The interrupt is controlled by the `type` key.
- - ``type``:  The interrupt type can be set to one of the following strings:
+   gpio = esp32.gpio(pin, mode [, cfg])
 
-  - ``POSEDGE``: interrupt on rising edge.
-  - ``NEGEDGE``: interrupt on falling edge.
-  - ``ANYEDGE``: interrupt on both rising and falling edges.
+Parameters
+~~~~~~~~~~
 
-  Defaults to ``POSEDGE`` if a callback is provided; interrupts are disabled if no callback is provided.
+- ``pin``: GPIO pin number.
+- ``mode``: One of the following strings:
 
+  - ``"IN"``: Input only.
+  - ``"OUT"``: Output only.
+  - ``"OUTOD"``: Output only with open-drain behavior.
+  - ``"INOUTOD"``: Input/output with open-drain behavior.
+  - ``"INOUT"``: Input/output.
 
-gpio Object Methods
---------------------
+- ``cfg``: Optional configuration table.
 
-The `gpio` object has the following methods:
+Configuration options:
 
-gpio:value([val])
-~~~~~~~~~~~~~~~~~
+- ``pullup``: Enable the internal pull-up resistor. Default is ``false``.
+- ``pulldown``: Enable the internal pull-down resistor. Default is ``false``.
+- ``callback``: Lua callback function used for interrupt-driven input handling.
+- ``type``: Interrupt trigger type when ``callback`` is set.
 
-Sets the value of the GPIO to `true` (high) or `false` (low) or returns the GPIO value if no argument is provided.
+Supported interrupt types:
 
-gpio:close()
-~~~~~~~~~~~~
+- ``"LOW"``: Trigger while the input level is low.
+- ``"HIGH"``: Trigger while the input level is high.
+- ``"POSEDGE"``: Trigger on rising edge.
+- ``"NEGEDGE"``: Trigger on falling edge.
+- ``"ANYEDGE"``: Trigger on both rising and falling edges.
 
-Releases the GPIO, freeing the resources associated with it. Use this method when you are finished using the GPIO.
+If a callback is provided and ``type`` is omitted, the default interrupt type
+is ``"POSEDGE"``.
+
+Use edge triggers for buttons and pulse inputs when you want to react to a
+transition. Use level triggers only when the application really needs to know
+that a pin remains high or low, since a level condition can produce repeated
+interrupt activity while the level remains active.
+
+GPIO Object Methods
+-------------------
+
+``gpio:value([val])``
+~~~~~~~~~~~~~~~~~~~~~
+
+If ``val`` is provided, this method writes the pin level:
+
+- ``true`` for high
+- ``false`` for low
+
+If ``val`` is omitted, the method returns the current GPIO level.
+
+On boards where an LED is wired as active-low, ``false`` turns the LED on and
+``true`` turns it off. Check the schematic or board documentation if the output
+appears inverted.
+
+``gpio:close()``
+~~~~~~~~~~~~~~~~
+
+Releases the GPIO object and frees the underlying hardware resources.
 
 .. _GpioExamples:
 
 Examples
 --------
-The following examples are designed to be run as Lua Server Pages (LSP) pages.
 
-Example 1: Setting GPIO 18 High
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The following examples are designed to run well as Lua Server Pages (LSP), but
+the same GPIO patterns also work in regular Lua application code.
 
-The following example configures GPIO 18 for output mode, sets the GPIO high, waits for 2 seconds, then closes the GPIO. The GPIO is automatically closed since we use Lua's <close> syntax, which automatically closes the object when it goes out of scope.
+Example 1: Set GPIO 18 High
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example opens GPIO 18 as an output, drives it high, waits two seconds, and
+then automatically releases the GPIO object when it goes out of scope.
 
 .. code-block:: lua
 
-   local pin <close> = esp32.gpio(18,"OUT")
+   local pin <close> = esp32.gpio(18, "OUT")
    pin:value(true)
    ba.sleep(2000)
 
-Example 2: Turning LED On and Off
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The ``<close>`` syntax is useful when you want the resource to be released
+automatically at the end of the current scope.
 
-The following example performs a full garbage-collection cycle, sleeps for 2 seconds, then opens pin 18 for output mode, and sets the GPIO high. If you connect an LED to the pin you will see the LED turning on and stay on. When the page is refreshed, the garbage collector collects the previous instance, thus turning the LED off. We then sleep for two seconds before creating a new object. The effect is that the LED will be on until the page is refreshed, thereby turning off the LED for two seconds.
+Example 2: Toggle an LED Through Garbage Collection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example demonstrates an Xedge32 pattern that is especially convenient
+during hot reloading. When the page is refreshed, the previous GPIO object
+becomes unreachable and can be garbage-collected, which releases the pin.
 
 .. code-block:: lua
 
    collectgarbage()
    ba.sleep(2000)
-   local pin = esp32.gpio(18,"OUT")
+   local pin = esp32.gpio(18, "OUT")
    pin:value(true)
 
-Example 3: Reading Button State
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If an LED is connected to GPIO 18, it turns off briefly while the previous
+object is collected, then turns on again when the new object is created.
 
-The following example configures pin 15 as input with pulldown set to true. The code then pulls the pin for a maximum of 30 seconds. If you connect a button to the pin and press the button, the loop exits before it has looped 30 times.
+Example 3: Read a Button State
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example configures GPIO 15 as an input with a pull-down resistor and polls
+the pin once per second for up to 30 seconds.
 
 .. code-block:: lua
 
-   local pin <close> = esp32.gpio(15,"IN",{pulldown=true})
-   for i= 1,30 do
-       local val = pin:value()
-       trace(i,val)
-       if val then break end
-       ba.sleep(1000)
+   local pin <close> = esp32.gpio(15, "IN", {pulldown = true})
+   for i = 1, 30 do
+      local val = pin:value()
+      trace(i, val)
+      if val then
+         break
+      end
+      ba.sleep(1000)
    end
 
-Example 4: Using Interrupt Callback Function
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Example 4: React to a Button with an Interrupt Callback
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The following example builds on the previous example and installs an interrupt callback function that gets called at both rising and falling edges. The callback is called each time you click the button and also when you release the button. The callback is called as long as the GPIO object is not collected by Lua's garbage collector.
+This example listens for both rising and falling edges on GPIO 15. It is a
+better pattern than polling when you want fast response and less idle CPU work.
 
 .. code-block:: lua
 
-   local cfg={
-      pulldown=true,
-      type="ANYEDGE",
-      callback=function(level)
-         trace("level",level)
+   local cfg = {
+      pulldown = true,
+      type = "ANYEDGE",
+      callback = function(level)
+         trace("level", level)
       end
    }
-   trace(esp32.gpio(15,"IN", cfg))
+
+   trace(esp32.gpio(15, "IN", cfg))
+
+Practical Guidance
+------------------
+
+- Use polling when you only need occasional state checks.
+- Use callbacks for buttons, pulse inputs, and other event-driven signals.
+- Confirm the board pinout before using a GPIO number. Some ESP32 pins are
+  reserved for flash, PSRAM, USB, boot mode selection, camera, or SD card
+  hardware.
+- Prefer explicit cleanup with ``gpio:close()`` in long-running applications.
+- In short-lived LSP pages, Lua's automatic cleanup can simplify iteration.
