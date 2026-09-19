@@ -32,40 +32,42 @@ As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.c
 
 **Note:** [Xedge32](https://realtimelogic.com/ba/ESP32/) is built on the more generic [Xedge](https://realtimelogic.com/products/xedge/), which itself is based on the [Barracuda App Server library](https://realtimelogic.com/products/barracuda-application-server/). Xedge32, Xedge, and the Barracuda App Server are OEM software components designed for easy integration into OEM products. All components are [designed to be extended](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code).
 
-This branch requires ESP-IDF 6.1.x. The component manifest rejects earlier or
-later minor releases so an SDK change cannot silently select an untested API
-set. Install ESP-IDF from the
-[official repository](https://github.com/espressif/esp-idf), or select version
-6.1 with Espressif Installation Manager (EIM).
-
-The following Linux commands install ESP-IDF 6.1 and build Xedge32. They do not
-remove another installed SDK.
+Prerequisites:
 
 ```bash
 sudo apt -y update
-sudo apt -y install git wget zip flex bison gperf python3 python3-venv \
-  cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
+sudo apt -y install git zip
+```
 
-# Install ESP-IDF 6.1 in its own directory.
-mkdir -p ~/esp
-cd ~/esp
-git clone -b v6.1 --recursive https://github.com/espressif/esp-idf.git esp-idf-v6.1
-./esp-idf-v6.1/install.sh esp32,esp32s3,esp32p4
-. ./esp-idf-v6.1/export.sh
 
-# Clone Xedge32 and initialize its submodules.
+## Install ESP-IDF 6.1.
+
+See the [ESP-IDF Release v6.1](https://github.com/espressif/esp-idf/releases/tag/v6.1) for details.
+
+## Clone Xedge32 and initialize its submodules.
+
+```bash
 git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
 cd xedge
 git submodule update --init --recursive
+```
 
-# Rebuild the embedded Xedge.zip resource after changing its Lua resources.
+## Rebuild the embedded Xedge.zip resource after changing its Lua resources.
+
+```bash
 chmod +x BuildESP32ResourceFile.sh
 ./BuildESP32ResourceFile.sh
+```
 
-# Select one target. ESP32-P4 camera support is enabled by its defaults.
+## Select one target. ESP32-P4 camera support is enabled by its defaults.
+
+```bash
 export IDF_TARGET=esp32       # or esp32s3 or esp32p4
+```
 
-# Use a target-specific build directory and sdkconfig file.
+## Use a target-specific build directory and sdkconfig file.
+
+```bash
 idf.py -B build-$IDF_TARGET -D SDKCONFIG=sdkconfig.$IDF_TARGET build
 ```
 
@@ -81,11 +83,15 @@ and device details.
 After the build succeeds, flash and monitor the board. Replace the example port
 with the port assigned to your board.
 
-```bash
-# Native Linux
-idf.py -B build-$IDF_TARGET -p /dev/ttyUSB0 flash monitor
+## Native Linux
 
-# WSL1 example for Windows COM4
+```bash
+idf.py -B build-$IDF_TARGET -p /dev/ttyUSB0 flash monitor
+```
+
+## WSL1 example for Windows COM4
+
+```bash
 idf.py -B build-$IDF_TARGET -p /dev/ttyS4 -b 115200 flash monitor
 ```
 
