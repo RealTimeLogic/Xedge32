@@ -1,66 +1,85 @@
 Miscellaneous API
-==================
+=================
 
-The `esp32` module provides some miscellaneous functions.
+The ``esp32`` module also includes a set of utility functions that do not fit
+under a single peripheral category. These functions cover Wi-Fi information,
+network connection management, SD card setup, device control actions, event
+subscriptions, and OTA firmware updates.
 
-esp32.apinfo()
---------------------
+This page groups those helpers into one place so you can quickly find common
+system-level operations.
 
-Returns a Lua table with WiFi information for the connected WiFi. The table includes several fields with WiFi information, where the most important one is the 'rssi' field, which stands for Received Signal Strength Indicator. The 'rssi' field indicates the strength of the WiFi signal that the ESP32 is receiving.  RSSI is typically expressed in decibels relative to a milliwatt (dBm). The value of 'rssi' is usually negative, as it represents power loss. Here is a general guideline for interpreting 'rssi' values:
+``esp32.apinfo()``
+------------------
 
-- **-30 dBm**: Amazing. You're practically standing next to the router.
-- **-50 dBm**: Excellent. Signal strength is really strong.
-- **-60 dBm**: Good. Most online activities should work well.
-- **-70 dBm**: Fair. You might start experiencing noticeable dips in speed.
-- **-80 dBm or worse**: Poor. Connection might be spotty and unstable.
+Returns a Lua table describing the currently connected Wi-Fi network.
 
-Example using the `serpent <https://github.com/pkulchenko/serpent>`_ module for formatting.
+One of the most useful fields is ``rssi``, the Received Signal Strength
+Indicator. RSSI is reported in dBm and is usually a negative number.
+
+General RSSI guidance:
+
+- ``-30 dBm``: Outstanding signal strength.
+- ``-50 dBm``: Excellent signal strength.
+- ``-60 dBm``: Good for normal use.
+- ``-70 dBm``: Fair, but performance may start to degrade.
+- ``-80 dBm`` or lower: Weak and potentially unstable.
+
+Example using the `serpent <https://github.com/pkulchenko/serpent>`_ module for
+formatting:
 
 .. code-block:: lua
 
    local serpent = require("serpent")
    print(serpent.block(esp32.apinfo()))
 
+``esp32.loglevel(level)``
+-------------------------
 
+Controls the ESP32 system log verbosity.
 
-esp32.loglevel(level)
------------------------
-   :param level: A string representing the desired log level for the ESP32 system log. 
-   
-   This function allows you to configure the log level for the ESP32 system log.
-   The log level determines which log messages are displayed. The valid options for the ``level`` parameter are:
+Parameter:
 
-   - **none**: No log messages will be displayed.
-   - **error**: Only error messages will be displayed (default setting).
-   - **warn**: Error and warning messages will be displayed.
-   - **info**: Error, warning, and informational messages will be displayed.
-   - **debug**: Error, warning, informational, and debug messages will be displayed.
-   - **verbose**: All log messages, including verbose debug messages, will be displayed.
+- ``level``: One of ``"none"``, ``"error"``, ``"warn"``, ``"info"``,
+  ``"debug"``, or ``"verbose"``.
 
-   .. note::
-   
-      The maximum log level is configured in the menuconfig settings.
-      If an invalid log level is provided, or if the requested log level exceeds the
-      maximum level set in menuconfig, an error will be raised with a detailed message.
+Meaning of each level:
 
+- ``"none"``: Disable log output.
+- ``"error"``: Show only error messages. This is the default.
+- ``"warn"``: Show errors and warnings.
+- ``"info"``: Show errors, warnings, and informational messages.
+- ``"debug"``: Add debug messages.
+- ``"verbose"``: Show the most detailed available output.
 
-esp32.mac()
---------------------
-This function returns the ESP32's 6 byte base MAC address.
+.. note::
+
+   The maximum available log level depends on the firmware build settings in
+   ``menuconfig``. If you request a level that exceeds the compiled maximum, the
+   function raises an error.
+
+``esp32.mac()``
+---------------
+
+Returns the ESP32 base MAC address as a 6-byte Lua string.
 
 Example:
 
 .. code-block:: lua
 
-   local mac=esp32.mac()
-    -- Print MAC as hexadecimal numbers
-   print(mac:gsub(".",function(x) return string.format("%02X",string.byte(x)) end))
+   local mac = esp32.mac()
+   print(mac:gsub(".", function(x)
+      return string.format("%02X", string.byte(x))
+   end))
 
+``esp32.wscan([print])``
+------------------------
 
-esp32.wscan([print])
---------------------
+Scans for visible Wi-Fi networks and returns a list of tables, one table per
+network.
 
-Scan for Wi-Fi networks. The function returns a list of tables, where each table represents a network. The optional `print` argument can be set to `true` to print the data to :ref:`LuaShell32`.
+If the optional argument is ``true``, the function also prints the result to
+:ref:`LuaShell32`.
 
 Example:
 
@@ -68,54 +87,104 @@ Example:
 
    local fmt = string.format
    for _, net in pairs(esp32.wscan()) do
-       print(fmt("SSID: %s\nChannel: %d\nRSSI: %d\nAuthmode: %s\nPChiper: %s\nGCipher: %s\n",
-           net.ssid, net.channel, net.rssi, net.authmode, net.pchiper, net.gcipher))
+      print(fmt(
+         "SSID: %s\nChannel: %d\nRSSI: %d\nAuthmode: %s\nPChiper: %s\nGCipher: %s\n",
+         net.ssid, net.channel, net.rssi, net.authmode, net.pchiper, net.gcipher
+      ))
    end
 
-Note that this function takes some time to return.
+.. note::
 
-esp32.netconnect(network, cfg)
---------------------------------
+   Wi-Fi scanning takes time. Plan for a noticeable delay before the function
+   returns.
 
-Initiate a WiFi or wired network connection by supplying the necessary configuration parameters. This function initiates the connection process in the background and returns control immediately. The status of the connection is displayed in the :ref:`LuaShell32`. The ``cfg`` parameters are saved in NVRAM on a successful network connection. This enables the ESP32 to reconnect to the network automatically using these parameters upon restart. The device initially operates in Access Point Mode by default, with the SSID set to xedge32. The default SSID password is 12345678.
+``esp32.netconnect(network, cfg)``
+----------------------------------
 
-- ``network``: a string that can be one of:
-    * ``wifi``: Connect to a Wi-Fi network by providing the SSID and password
-    * ``W5500``:  Connect to an Ethernet network via a W5500 chip.
-- ``cfg``: a configuration table that must include:
-    * For WiFi networks:
-        * ``ssid``: the WiFi network's SSID
-        * ``pwd``: the WiFi network's password
-    * For wired networks via W5500:
-        * ``spi``: The SPI bus number to which the W5500 chip is connected.
-        * ``clk``: The GPIO pin number for the clock signal of the SPI bus.
-        * ``mosi``: The GPIO pin number for the Master Out Slave In (MOSI) signal of the SPI bus.
-        * ``miso``: The GPIO pin number for the Master In Slave Out (MISO) signal of the SPI bus.
-        * ``cs``: The GPIO pin number for the chip select signal of the W5500 chip.
-        * ``irq``: The GPIO pin number for the interrupt request signal of the W5500 chip.
-        * ``freq``: The clock frequency (in Hz) of the SPI bus.
+Starts a Wi-Fi or wired network connection in the background and returns
+immediately. Connection progress and status messages are shown in
+:ref:`LuaShell32`.
 
-    if ``cfg`` is not provided and device is in WiFi Station Mode, the device reverts back to Access Point mode.
+If the connection succeeds, the configuration is stored in NVRAM so the device
+can reconnect automatically after a restart.
 
-You can also call this function to disconnect from a network by not providing the ``cfg`` configuration table argument. For WiFi, you may call this function with new configuration options to switch to another network.
+By default, an unconfigured system starts in Access Point Mode with SSID
+``xedge32`` and password ``12345678``.
+
+Network Parameters
+~~~~~~~~~~~~~~~~~~
+
+``network``
+   One of:
+
+- ``"wifi"``: Connect through Wi-Fi.
+- ``"W5500"`` or ``"DM9051"``: Connect through SPI Ethernet when the firmware
+  includes support for that controller.
+- ``"IP101"``, ``"RTL8201"``, ``"LAN87XX"``, ``"DP83848"``, or ``"KSZ80XX"``:
+  Connect through RMII Ethernet when the firmware and board support that PHY.
+
+``cfg``
+   Configuration table. Required fields depend on the selected network type.
+
+Wi-Fi configuration fields:
+
+- ``ssid``: Wi-Fi network name.
+- ``pwd``: Wi-Fi password.
+
+SPI Ethernet configuration fields:
+
+- ``spi``: SPI bus number.
+- ``clk``: SPI clock GPIO.
+- ``mosi``: MOSI GPIO.
+- ``miso``: MISO GPIO.
+- ``cs``: Chip-select GPIO.
+- ``irq``: Interrupt GPIO.
+- ``freq``: SPI clock frequency in Hertz.
+- ``rst``: Optional PHY reset GPIO.
+
+RMII Ethernet configuration fields:
+
+- ``rst``: PHY reset GPIO.
+- ``mdio``: MDIO GPIO.
+- ``mdc``: MDC GPIO.
+
+If ``cfg`` is omitted while the device is already running in Wi-Fi Station
+Mode, the device switches back to Access Point Mode.
+
+Examples:
 
 .. code-block:: lua
 
-   -- Example 1: connecting to Wi-Fi
-   esp32.netconnect("wifi",{ssid="My-Wi-Fi", pwd="My-Password"})
-   -- Example 2: Configuring Ethernet for EdgeBox-ESP-100
-   esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
-   -- Example 3: Configuring Ethernet for LILYGO T-ETH-Lite
-   esp32.netconnect("W5500", {spi=2,clk=13,mosi=12,miso=11,cs=10,freq=40000000,irq=14})
-   -- Example 4: Revert a device operating in Station Mode to its original Access Point Mode.
+   -- Connect to Wi-Fi
+   esp32.netconnect("wifi", {ssid = "My-Wi-Fi", pwd = "My-Password"})
+
+   -- Configure Ethernet for EdgeBox-ESP-100
+   esp32.netconnect("W5500", {spi = 2, clk = 13, mosi = 12, miso = 11, cs = 10, freq = 40000000, irq = 14})
+
+   -- Configure Ethernet for LILYGO T-ETH-Lite
+   esp32.netconnect("W5500", {spi = 2, clk = 13, mosi = 12, miso = 11, cs = 10, freq = 40000000, irq = 14})
+
+   -- Configure RMII Ethernet with a DP83848 PHY
+   esp32.netconnect("DP83848", {rst = 5, mdio = 18, mdc = 23})
+
+   -- Return from Station Mode to Access Point Mode
    esp32.netconnect"wifi"
 
-esp32.sdcard(width)
----------------------------
+.. note::
 
-You can register a new disk named 'sd' if your ESP32 board includes an SDMMC interface. The `IO interface <https://realtimelogic.com/ba/doc/?url=lua.html#ba_ioinfo>`_ can then be opened by calling ``ba.openio("sd")``.
+   Ethernet support is build-dependent. If an adapter name is rejected or the
+   driver fails to start, verify that the firmware was built with the matching
+   Ethernet PHY support and that the board wiring matches the selected adapter.
 
-The function takes the following hardware dependent arguments:
+``esp32.sdcard(width)``
+-----------------------
+
+Registers a new disk named ``sd`` when the board provides an SDMMC interface.
+After configuration, you can open the device through the `IO interface
+<https://realtimelogic.com/ba/doc/?url=lua.html#ba_ioinfo>`_ with
+``ba.openio("sd")``.
+
+Supported call forms:
 
 .. code-block:: lua
 
@@ -124,121 +193,153 @@ The function takes the following hardware dependent arguments:
    esp32.sdcard(width, clk, cmd, d0, d1, d2, d3)
    esp32.sdcard(width, clk, cmd, d0, d1, d2, d3, d4, d5, d6, d7)
 
-Parameters:
-~~~~~~~~~~~~~
-- **width**: "bus width", can be 1, 4, or 8.
-- **clk, cmd, d0-d7:**  Pin configuration parameters use the defaults for the CPU if not set.
+SD Card Parameters
+~~~~~~~~~~~~~~~~~~
 
-#. ``clk``: GPIO number for the SD card clock pin.
-#. ``cmd``: GPIO number for the SD card command pin.
-#. ``d0``: GPIO number for the SD card data pin 0.
-#. ``d1``: GPIO number for the SD card data pin 1 (when 4-bit wide bus).
-#. ``d2``: GPIO number for the SD card data pin 2 (when 4-bit wide bus).
-#. ``d3``: GPIO number for the SD card data pin 3 (when 4-bit wide bus).
+- ``width``: Bus width. Valid values are ``1``, ``4``, or ``8``.
+- ``clk``: Clock pin.
+- ``cmd``: Command pin.
+- ``d0`` to ``d7``: Data pins.
 
-Default pins:
-~~~~~~~~~~~~~~~~~~~~
+Default Pins
+~~~~~~~~~~~~
 
-On ESP32, SDMMC peripheral is connected to specific GPIO pins using the IO MUX. GPIO pins cannot be customized. The following list shows the default settings:
+On **ESP32**, the SDMMC peripheral uses fixed IO-MUX-connected pins:
 
-- clk = GPIO14, cmd = GPIO15, d0 = GPIO2, 
-- d1 = GPIO4, d2 = GPIO12, d3 = GPIO13, 
-- d4 = GPIO33, d5 = GPIO34, d5 = GPIO35, d5 = GPIO36.
+- ``clk`` = GPIO14
+- ``cmd`` = GPIO15
+- ``d0`` = GPIO2
+- ``d1`` = GPIO4
+- ``d2`` = GPIO12
+- ``d3`` = GPIO13
+- ``d4`` = GPIO33
+- ``d5`` = GPIO34
+- ``d6`` = GPIO35
+- ``d7`` = GPIO36
 
-On ESP32-S3, SDMMC peripheral is connected to GPIO pins using a GPIO matrix, which enables arbitrary GPIOs to be used to connect an SD card. The following list shows the default settings:
+On **ESP32-S3** and other targets with SDMMC GPIO matrix routing, the pins are
+more flexible. The default ESP32-S3 mapping is:
 
-- clk = GPIO34, cmd = GPIO33, d0 = GPIO37, 
-- d1 = GPIO38, d2 = GPIO39, d3 = GPIO36,  
-- d4 = GPIO35, d5 = GPIO40, d6 = GPIO42, d7 = 41.
+- ``clk`` = GPIO34
+- ``cmd`` = GPIO33
+- ``d0`` = GPIO37
+- ``d1`` = GPIO38
+- ``d2`` = GPIO39
+- ``d3`` = GPIO36
+- ``d4`` = GPIO35
+- ``d5`` = GPIO40
+- ``d6`` = GPIO42
+- ``d7`` = GPIO41
 
-Returns:
-~~~~~~~~~
+Return Behavior
+~~~~~~~~~~~~~~~
 
-The function returns ``nil, error`` if it is unable to detect the SD card. Upon successfully configuring the settings, the function saves the values in the NVRAM and reboots the system. To remove existing settings, call this function without any arguments.
+- Returns ``nil, error`` if the SD card cannot be detected.
+- On success, stores the configuration in NVRAM and reboots the system.
+- Calling the function without arguments removes an existing SD card
+  configuration.
+
+Custom SD card pins are only available on targets where the SDMMC peripheral
+can be routed through the GPIO matrix. On original ESP32 targets, use the
+fixed IO-MUX-connected SDMMC pins.
 
 Examples:
-~~~~~~~~~
-
-Initialize the SD-CARD driver of a 1-bit wide bus that has clock pin connected to GPIO14, command to GPI15, and data to GPIO2.
 
 .. code-block:: lua
 
+   -- Initialize a 1-bit SD card bus using the default pin mapping
    esp32.sdcard(1)
 
-The following example shows how to set the GPIO pins CLK, CMD, and D0 for a few board.
-
-.. code-block:: lua
-
+   -- Example custom mappings for specific boards
    esp32.sdcard(1, 39, 38, 40) -- ESP32-S3-WROOM CAM Board
-   esp32.sdcard(1,  7,  6,  5) -- Lilygo's T-ETH-Lite
+   esp32.sdcard(1,  7,  6,  5) -- LilyGO T-ETH-Lite
    esp32.sdcard(1,  7,  9,  8) -- XIAO ESP32S3 Sense
 
 .. _esp32-execute-label:
 
-esp32.execute(command)
--------------------------
+``esp32.execute(command)``
+--------------------------
 
-This function performs various actions depending on the provided argument.
+Performs device-level control actions.
 
-Commands:
+Supported commands:
 
-- ``"erase"``: Erases the first FAT partition, which corresponds to the internal SPIFFS FAT file system. Call this function if the FAT file system becomes corrupt. The ESP32 will reboot after erasing the flash, and the FAT file system will be reformatted upon restart.
+- ``"erase"``: Erase the first FAT partition, reformat it on reboot, and
+  restart the device. Use this if the internal FAT filesystem becomes corrupt.
+- ``"restart"``: Restart the ESP32.
+- ``"killmain"``: Stop the main process that powers LuaShell32 and reclaim its
+  memory.
+- ``"mdns"``: Change the mDNS name.
 
-- ``"restart"``: Restarts the ESP32.
-
-- ``"killmain"``: Terminates the main process powering LuaShell32, and reclaims memory. You may choose to terminate the main process and stop LuaShell32 when a network connection is established. Refer to the ``xedge.event()`` function for example code.
-
-- ``"mdns"``: Change the mDNS name (see example below). The default name is Xedge32.
+Example:
 
 .. code-block:: lua
 
-   esp32.execute("mdns", "myesp") -- Change mDNS name to 'myesp'
-   esp32.execute"restart" -- Navigate to http://myesp.local after restart
+   esp32.execute("mdns", "myesp")
+   esp32.execute"restart"
 
+After restarting, the device can be reached at ``http://myesp.local`` if mDNS
+is available on your network.
 
-
-xedge.event()
+``xedge.event()``
 -----------------
 
-Xedge32 extends the Xedge xedge.event() mechanism, allowing you to subscribe and unsubscribe from network events, thus enabling the monitoring of network status changes. The following shows the xedge.event() function in the `Xedge xedge.event() <https://realtimelogic.com/ba/doc/?url=Xedge.html#event>`_ documentation.
+Xedge32 extends the generic Xedge event mechanism so Lua code can subscribe to
+network-related runtime events.
+
+Function signature:
 
 .. code-block:: lua
 
-   xedge.event(event, callback [,unsubscribe])
+   xedge.event(event, callback [, unsubscribe])
 
-All Xedge32 events carry a 'retained' flag, ensuring subscribers receive these events even if they subscribe after the event's generation.
+All Xedge32-generated events are retained. That means a late subscriber can
+still receive the most recent event state when appropriate.
 
-The specified ``callback`` function will be called when the network changes state or when an error or warning message is generated. The function takes the following arguments, all represented as Lua strings, including numbers:
+Event Types
+~~~~~~~~~~~
 
-- ``"wifi"``: Indicates that the event is related to Wi-Fi connectivity.
+``"wifi"``
+   Reports Wi-Fi state changes and Wi-Fi-related warnings or errors.
 
-  - **Arg1**: ``"up"``: Wi-Fi has transitioned from not connected to connected.
-  - **Arg1**: ``"down"``: Wi-Fi has transitioned from connected to not connected.
-  - **Arg1**: ``number``: A warning or error number as defined in the ESP-IDF (Espressif IoT Development Framework).
-  - **Arg2**: ``"ap" | "sta"``: Tells you Wi-Fi mode, which is Access Point Mode or Station Mode.
+   Callback arguments:
 
+   - ``"up"`` when Wi-Fi transitions to connected.
+   - ``"down"`` when Wi-Fi transitions to disconnected.
+   - an ESP-IDF warning or error number as a string.
+   - a second argument, ``"ap"`` or ``"sta"``, identifying Access Point or
+     Station mode.
 
-- ``wip`` (WiFi IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the WiFi connection.
+``"wip"``
+   Reports that Wi-Fi has received IP configuration from DHCP.
 
-  - **Arg1**: ``ip-address``: The assigned IP address.
-  - **Arg2**: ``netmask``: The assigned network mask.
-  - **Arg3**: ``gateway``: The assigned gateway.
+   Callback arguments:
 
-- ``eth`` (Ethernet IP address received): Indicates that the device has successfully obtained its IP address, netmask, and gateway from the DHCP server over the Ethernet connection. This event is distributed on devices that has a connected Ethernet port.
+   - IP address
+   - netmask
+   - gateway
 
-  - **Arg1**: ``ip-address``: The assigned IP address.
-  - **Arg2**: ``netmask``: The assigned network mask.
-  - **Arg3**: ``gateway``: The assigned gateway.
+``"eth"``
+   Reports that Ethernet has received IP configuration from DHCP.
 
-- ``"sntp"``: This event indicates that the ESP32 has synchronized its system time with the time provided by the Network Time Protocol (NTP) server, typically pool.ntp.org. This event is generated  when the device receives the time from the network. A correct system time is especially crucial when establishing a secure connection to a server using the Transport Layer Security (TLS) protocol. When a client connects to a server over TLS, one of the first steps in the handshake process is the verification of the server's certificate. This certificate includes a validity period - a 'not before' and 'not after' timestamp - and the client will check its current system time against this validity period.  The system time on the client device (in this case, the ESP32) is not set before receiving this event. Therefore, before establishing a secure server connection, any client must subscribe to the ``"sntp"`` event. This subscription ensures that the system time on the ESP32 is synchronized and accurate, thus allowing the TLS handshake process to proceed successfully. Attempting to establish a connection with a server before the system time has been updated will likely result in a failure due to the reasons outlined above. It's therefore crucial to monitor the ``"sntp"`` event and only proceed with the TLS handshake once the system time has been synchronized.
+   Callback arguments:
 
+   - IP address
+   - netmask
+   - gateway
+
+``"sntp"``
+   Reports that the system time has been synchronized over SNTP.
+
+This event is especially important before opening TLS connections, because
+certificate validation depends on the device clock being correct.
 
 Event Examples
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 .. code-block:: lua
 
-   xedge.event("wifi",function(status)
+   xedge.event("wifi", function(status)
       if status == "up" then
          trace("Wi-Fi connected")
       elseif status == "down" then
@@ -248,100 +349,107 @@ Event Examples
       end
    end)
 
-   xedge.event("wip",function(ip,mask,gw)
+   xedge.event("wip", function(ip, mask, gw)
       trace("IP address:", ip, "network mask", mask, "gateway", gw)
-      -- We do not need LuaShell32 when we have a network connection
       esp32.execute"killmain"
    end)
 
-   xedge.event("eth",function(ip,mask,gw)
-      -- Received if this device has Ethernet and Ethernet connected during runtime.
+   xedge.event("eth", function(ip, mask, gw)
       trace("IP address:", ip, "network mask", mask, "gateway", gw)
    end)
 
-   xedge.event("sntp",function()
+   xedge.event("sntp", function()
       trace("Time synchronized")
    end)
 
+One-Time SNTP Subscription Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
-The following example shows how to register and de-register an event using xedge.event(). It subscribes to "sntp" events, which are triggered after system startup and any time the system clock is synchronized via SNTP. The code demonstrates how to handle only the first event, record the system's boot time, and then unregister the handler to avoid processing future events. The captured time is saved to the app table for use elsewhere in the application.
+The following example subscribes to the ``"sntp"`` event, records the first
+time synchronization, and then unregisters itself.
 
 .. code-block:: lua
 
-   local sntp -- Function forward declaration
+   local sntp
 
-   -- Cleanup hook: removes the SNTP event listener.
-   -- Called automatically when the application stops, or manually after
-   -- handling the event once.
    function onunload()
-      xedge.event("sntp", sntp, true)  -- Unsubscribe from the "sntp" event
+      xedge.event("sntp", sntp, true)
    end
 
-   -- Event handler: called the first time SNTP syncs the clock.
-   -- Automatically unregisters itself after running once.
    sntp = function()
-      -- Remove the event listener so we don't handle future "sntp" events
       onunload()
-      startTime = ba.datetime"NOW"  -- Record boot/start time
-      -- Log event with timestamp
-      xedge.elog({ts=true}, "Boot time=%s", startTime:tostring())
-      xedge.eflush({subject="App starting"})  -- Flush event log with context
+      startTime = ba.datetime"NOW"
+      xedge.elog({ts = true}, "Boot time=%s", startTime:tostring())
+      xedge.eflush({subject = "App starting"})
    end
 
-   -- Register our one-time SNTP sync handler
    xedge.event("sntp", sntp)
 
+.. note::
 
-Note
-~~~~
-
-All arguments provided by C-code-generated-events are represented as Lua strings, including numbers.
-
+   All arguments supplied by C-generated Xedge32 events are represented as Lua
+   strings, including values that conceptually represent numbers.
 
 Xedge32 OTA
-------------
+-----------
 
-Xedge32 supports Over-The-Air (OTA) firmware update core functionality through the ``esp32.ota`` function.
+Xedge32 provides core OTA support through ``esp32.ota``.
 
-- **Without Arguments**: Returns the current firmware version as a table.
-- **With "begin" Argument**: Returns an OTA firmware upgrade object.
+Call forms:
 
-OTA Examples
-~~~~~~~~~~~~~
+- ``esp32.ota()`` returns the current firmware version table.
+- ``esp32.ota"begin"`` starts an upgrade session and returns an OTA object.
+
+Examples
+~~~~~~~~
 
 Retrieve the current firmware version:
 
 .. code-block:: lua
 
-    local ver = esp32.ota()
-    for k,v in pairs(ver) do trace(k,v) end
+   local ver = esp32.ota()
+   for k, v in pairs(ver) do
+      trace(k, v)
+   end
 
-Initiate an OTA firmware upgrade:
+Begin an OTA upgrade:
 
 .. code-block:: lua
 
-    local ota, err = esp32.ota"begin"
+   local ota, err = esp32.ota"begin"
 
-OTA Object Member Methods
-~~~~~~~~~~~~~~~~~~~~~~~~~
+OTA Object Methods
+~~~~~~~~~~~~~~~~~~
 
-The OTA object provides methods to manage the firmware upgrade process:
+``ota:write(data)``
+   Writes a chunk of firmware data. Keep calling this method until the full
+   image has been written.
 
-- **write(data)**: Write firmware data. Keep calling this function until all firmware data has been passed to the write method. Returns ``true`` on success, or ``nil, error`` on failure or data inconsistency.
-
-  .. code-block:: lua
+   .. code-block:: lua
 
       local ok, err = ota:write(data)
 
-- **commit()**: Commits the written firmware data. Returns ``true`` on success, or ``nil, error`` if the firmware is not accepted.
+``ota:commit()``
+   Finalizes the upgrade. Returns ``true`` on success, otherwise ``nil, error``.
 
-  .. code-block:: lua
+   .. code-block:: lua
 
       local ok, err = ota:commit()
 
-- **abort()**: Aborts the upgrade process.
+``ota:abort()``
+   Cancels the current OTA session.
 
-  .. code-block:: lua
+   .. code-block:: lua
 
       ota:abort()
+
+Practical Guidance
+------------------
+
+- Use ``apinfo`` and ``wscan`` during network bring-up and troubleshooting.
+- Use ``netconnect`` for both first-time network configuration and automated
+  reconnect logic.
+- Use ``xedge.event("sntp", ...)`` before TLS-dependent application startup if
+  accurate time matters.
+- Use OTA only after verifying image integrity and transport reliability in your
+  application workflow.

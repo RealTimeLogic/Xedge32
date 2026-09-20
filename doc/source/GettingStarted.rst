@@ -1,116 +1,182 @@
 Getting Started
-================
+===============
 
-To start using Xedge, you need to upload the firmware onto an ESP32-S3 or an ESP32 with PSRAM (for example, the ESP32 WROVER). Before you begin, ensure your ESP32 device meets the following requirements for the pre-compiled firmware:
+To start using Xedge32, you first need to install the firmware on a supported
+ESP32 board. The precompiled firmware targets:
 
-- **Standard ESP32**: Requires a minimum of 4MB flash memory and 4MB RAM.
-- **ESP32-S3 Variant**: Requires a minimum of 8MB flash memory and 8MB RAM, but comes with additional features.
+- **Standard ESP32 boards with PSRAM**, such as ESP32 WROVER, with at least
+  4 MB flash and 4 MB RAM.
+- **ESP32-S3 boards**, with at least 8 MB flash and 8 MB RAM.
 
+If you are completely new to Xedge32, start with the precompiled firmware and
+the default onboarding workflow. More advanced build and upgrade paths are
+included later on this page.
 
-First Time Installers
-----------------------
+Before flashing your first board, it can also help to read `How Xedge32,
+Xedge, and Barracuda App Server Work Together
+<https://realtimelogic.com/articles/How-Xedge32-Xedge-and-Barracuda-App-Server-Work-Together>`_.
+That article explains which parts are generic Xedge/BAS features and which
+parts are specific to ESP32 hardware.
 
-We suggest using the user-friendly web-based installer available on the `Xedge32 introduction page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_ for a straightforward installation process. Please consult the advanced installation instructions below if you require more detailed customization.
+First-Time Installers
+---------------------
+
+For the easiest first installation, use the web installer on the `Xedge32
+installation page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_.
+That installer is the quickest route to a working device because it avoids
+manual flash addresses and command-line tools.
+
+If you need more control over flashing, board selection, or firmware variants,
+continue with the manual instructions below.
 
 OTA Upgrade
-------------
+-----------
 
-For users with Xedge32 already installed on an ESP32-S3 device, take advantage of the `integrated Xedge32 OTA Upgrade Manager <https://youtu.be/GHBcjeO-Yhc>`_ for a seamless update experience. Begin by downloading the latest `ESP32-S3 firmware zip file <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_. Once downloaded, extract the contents of the ZIP file. Then, simply drag and drop the xedge.bin or xedge-s0.bin firmware file onto the Upgrade Manager's user interface to commence the upgrade process.
+If Xedge32 is already installed on an ESP32-S3, you can upgrade it with the
+`integrated Xedge32 OTA Upgrade Manager <https://youtu.be/GHBcjeO-Yhc>`_.
 
-Advanced Installation/Upgrade
+Typical OTA workflow:
+
+1. Download the latest `ESP32-S3 firmware ZIP file
+   <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_.
+2. Extract the ZIP file.
+3. Open the OTA Upgrade Manager.
+4. Drag either ``xedge.bin`` or ``xedge-s0.bin`` onto the upgrade page.
+
+This upgrade path is especially convenient once a board is already deployed and
+reachable through the Xedge32 interface.
+
+Advanced Installation and Upgrade
 ---------------------------------
 
-We offer two options for the firmware:
+Two firmware delivery models are available:
 
-1. Ready-to-use firmware binary files which you can directly upload onto your board.
-2. C source code files which you can compile using the Espressif ESP-IDF toolchain.
+1. Precompiled binary files that you can flash directly to the board.
+2. Source code that you can build yourself with the Espressif ESP-IDF toolchain.
 
-**Important:** We provide instructions suitable for both the ESP32 and the newer ESP32-S3 chips. Make sure to follow the correct instructions for the chip that you're using.
+.. important::
 
-.. contents:: Get started as follows:
+   The instructions on this page cover both ESP32 and ESP32-S3 hardware. Make
+   sure you follow the command sequence and firmware layout that matches your
+   specific chip.
+
+.. contents:: Page contents
    :depth: 2
    :local:
 
 .. _flashing-the-firmware:
 
+Firmware Option 1: Use Precompiled Firmware
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Firmware Option 1: Use Pre-Compiled Firmware
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The firmware binaries can be uploaded using Windows, Mac, and Linux using the command line tool `esptool`. Refer to the instructions below for details. We will start by showing how to use a graphical installer, which is only compatible with Windows.
+The precompiled firmware can be flashed from Windows, macOS, or Linux. We begin
+with the Windows graphical workflow because it is the most approachable for
+many first-time users, then show the ``esptool`` command-line workflow.
 
 Windows Graphical Installer
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. raw:: html
 
    <div style="position: relative;width: 100%;height: 0;padding-bottom: 56.25%;"><iframe src="https://www.youtube.com/embed/V-HH0yc74hY" frameborder="0" allowfullscreen style="position: absolute;top: 0;left: 0;width: 100%;height: 100%;"></iframe></div>
 
-**How to flash the Xedge32 IDE**
+How to Flash the Xedge32 Firmware
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-To upload the Xcode32 firmware to your ESP32 board, begin by downloading the `ESPRESSIF Flash Tool <https://www.espressif.com/en/support/download/other-tools>`_ and one of:
+Download the `ESPRESSIF Flash Tool
+<https://www.espressif.com/en/support/download/other-tools>`_ and one of the
+following firmware packages:
 
-- `ESP32  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
-- `ESP32-S3  Xedge Firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_: includes two firmware files. See the `firmware-options`_ for details.
+- `ESP32 Xedge firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
+- `ESP32-S3 Xedge firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
+  which includes two firmware variants. See :ref:`firmware-options`.
 
-Unzip the `ESPRESSIF Flash Tool` archive and the `Xedge32-Firmware.zip` or `Xedge32-S3-Firmware.zip archive`.
+After downloading, extract the flash tool archive and the firmware ZIP file.
 
-1. Connect your ESP32 board to your computer and find the com port used by using the Device Manager.
-2. Start the ESPRESSIF Flash Tool `flash_download_tool_3.9.4.exe` executable.
-3. When the tool starts, select ChipType ESP32 or ESP32-S3 and click OK.
-4. On the SPIDownload page, `set the COM port to the one used by the ESP32 <https://learn.adafruit.com/adafruit-esp32-s2-feather/advanced-serial-console-on-windows>`_ and set Speed to 115200.
-5. Click the ERASE button and wait for it to complete.
-6. Click the 3 dots (...) to browse to the bin files you downloaded.
-7. Select the following binary files and set the address accordingly:
+Then follow these steps:
 
-   a. Option 1: When using the merged binary firmware file merged-xedge.bin
+1. Connect the ESP32 board to your computer.
+2. Identify the COM port in Windows Device Manager.
+3. Start ``flash_download_tool_3.9.4.exe``.
+4. Select the correct chip type, ``ESP32`` or ``ESP32-S3``, and click
+   :guilabel:`OK`.
+5. On the ``SPIDownload`` page, set the correct COM port and set the speed to
+   ``115200``.
+6. Click :guilabel:`ERASE` and wait for the erase operation to complete.
+7. Use the browse buttons to select the firmware file or files.
+8. Apply one of the following flash layouts.
 
-      +-----------------------+--------------+
-      | Binary File           |    Address   |
-      +=======================+==============+
-      | `merged-xedge.bin`    | `0x0`        |
-      +-----------------------+--------------+
+Option 1: Merged Firmware File
+""""""""""""""""""""""""""""""
 
-      Click the checkbox to the left of the binary file to select it.
+Use this when flashing ``merged-xedge.bin``:
 
-   b. Option 2: When using the three separate binary files
-   
-      +-----------------------+-------------------+-------------------+
-      | Binary File           |   ESP32 Address   | ESP32-S3 Address  |
-      +=======================+===================+===================+
-      | `bootloader.bin`      | `0x1000`          | `0x0`             |
-      +-----------------------+-------------------+-------------------+
-      | `partition_table.bin` | `0x8000`          | `0x8000`          |
-      +-----------------------+-------------------+-------------------+
-      | `xedge.bin`           | `0x10000`         | `0x20000`         |
-      +-----------------------+-------------------+-------------------+
+.. list-table::
+   :header-rows: 1
 
-      Click the three checkboxes to the left of the three bin files to select them.
+   * - Binary File
+     - Address
+   * - ``merged-xedge.bin``
+     - ``0x0``
 
-8.  Do not change any other values.
-9. Click the START button and wait for it to upload the bin files to your ESP32.
-10. When completed, open a terminal emulator such as Putty.
-11. You should see a terminal window with text being printed, as shown in the screenshot below.
-12. When you see `LuaShell32 ready` being printed, proceed by :ref:`configuring the ESP32 <configesp32>` as explained below.
+Select the checkbox to the left of the file entry after adding it.
+
+Option 2: Separate Firmware Files
+"""""""""""""""""""""""""""""""""
+
+Use this when flashing the individual binary components:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Binary File
+     - ESP32 Address
+     - ESP32-S3 Address
+   * - ``bootloader.bin``
+     - ``0x1000``
+     - ``0x0``
+   * - ``partition_table.bin``
+     - ``0x8000``
+     - ``0x8000``
+   * - ``xedge.bin``
+     - ``0x10000``
+     - ``0x20000``
+
+Enable all three checkboxes after selecting the files.
+
+Finish the Flash Process
+""""""""""""""""""""""""
+
+9. Leave the remaining tool settings unchanged.
+10. Click :guilabel:`START` and wait for the upload to finish.
+11. Open a serial terminal such as PuTTY.
+12. Watch the boot log.
+13. When ``LuaShell32 ready`` appears, continue with
+    :ref:`configesp32`.
 
 .. image:: https://realtimelogic.com/images/Xedg32-Flash-Firmware.png
    :alt: Firmware Upload Tool
 
-The screenshot above displays the firmware tool on the left with three separate binary files selected, and on the right, it shows a Putty terminal connected to the device. Option one is more user-friendly as it employs a merged binary firmware file, combining the three separate files into one entity.
+The screenshot above shows the flash tool on the left and a terminal window on
+the right. The merged firmware option is simpler because it packages the
+required firmware parts into a single file.
 
+Common Flashing Issues
+^^^^^^^^^^^^^^^^^^^^^^
 
-**Potential Issues and Solutions:**
+- Some boards require you to hold the boot button while connecting USB. Once
+  the board is detected, you can release the button.
+- On ESP32-S3 boards with both USB-OTG and USB-UART, use the USB-UART port for
+  flashing. If needed, use the other port for the runtime console.
+- If PuTTY does not show :ref:`LuaShell32`, prepare the serial terminal first,
+  then press the board's reset button and immediately open the terminal
+  connection.
 
-   -  On certain boards, you must press the boot button before connecting the USB. Once the USB is plugged in, you can release the button.
-   -  If you're using an ESP32-S3 board equipped with both USB-OTG and USB-UART, you will need to perform flashing using the USB-UART connection. Meanwhile, connect Putty to USB-OTG.
-   - If you do not see the :ref:`LuaShell32` after connecting Putty, try the following: Configure Putty with the required serial connection parameters so you can quickly click the Open button, then do as follows: Click the ESP32 development board's reset button, followed by quickly clicking the Open button in Putty.
+Linux, macOS, and Windows with ``esptool``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-
-Linux, Mac, and Windows using the command line tool `esptool`
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-
-The following examples show how to use Linux. The commands are similar for Mac and Windows.
+The following examples use Linux syntax, but the same ``esptool`` commands can
+be adapted for macOS and Windows.
 
 Install the required tool:
 
@@ -118,7 +184,6 @@ Install the required tool:
 
    sudo apt install python3-pip
    pip install esptool
-
 
 Upload the **ESP32** firmware:
 
@@ -148,77 +213,95 @@ Upload the **ESP32-S3** firmware:
 
    # python -m esptool --chip esp32s3 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 bootloader.bin 0x8000 partition-table.bin 0x20000 xedge.bin
 
-
 .. _firmware-options:
 
-For the ESP32-S3, we provide two firmware options
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ESP32-S3 Firmware Options
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. image:: img/esp-s3-usb.jpg
    :align: right
 
-**xedge.bin (merged-xedge.bin)**
-   - Tailored for boards like "xiao esp32-s3" with a single USB port.
-   - This firmware activates the Xedge32 console :ref:`LuaShell32` through the USB port.
+Two runtime variants are provided for ESP32-S3 boards:
 
-**xedge-s0.bin (merged-xedge-s0.bin)**
-   - Ideal for boards that utilize serial UART0 for flashing or console logging. The USB to serial converter chip, such as CP210x or FTDI, can be integrated or external.
-   - This firmware version initializes the Xedge32 console using :ref:`LuaShell32` via the USB-to-UART serial connection.
+**``xedge.bin`` / ``merged-xedge.bin``**
+   Best for boards such as the XIAO ESP32-S3 that expose a single USB port.
+   This build provides :ref:`LuaShell32` over that USB connection.
+
+**``xedge-s0.bin`` / ``merged-xedge-s0.bin``**
+   Best for boards that use UART0 for flashing or console access through a
+   USB-to-UART bridge such as CP210x or FTDI.
 
 .. note::
-   If you upload the xedge.bin software via USB-to-UART, and your board has two USB ports, you'll need to switch to the other USB port after uploading. However, with xedge-s0.bin, you can continue using the same USB-to-UART port.
 
+   If you flash ``xedge.bin`` over a USB-to-UART adapter on a two-port board,
+   you may need to move to the other USB port after flashing in order to access
+   the runtime console. If you use ``xedge-s0.bin``, you can usually keep using
+   the same USB-to-UART connection.
 
-Firmware Option 2: Compile The Code
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Firmware Option 2: Compile the Code
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-See the `GitHub Repository <https://github.com/RealTimeLogic/Xedge-ESP32>`_ for details.
+If you need to customize the firmware itself, use the source tree and build
+instructions in the `GitHub repository
+<https://github.com/RealTimeLogic/Xedge-ESP32>`_.
 
-
-Configure the ESP32
---------------------------
+Compiling the firmware is the right approach when you need custom C extensions,
+build-time configuration changes, or tighter control over the final image.
 
 .. _configesp32:
 
-Once the firmware upload is complete, reboot the ESP32. The ESP32 will be in Access Point mode after restarting. You can now :ref:`connect to it using a serial terminal <LuaShell32>` or :ref:`access the web-based shell by connection to the access point <Access Point Mode>`. Select one of these options and program the ESP32 as follows if you want it to connect to your network and not operate as an access point:
+Configure the ESP32
+-------------------
 
+After flashing, reboot the ESP32. On first boot, Xedge32 starts in Access Point
+Mode. From there, you can either connect over serial or connect to the device's
+Wi-Fi access point and use the web-based shell.
 
-In the :ref:`LuaShell32` prompt, type the following to connect to your network:
+Relevant guides:
 
-   -  Using **Wi-Fi**:
+- :ref:`LuaShell32` for serial or web-shell access
+- :ref:`Access Point Mode` for browser-based onboarding
 
-   .. code-block:: lua
+If you want the device to join your normal network instead of staying in Access
+Point Mode, open :ref:`LuaShell32` and run one of the following commands.
 
-      esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
+Using Wi-Fi
+~~~~~~~~~~~
 
-   -  Using **Ethernet**:
+.. code-block:: lua
 
-   .. code-block:: lua
+   esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
 
-      esp32.netconnect("W5500", {spi-settings})
+Using Ethernet
+~~~~~~~~~~~~~~
 
-The next time you turn on your ESP32 device, it will automatically connect to your Wi-Fi network, so there's no need to reconnect the serial console and use the LuaShell32.
+.. code-block:: lua
+
+   esp32.netconnect("W5500", {spi-settings})
+
+On a successful connection, the configuration is stored so the device can
+reconnect automatically after the next restart.
 
 Next Step
-------------
+---------
 
-Once Xedge has successfully connected to your network, continue your journey by exploring our guide on how to use :ref:`Xedge32` .
-
+Once Xedge32 is connected to your network, continue with :ref:`Xedge32` to
+learn how to upload examples, create applications, and work with the IDE.
 
 Firmware Upgrade Options
--------------------------
-
-The pre-compiled firmware for the ESP32-S3 features convenient drag-and-drop upgrades. To upgrade Xedge32, you have two options:
-
-1. Follow the detailed firmware installation process described in this tutorial, but only upload xedge.bin or xedge-s0.bin.
-2. Opt for the more straightforward drag-and-drop method as previosly explained.
-
-
-Support and Discussions
 ------------------------
 
-If you encounter any issues, have questions, or simply want to join discussions about the firmware, our main platform for support is the GitHub Discussions page for the project.
+For ESP32-S3 boards, ongoing upgrades are usually simpler than the initial
+install. You can either:
 
-Please visit the `Xedge32 Discussions on GitHub`_ for assistance and community interactions.
+1. Repeat the firmware flashing procedure and upload only ``xedge.bin`` or
+   ``xedge-s0.bin``.
+2. Use the drag-and-drop OTA workflow described earlier on this page.
 
-.. _Xedge32 Discussions on GitHub: https://github.com/RealTimeLogic/Xedge32/discussions
+Support and Discussions
+-----------------------
+
+If you run into issues, want to compare notes with other users, or need help
+choosing a board or workflow, visit the project's discussion forum:
+
+`Xedge32 Discussions on GitHub <https://github.com/RealTimeLogic/Xedge32/discussions>`_

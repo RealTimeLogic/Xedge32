@@ -1,62 +1,109 @@
+.. _LuaShell32:
+
 LuaShell32
-=======================
+==========
 
-The LuaShell32 is an interactive Lua prompt that is available via USB/serial for the ESP32 microcontroller and via a web based shell. With this prompt, you can enter and execute Lua code in real-time, providing you with full control over the behavior of your ESP32 device.
+LuaShell32 is the interactive Lua prompt included with Xedge32. You can access
+it either through a USB serial connection or through the web interface. It is
+the quickest way to test commands, inspect the current runtime environment, and
+configure networking without having to create a full application first.
 
-How to Start the Shell:
--------------------------
+Think of LuaShell32 as your live control console for the device. You can use it
+for one-off experiments, hardware bring-up, diagnostics, and small setup tasks.
 
-   - **Using a serial connection:** Connect your ESP32 device to your computer using a USB cable and open a terminal program that supports serial communication. Set the serial port to the appropriate baud rate (e.g. 115200) and connect to the ESP32 device.
-   - **Using the web based shell:**
-      - Click the three dots (``...``) in the upper right corner of the Xedge editor.
-      - Select **Lua Shell** to open the web-based LuaShell32.
+Starting the Shell
+------------------
 
-.. note:: When working with the web-based LuaShell32, it's essential to clear previously executed commands before entering new ones. This is because the web interface accumulates commands in its shell editor. Failing to clear past commands can lead to unintended command sequences or errors.
+You can open LuaShell32 in two ways:
 
-Once you're connected and the ESP32 boot process completes, you should see a prompt that looks like this:
+- **USB/serial**: Connect the ESP32 to your computer, open a serial terminal,
+  and connect at the appropriate baud rate, typically ``115200``.
+- **Web shell**: In the Xedge editor, click the three dots (``...``) in the
+  upper-right corner and select **Lua Shell**.
 
-::
+.. note::
 
-    >
+   The web-based shell keeps previously entered text in the editor. Before you
+   run a new command, clear out old input so you do not accidentally submit a
+   longer command sequence than intended.
 
-This is the LuaShell32 prompt, which indicates that the prompt is ready to accept Lua code. To execute a command, simply type it into the prompt and press Enter. For example, you could enter the following command to print a message to the console:
+What the Prompt Looks Like
+--------------------------
 
-::
-
-    print("Hello, world!")
-
-When you press Enter, LuaShell32 will execute the command and display the output:
-
-::
-
-    > print("Hello, world!")
-    Hello, world!
-
-You can also define variables and functions in LuaShell32. For example, you could define a variable like this:
+After the ESP32 finishes booting, the shell displays a prompt like this:
 
 ::
 
-    x = 42
+   >
 
-And then use it in a calculation like this:
+The ``>`` character means LuaShell32 is ready to accept Lua code.
 
-::
+Running Your First Command
+--------------------------
 
-    y = x + 8
-    print(y)
-
-This would output:
+Type a Lua expression or statement and press Enter. For example:
 
 ::
 
-    > x = 42
-    > y = x + 8
-    > print(y)
-    50
+   print("Hello, world!")
 
+LuaShell32 runs the code immediately and prints the result:
 
-In LuaShell32, you have access to all of the standard Lua libraries and functions, the Barracuda App Server APIs, and the ESP32 APIs.
+::
 
-That's a quick introduction to LuaShell32. With this tool, you can experiment with Lua code and explore the capabilities of the ESP32 microcontroller. However, note that the :ref:`Web-Based Lua REPL <Xedge32>` included in Xedge provides a much better user experience. For example, you can modify an LSP page containing Lua code and refresh the page, using your browser, to compile the new code.
+   > print("Hello, world!")
+   Hello, world!
 
-See the :ref:`Xedge32` for more information.
+Working Interactively
+---------------------
+
+You are not limited to single-line commands. You can create variables, call
+functions, and explore APIs directly from the shell.
+
+For example:
+
+::
+
+   x = 42
+   y = x + 8
+   print(y)
+
+This produces:
+
+::
+
+   > x = 42
+   > y = x + 8
+   > print(y)
+   50
+
+What You Can Access
+-------------------
+
+Inside LuaShell32 you have access to:
+
+- the standard Lua libraries,
+- the Barracuda App Server APIs,
+- the generic Xedge APIs, and
+- the Xedge32 ESP32-specific APIs documented in this manual.
+
+This makes the shell a practical place to try hardware calls such as
+``esp32.gpio(...)``, inspect network information, or test a sensor before you
+wrap the code in an LSP page or application.
+
+When to Use LuaShell32
+----------------------
+
+LuaShell32 is especially useful for:
+
+- entering Wi-Fi credentials during first-time setup,
+- verifying pin mappings and peripheral behavior,
+- testing small snippets before turning them into reusable code,
+- checking event delivery and network state, and
+- troubleshooting a device in the field.
+
+For larger development work, the :ref:`Web-Based Lua REPL <Xedge32>` in Xedge
+usually provides a better experience because you can edit LSP pages, reload
+them in the browser, and keep your code organized in files.
+
+See :ref:`Xedge32` for the broader development workflow.

@@ -1,24 +1,50 @@
-
-idf_component_register(
-  SRCS "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "NetESP32.c" "CfgESP32.c" "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/XedgeZip.c" "console.c" "BaESP32.c" "LPeg/lpcset.c" "LPeg/lpcap.c" "LPeg/lpcode.c" "LPeg/lpprint.c" "LPeg/lptree.c" "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c" "BaCam.c"
-  INCLUDE_DIRS "."
-  "BAS/inc"
-  "BAS/inc/arch/NET/LwIP"
-  "BAS/inc/arch/FreeRTOS"
-  "BAS/examples/xedge/src"
-  PRIV_REQUIRES
-    driver    
+# 1. Define base private requirements for all targets
+set(main_priv_reqs
+    esp_driver_i2c
+    esp_driver_uart
+    esp_driver_pcnt
+    esp_driver_rmt
+    esp_driver_usb_serial_jtag
+    esp_driver_ledc    
     esp_wifi
     esp_event
     esp_netif
     nvs_flash
-	fatfs           # <-- for esp_vfs_fat.h
-	esp_eth         # <-- for esp_eth_mac.h / esp_eth_phy.h
-	efuse           # for esp_efuse.h
- 	esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
+    fatfs           # <-- for esp_vfs_fat.h
+    esp_eth         # <-- for esp_eth_mac.h / esp_eth_phy.h
+    efuse           # for esp_efuse.h
+    esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
     app_update      # <-- for esp_ota_ops.h
-    esp32-camera 
-	esp_timer
+    esp_timer
+)
+
+# 1.5 Define base source files for all targets
+set(main_srcs
+    "BAS/src/BAS.c" "BAS/src/DiskIo/posix/BaFile.c" "BAS/src/arch/FreeRTOS/ThreadLib.c" 
+    "BAS/src/arch/NET/LwIP/SoDisp.c" "BAS/src/dlmalloc.c" "main.c" "NetESP32.c" "CfgESP32.c" 
+    "BAS/examples/xedge/src/xedge.c" "BAS/examples/xedge/obj/XedgeZip.c" "console.c" 
+    "BaESP32.c" "LPeg/lpcset.c" "LPeg/lpcap.c" "LPeg/lpcode.c" "LPeg/lpprint.c" "LPeg/lptree.c" 
+    "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c"
+)
+
+# 2. Conditionally append the camera driver AND the correct C file
+if(IDF_TARGET STREQUAL "esp32" OR IDF_TARGET STREQUAL "esp32s3")
+    list(APPEND main_priv_reqs "esp32-camera")
+    list(APPEND main_srcs "BaCam.c")
+elseif(IDF_TARGET STREQUAL "esp32p4")
+    list(APPEND main_priv_reqs "esp_video" "esp_cam_sensor" "esp_driver_jpeg" "esp_driver_ppa")
+    list(APPEND main_srcs "BaCamV4L2.c")
+endif()
+
+# 3. Register the component using the dynamic lists
+idf_component_register(
+    SRCS ${main_srcs}
+    INCLUDE_DIRS "."
+        "BAS/inc"
+        "BAS/inc/arch/NET/LwIP"
+        "BAS/inc/arch/FreeRTOS"
+        "BAS/examples/xedge/src"
+    PRIV_REQUIRES "${main_priv_reqs}"
 )
 
 # -fno-inline-small-functions is required. The Xtensa ESP32 compiler
@@ -48,3 +74,5 @@ set_source_files_properties(
   PROPERTIES
     COMPILE_FLAGS "-Wno-maybe-uninitialized -Wno-error=maybe-uninitialized"
 )
+
+include("${CMAKE_CURRENT_LIST_DIR}/PatchLinenoise.cmake")

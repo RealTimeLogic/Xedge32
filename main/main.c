@@ -29,7 +29,10 @@
 #endif
 #include <esp_efuse.h>
 #include <esp_console.h>
-#include <linenoise/linenoise.h>
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+#include <driver/usb_serial_jtag.h>
+#endif
+#include "esp_linenoise.h"
 #include <xedge.h>
 #include "BaESP32.h"
 #include "NetESP32.h"
@@ -58,6 +61,7 @@ static const char TAG[]={"X"};
 static bool gotSdCard = FALSE;
 static const char mountPoint[] = {"/sdcard"};
 static sdmmc_card_t *card = NULL;
+esp_linenoise_handle_t el_handle = NULL;
 
 /* mark in error messages for incomplete statements */
 #define EOFMARK		"<eof>"
@@ -113,7 +117,10 @@ static void executeOnLuaReplCB(ThreadJob* job, int msgh, LThreadMgr* mgr)
    {
       lua_pcall(L, 0, 0, msgh);
       luaLineBuffer.buf[luaLineBuffer.ix] = 0;
-      linenoiseHistoryAdd(luaLineBuffer.buf);
+      //linenoiseHistoryAdd(luaLineBuffer.buf);
+      //if(el_handle != NULL) {      
+      //   esp_linenoise_history_add(el_handle, luaLineBuffer.buf);
+      //}
       luaLineBuffer.ix = 0;
    }
    else 
@@ -202,9 +209,11 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
    /*
      installESP32Libs must be called before netInit since it sets up a
      mutex used by all net callbacks.
-    */
+   */
    installESP32Libs(L);
-   netInit();
+   esp_err_t netErr = netInit();
+   if(netErr != ESP_OK)
+      ESP_LOGE(TAG, "Network initialization failed: %s", esp_err_to_name(netErr));
    startMdnsService();
 
    netConfig_t cfg;
@@ -214,17 +223,19 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
     * semaphore is initialized within the installESP32Libs function.
     */
    cfgGetNet(&cfg);
-
-#if SOC_WIFI_SUPPORTED
-   if(!strcmp("wifi", cfg.adapter))
+   if((netErr == ESP_OK) && !strcmp("wifi", cfg.adapter))
    {
+#ifdef CONFIG_XEDGE_WIFI_ENABLED
       netWifiConnect(cfg.ssid, cfg.password);
-   }
-   else if(netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter))
-   {
-      netEthConnect();
-   }  
 #endif
+   }
+   else if((netErr == ESP_OK) &&
+           (netIsAdapterSpi(cfg.adapter) || netIsAdapterRmii(cfg.adapter)))
+   {
+#if defined(CONFIG_ETH_USE_SPI_ETHERNET) || defined(CONFIG_ETH_USE_ESP32_EMAC) 
+      netEthConnect();
+#endif
+   }  
 
    if(gotSdCard)
    {
@@ -372,12 +383,15 @@ static void mainServerTask(Thread *t)
    (void)t;
 #ifdef USE_DLMALLOC
    /* Allocate as much pSRAM as possible */
-#if CONFIG_IDF_TARGET_ESP32S3
-   EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
-#else
-   EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024 + 5*1024];
-#endif
-   init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
+  #if CONFIG_IDF_TARGET_ESP32S3 
+     EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
+  #elif CONFIG_IDF_TARGET_ESP32P4
+     EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
+  #else
+     EXT_RAM_BSS_ATTR static char poolBuf[3*1024*1024 + 5*1024];
+  #endif
+
+     init_dlmalloc(poolBuf, poolBuf + sizeof(poolBuf));
 #else   
    #error must use dlmalloc
 #endif
@@ -568,7 +582,7 @@ int lsdcard(lua_State* L)
                // TODO: When I execute esp_restart with esp32-s3 and the console 
                // is CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, the restart hangs, but 
                // when I put a delay of 1000 mS it works.
-#if CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
                Thread_sleep(1000);
 #endif
                esp_restart();
@@ -611,65 +625,87 @@ void app_main(void)
 {
    // Disable the esp log system.
    esp_log_level_set("*", ESP_LOG_ERROR);
-   initComponents();
    manageConsole(true);
+   initComponents();
+
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+   /* A charger has no USB host. Start Xedge, but do not enter the line
+      editor or its terminal probe on this power-only connection. */
+   if( ! usb_serial_jtag_is_connected())
+   {
+      manageConsole(false);
+      return;
+   }
+#endif
+
+   /** 
+    * Configure linenoise line completion library 
+    * Enable multiline editing. If not set, long commands will scroll within
+    * single line.
+    */
+   esp_linenoise_config_t el_cfg;
+   esp_linenoise_get_instance_config_default(&el_cfg);
+   el_cfg.allow_empty_line = false;
+   el_cfg.max_cmd_line_length = 256;
+   el_cfg.prompt = "\033[0m> "; 
+  
+   ESP_ERROR_CHECK(esp_linenoise_create_instance(&el_cfg, &el_handle));
    
    /*
     * The luaLineBuffer is shared with the thread that executes executeOnLuaReplCB callback. 
     * To ensure data integrity and prevent simultaneous access, a binary semaphore is used.
     */
    luaLineBuffer.sem = xSemaphoreCreateBinary();
-   
-   HttpTrace_printf(5,
+
+   printf(
                     "\n\n __   __        _            \n \\ \\ / /       | |"
                     "           \n  \\ V / ___  __| | __ _  ___ \n   > < / _"
                     " \\/ _` |/ _` |/ _ \\\n  / . \\  __/ (_| | (_| |  __/\n"
                     " /_/ \\_\\___|\\__,_|\\__, |\\___|\n                   "
                     "__/ |     \n                  |___/      \n\n");
-   HttpTrace_printf(5,"LuaShell32 ready.\n");
-    
-   /*
-    * The app_main thread originally runs at low priority (ESP_TASK_MAIN_PRIO, or ESP_TASK_PRIO_MIN + 1).
-    * The linenoise library uses the read() function that can block while waiting for USB/UART characters.
-    * Occasionally, the console hangs, especially when closing the network adapter. The root cause seems to be
-    * priority inversion, which can impact the RX ring buffer.
-    * 
-    * We've identified two potential fixes:
-    * 
-    * 1. Lower the FreeRTOS tick frequency to 100 Hz. This approach minimizes context switches and interrupts,
-    *    but it might affect the overall responsiveness of the firmware.
-    * 
-    * 2. Increase the priority of the app_main thread. We chose this solution to avoid altering the tick frequency
-    *    and maintain firmware responsiveness.
-    * 
-    * The chosen solution may increase the app_main thread's priority to mitigate priority inversion. This helps
-    * prevent delays in the RX ring buffer processing caused by other tasks. Note that careful consideration
-    * of task priorities is necessary to avoid other unexpected behavior or conflicts.
-    */
-   vTaskPrioritySet(NULL, uxTaskPriorityGet(NULL) + 4);  
+   printf("LuaShell32 ready.\n");
+
+   char cmd_buffer[256];
    for(;;)
    {
-      char* line = linenoise("\033[0m> ");
-      if(line == NULL || !line[0])
+      /* Read outside the BAS dispatcher mutex. */
+      esp_err_t ret = esp_linenoise_get_line(el_handle, cmd_buffer, sizeof(cmd_buffer));  
+      if(ret != ESP_OK) 
+      {
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+         /* A charger supplies power but no USB SOF packets. Reclaim the
+            unused console task instead of retrying stdin forever. */
+         if( ! usb_serial_jtag_is_connected())
+         {
+            manageConsole(false);
+            return;
+         }
+#endif
+         vTaskDelay(pdMS_TO_TICKS(10));
          continue;
+      }
+
+      // Process the captured line
+      size_t len = strlen(cmd_buffer);
+      if(len == 0) continue;
+
+      esp_linenoise_history_add(el_handle, cmd_buffer);
 #if CONFIG_DEBUG_THREADS
-      if( ! strcmp(line, "threads") )
+      if( !strcmp(cmd_buffer, "threads") )
       { 
          dbgThreads();
          continue;
       }
 #endif
       size_t left = luaLineBuffer.size - luaLineBuffer.ix;
-      size_t len = strlen(line);
-      if (left < len)
+      if( left < len )
       {
          luaLineBuffer.size += len + 100;
          luaLineBuffer.buf = netCheckAlloc(
                              baRealloc(luaLineBuffer.buf, luaLineBuffer.size+1));
       }
-      memcpy(luaLineBuffer.buf + luaLineBuffer.ix, line, len);
+      memcpy(luaLineBuffer.buf + luaLineBuffer.ix, cmd_buffer, len);
       luaLineBuffer.ix += len;
-      linenoiseFree(line);
       ThreadJob* job=ThreadJob_lcreate(sizeof(ThreadJob), executeOnLuaReplCB);
       if( ! job ) baFatalE(FE_MALLOC,0);
       

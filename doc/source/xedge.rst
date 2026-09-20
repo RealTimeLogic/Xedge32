@@ -1,147 +1,193 @@
-Xedge32
-================
+.. _Xedge32:
 
-Xedge32 is a development tool for embedded edge devices. Its web-based user interface makes it incredibly easy to develop embedded software using the Lua language.
+Xedge32
+=======
+
+Xedge32 is a development environment for embedded edge devices. It combines a
+web-based interface with Lua-driven application development so you can build,
+test, and iterate directly on the target device.
 
 .. image:: https://realtimelogic.com/images/xedge/v1/Xedge.png
    :alt: Xedge32 UI
 
-Xedge is a versatile tool that runs on various platforms, including ESP32. This documentation focuses on getting started with Xedge on ESP32. For more details on using Xedge, please refer to the `Xedge Main Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+Xedge itself is available on multiple platforms, but this guide focuses on the
+ESP32-specific workflow. For the broader Xedge feature set, see the `Xedge main
+documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
 
-How To Use Xedge32
----------------------------------------
+Working with Example Applications
+---------------------------------
 
-The LSP-Example's GitHub repository includes `ESP32 specific examples <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ that we will use in the instructions below. First, download these files to your computer and then upload them to the ESP32 using the built-in Web File Manager. You can use the combined WebDAV and Web File Manager URL at ``http://ip-address/rtl/apps/`` to upload files to the ESP32. You can refer to the :download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>` for more information on how to mount a WebDAV drive.
+The `LSP-Examples repository
+<https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ contains a
+good set of ESP32-oriented examples. A practical way to learn Xedge32 is to
+upload these examples, open them in the browser IDE, and run them directly on
+the device.
 
-Upload this directory to the ESP32 by using WebDAV or If using the Web File Manager as shown below, use a browser and navigate to ``http://ip-address/rtl/apps/``
+Basic workflow:
 
-|Web File manager: Drag and Drop|
+1. Download the ESP32 example files to your computer.
+2. Upload them to the ESP32 using WebDAV or the built-in Web File Manager.
+3. Create a new application from the uploaded directory.
+4. Open the example files in the IDE and run them one by one.
 
-Navigate to ``http://ip-address/rtl/apps/`` and click the :guilabel:`+` button to create a directory named "Lua-Examples". Then, click the "Lua-Examples" link to navigate to ``http://ip-address/rtl/apps/Lua-Examples/``, select the files, and drag & drop the files into the browser window at ``http://ip-address/rtl/apps/Lua-Examples/``. The Web File Manager starts uploading the files as soon as you drop them into the browser window.
+Uploading Files to the ESP32
+----------------------------
 
-|Web File Manager: Upload|
+You can use the combined WebDAV and Web File Manager endpoint at
+``http://ip-address/rtl/apps/``.
 
-After completing the upload process, navigate to ``http://ip-address/rtl/``, expand :guilabel:`disk` in the left pane, and right click the "Lua-Examples" directory. Then, click :guilabel:`New App`. In the dialog, enable :guilabel:`Running` and :guilabel:`LSP App`. click :guilabel:`Save`
+If you want a walkthrough for mounting the device as a WebDAV drive, see the
+:download:`WebDAV how-to video <https://youtu.be/i5ubScGwUOc>`.
 
-In the Xedge Lua IDE, you can expand the examples in the left pane, and click any of the examples to open the source code in the editor. Then, click the run button to execute the example. 
+If you prefer the browser workflow:
 
-How To Use an External IDE
---------------------------
+1. Open ``http://ip-address/rtl/apps/``.
+2. Click the :guilabel:`+` button and create a directory named
+   ``Lua-Examples``.
+3. Open the new directory at ``http://ip-address/rtl/apps/Lua-Examples/``.
+4. Drag and drop the downloaded example files into the browser window.
 
-While the internal web-based Lua IDE is easy to use since it is an integral part of Xedge32, a more advanced IDE may be preferred and is required for debugging Lua code.
+The upload starts as soon as you drop the files into the page.
 
-You can use any external IDE or editor to edit files directly on the ESP32 by mounting the device as a WebDAV drive. For instructions on how to mount the WebDAV drive using various client operating systems, visit the `How to Mount a WebDAV Drive <https://fuguhub.com/FileServer.lsp>`__ page on the FuguHub site.
+Creating an App from the Uploaded Directory
+-------------------------------------------
 
-To mount the ESP32's WebDAV server, use the URL https://ip-address/rtl/apps/.
+After the files have been uploaded:
+
+1. Navigate to ``http://ip-address/rtl/``.
+2. Expand :guilabel:`disk` in the left pane.
+3. Right-click the ``Lua-Examples`` directory.
+4. Select :guilabel:`New App`.
+5. Enable :guilabel:`Running` and :guilabel:`LSP App`.
+6. Click :guilabel:`Save`.
+
+You can now expand the example application in the left pane, open any example
+file in the editor, and run it directly from the IDE.
+
+Using an External IDE
+---------------------
+
+The built-in web IDE is excellent for quick iteration, but an external editor
+or IDE may be more comfortable for larger projects. You can edit files directly
+on the ESP32 by mounting the device as a WebDAV drive.
+
+For operating-system-specific instructions, see the `How to Mount a WebDAV
+Drive <https://fuguhub.com/FileServer.lsp>`__ guide.
+
+The WebDAV URL is:
+
+::
+
+   https://ip-address/rtl/apps/
 
 .. _LuaDebug:
 
+Debugging Lua Code
+------------------
 
-How To Debug Lua Code
----------------------
+Remote debugging is supported through the Barracuda App Server `Lua debug
+module <https://realtimelogic.com/ba/doc/?url=auxlua.html#dbgmon>`__. This
+workflow integrates with Visual Studio Code and lets you debug Lua running on
+the device.
 
-Debugging Lua code is made easy with the Barracuda App Server's `Lua debug module <https://realtimelogic.com/ba/doc/?url=auxlua.html#dbgmon>`__, which is compatible with Visual Studio Code and the Lua plugin. To use the debugger, you need access to the Lua files, but it's not possible to access them via WebDAV from the device when debugging. This is because the debug module stops all activity in the server, including the WebDAV server, when a breakpoint is hit. Instead, keep the Lua files on your host computer and access them from the device using the NetIo feature. Refer to the Xedge32 documentation for `additional NetIo details <https://realtimelogic.com/ba/doc/?url=xedge/readme.html#netio>`__.
+|Lua Debugger Screenshot|
 
-**Configure a debug session as follows:**
+One important detail is that breakpoints pause the server. Because of that, the
+device's WebDAV service is also paused while the debugger is stopped. For this
+reason, it is better to keep your source files on the host computer and let the
+device access them through NetIo during a debug session.
 
-Follow the instructions in our `How to Debug Lua Code Using Visual Studio Code <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug>`__ guide on GitHub. Make sure to install all tools listed in the `Prerequisites <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#prerequisites>`__ section and configure Visual Studio Code as explained in the `Configuring VS <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#configuring-vs>`__ section.
+For the NetIo background, see the `additional Xedge documentation
+<https://realtimelogic.com/ba/doc/?url=xedge/readme.html#netio>`__.
 
-Next, navigate to your local ``xedge`` directory and copy the `File Server Directory from GitHub <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug/FileServer>`__ to ``xedge-ESP32/BAS/examples/xedge/FileServer``.
+Debugging Workflow
+------------------
 
-To start the Mako Server, run the following command in the ``xedge-ESP32/BAS/examples/xedge`` directory:
+Follow the `How to Debug Lua Code Using Visual Studio Code
+<https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug>`__ guide
+and complete the prerequisites listed there.
 
-.. container:: cmd
+Then:
 
-   mako -l::FileServer
+1. Copy the `File Server directory
+   <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug/FileServer>`__
+   into ``xedge-ESP32/BAS/examples/xedge/FileServer`` on your host machine.
+2. Start the Mako Server from ``xedge-ESP32/BAS/examples/xedge``:
 
-If the Mako Server is not in the path, use this command instead:
+   .. container:: cmd
 
-.. container:: cmd
+      mako -l::FileServer
 
-   /path/2/mako -l::FileServer
+   If ``mako`` is not in your path:
 
-The File Server App sets up a file server that is accessed by the NetIo client running in the device. The File Server App should automatically open a browser window with the Web File Manager. Click the Lua-Examples link (1) and copy the full URL (2).
+   .. container:: cmd
 
-|Web File Server|
+      /path/2/mako -l::FileServer
 
-Using the browser, navigate to ``http://ip-address/rtl/``, right-click :guilabel:`net` in the left pane and paste in the URL in the app dialog's :guilabel:`URL` field. Enable :guilabel:`Running` and :guilabel:`LSP App`. click :guilabel:`Save`.
+3. When the File Server opens in the browser, click ``Lua-Examples`` and copy
+   the full URL shown by the file server.
+4. In Xedge32, open ``http://ip-address/rtl/``, right-click :guilabel:`net`,
+   and paste that URL into the app dialog.
+5. Enable :guilabel:`Running` and :guilabel:`LSP App`, then click
+   :guilabel:`Save`.
 
-The following printout should appear in the File Server console as soon as the NetIo client connects to the File Server App running on your host:
+As soon as the device connects to the File Server app, you should see a message
+similar to:
 
 ::
 
    Creating 'Visual Studio Code' config file:   Lua-Examples/.vscode/launch.json
 
+The generated ``launch.json`` includes the required `sourceMaps attribute
+<https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#setting-up-sourcemaps-in-launchjson>`__.
 
+Starting the First Debug Session
+--------------------------------
 
-As detailed in the GitHub documentation, a launch.json file is required with a `sourceMaps attribute <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Lua-Debug#setting-up-sourcemaps-in-launchjson>`__.  This file with the sourceMaps attribute is automatically created by the File Server App.
+1. Open the local directory ``xedge-ESP32/BAS/examples/xedge/Lua-Examples`` in
+   Visual Studio Code.
+2. Open ``httpclient.lsp`` and add the following lines near the top of the
+   file:
 
-Start Visual Studio Code and open the local directory: xedge-ESP32/BAS/examples/xedge/Lua-Examples
+   .. code-block:: lua
 
-Click on the httpclient.lsp file and add the two following lines at the top of the file just below the comment:
+      require"ldbgmon".connect{client=false}
+      trace"Running LSP page"
 
-.. code-block:: lua
+3. In a browser, open ``http://ip-address/LuaExamples/httpclient.lsp``.
+4. The page will appear to hang. That is expected because the web server is now
+   waiting for the debugger to attach.
+5. Press ``F5`` in Visual Studio Code to start debugging.
 
-   require"ldbgmon".connect{client=false}
-   trace"Running LSP page"
+Once the debugger attaches, execution stops automatically. You can now step
+through the code, resume execution, and set breakpoints for later runs.
 
-The following screenshot shows the code modification:
-
-|Visual Studio Code with Lua|
-
-Using your browser, navigate to ``http://ip-address/LuaExamples/httpclient.lsp``, where ip-address is your ESP32's IP address. The browser will now be waiting (spinning) since the web server is now frozen and waiting for the debugger client (Visual Studio Code) to connect. The web server can at this point only be resumed by the debugger.
-
-In Visual Studio Code, press the F5 button to start a debug session.  Visual Studio Code should now connect to the debug monitor and automatically halt the code as shown in the screenshot below.
-
-|Visual Studio Code with Lua Http Client|
-
-You can now step through the code or simply resume by pressing F5. When the server resumes, the browser window stops spinning. Refreshing the browser window will not stop the LSP page again now that you have an established debugger connection. To stop the code at the same location, set a breakpoint at the trace() call in the editor.
-
-|Visual Studio Code Set Breakpoint|
-
-You can now refresh the browser and the new breakpoint will be hit. Try stepping into the code (F11). Notice that you can step into the HTTP client library `httpm <https://realtimelogic.com/ba/doc/?url=auxlua.html#managed>`__, which is partly implemented in Lua. The code is not part of your application, but is embedded inside the firmware. The debug monitor sends the Lua source code to Visual Studio Code from the Xedge32's ZIP file embedded in the firmware.
-
-The following short video shows how to remotely debug Lua code on a Raspberry Pi. The instructions are similar; however, the server running on the Raspberry Pi (the one being debugged) is the Mako Server and not Xedge32.
+When you refresh the page again, the new breakpoint is hit. You can even step
+into library code such as `httpm
+<https://realtimelogic.com/ba/doc/?url=auxlua.html#managed>`__, including Lua
+code embedded in the firmware image.
 
 Further Reading
 ---------------
 
-   Prior to reading any of the following tutorials, check out the `online Lua Tutorials <https://tutorial.realtimelogic.com/>`__ and read the `Xedge Documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_.
+Before diving deeply into application development, it helps to read the
+following:
 
-**Lua examples designed for ESP32:**
+- `Online Lua tutorials <https://tutorial.realtimelogic.com/>`__
+- `Xedge32 tutorials <https://realtimelogic.com/xedge32-tutorials/>`_
+- `Xedge documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_
+- `ESP32 example section in LSP-Examples
+  <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_
 
-See the `ESP32 section <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_ in the LSP-Example's GitHub repository.
+Additional articles that work well with Xedge32:
 
-**Lua examples and tutorials compatible with ESP32:**
+- `How to connect the ESP32 to an MQTT cloud server using Mutual TLS Authentication <https://makoserver.net/articles/How-to-Connect-to-AWS-IoT-Core-using-MQTT-amp-ALPN>`__
+- `How to design a web user interface by using a ready to use dashboard app template <https://makoserver.net/articles/How-to-Build-an-Interactive-Dashboard-App>`__
+- `How to perform rapid IoT device client development using Lua <https://realtimelogic.com/articles/Rapid-Firmware-Development-with-the-Barracuda-App-Server>`__
+- `How to access the web server behind a firewall without using port forwarding <https://makoserver.net/articles/Secure-Remote-Access>`__
+- `Ajax for beginners <https://makoserver.net/articles/Ajax-for-Beginners>`__
+- `How to design a modern multiuser reactive web interface <https://realtimelogic.com/articles/Modern-Approach-to-Embedding-a-Web-Server-in-a-Device>`__
+- `Why use Lua for embedded web application development <https://realtimelogic.com/articles/Lua-FastTracks-Embedded-Web-Application-Development>`__
+- `Using the ESP32 as a foundation for your On-Premises IoT Platform <https://realtimelogic.com/articles/OnPremises-IoT-Platform>`__
 
-.. container:: list
-
-   -  `How to connect the ESP32 to an MQTT cloud server using Mutual
-      TLS
-      Authentication <https://makoserver.net/articles/How-to-Connect-to-AWS-IoT-Core-using-MQTT-amp-ALPN>`__
-   -  `How to design a web user interface by using a ready to use
-      dashboard app
-      template <https://makoserver.net/articles/How-to-Build-an-Interactive-Dashboard-App>`__
-   -  `How to perform rapid IoT device client development using
-      Lua <https://realtimelogic.com/articles/Rapid-Firmware-Development-with-the-Barracuda-App-Server>`__
-   -  `How to access the web server behind a firewall without using port
-      forwarding <https://makoserver.net/articles/Secure-Remote-Access>`__
-   -  `Ajax for
-      beginners <https://makoserver.net/articles/Ajax-for-Beginners>`__
-   -  `How to design a modern multiuser reactive web
-      interface <https://realtimelogic.com/articles/Modern-Approach-to-Embedding-a-Web-Server-in-a-Device>`__
-   -  `Why use Lua for embedded web application
-      development <https://realtimelogic.com/articles/Lua-FastTracks-Embedded-Web-Application-Development>`__
-   -  `Using the ESP32 as a foundation for your On-Premises IoT
-      Platform <https://realtimelogic.com/articles/OnPremises-IoT-Platform>`__
-
-.. |Web File manager: Drag and Drop| image:: https://realtimelogic.com/downloads/bas/rt1020/Web-File-manager-Drag-Drop.png
-   :class: fright
-.. |Web File Manager: Upload| image:: https://realtimelogic.com/downloads/bas/rt1020/Web-File-Manager-Upload.png
-   :class: fright
 .. |Lua Debugger Screenshot| image:: https://makoserver.net/blogmedia/Lua-Debugger.gif
-.. |Web File Server| image:: https://realtimelogic.com/downloads/bas/rt1020/FileServer-URL.png
-.. |Visual Studio Code with Lua| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Mod.png
-.. |Visual Studio Code with Lua Http Client| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Auto-BP.png
-.. |Visual Studio Code Set Breakpoint| image:: https://realtimelogic.com/downloads/bas/rt1020/VS-HttpClient-Set-BP.png
-

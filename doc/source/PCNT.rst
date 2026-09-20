@@ -1,287 +1,296 @@
-
 PCNT API
-==========
+========
 
-The Lua PCNT module interfaces with the `ESP-IDF PCNT <https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/pcnt.html>`_ (Pulse Counter) functionality, designed for counting the rising and falling edges of an input signal on the ESP32.
+The PCNT API exposes the ESP32 pulse counter hardware to Lua. Pulse counters
+are useful when you need to count edges, track direction, or monitor quadrature
+signals from devices such as rotary encoders, tachometers, flow sensors, and
+other pulse-producing hardware.
+
+Xedge32 mirrors the underlying ESP-IDF PCNT model closely enough that the
+official `ESP-IDF PCNT documentation
+<https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/pcnt.html>`_
+is still a useful reference when you need hardware-level background.
+
+Why Use PCNT
+------------
+
+The PCNT peripheral is much better suited than ordinary GPIO polling when you
+need reliable counting at higher edge rates. It moves the edge handling into
+hardware and lets Lua read the accumulated result or respond to watchpoints.
 
 Key Features
 ------------
 
-- **16-bit Signed Counter**
-  
-  - Each pulse counter unit features a 16-bit signed counter register. The maximum frequency the counters can manage is 40 Mhz.
+- **16-bit signed counter**
+  Each PCNT unit contains a signed 16-bit counter register. The hardware can
+  handle input frequencies up to 40 MHz.
 
-- **Two Configurable Channels**
-  
-  - There are two channels per unit, each configurable to increment or decrement the counter based on the input signal.
+- **Two configurable channels per unit**
+  Each channel can be programmed to increment, decrement, or hold the counter
+  based on edge and level conditions.
 
-- **Signal and Control Inputs**
-  
-  - *Signal Input*: Accepts signal edges (rising or falling) for detection.
-  - *Control Input*: Enables or disables the signal input dynamically.
+- **Separate signal and control inputs**
+  The signal input is used for edge detection, while the control input modifies
+  how those edges affect the counter.
 
-- **Input Filters**
-  
-  - Optional filters are available for count and control inputs to eliminate unwanted signal glitches.
+- **Optional glitch filtering**
+  A hardware filter can ignore very short pulses that are likely to be noise.
 
-- **Watchpoints and Interrupts**
-  
-  - The pulse counters offer five watchpoints sharing a single interrupt.  The watchpoints include:
+- **Watchpoints with callbacks**
+  You can trigger Lua callbacks when the counter reaches selected values such as
+  zero, thresholds, or high and low limits.
 
-    - *Maximum/Minimum Count Value*: Triggers an interrupt when the counter reaches the set upper (positive number) or lower (negative number) limit, resetting the counter to 0.
-    - *Two Threshold Values (Threshold 0 and 1)*: Triggers an interrupt when these preset values are reached while counting continues.
-    - *Zero*: Triggers an interrupt when the counter value is zero, with counting continuing.
+For a deeper hardware description, see Chapter 17 of the `ESP32 Technical
+Reference Manual
+<https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf>`_.
 
-For a comprehensive understanding of the pulse counter hardware, refer to Chapter 17 of the `ESP32 Technical Reference Manual <https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf>`_.
+Creating a PCNT Object
+----------------------
 
-
-
-esp32.pcnt
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Create a PCNT object.
+Function signature:
 
 .. code-block:: lua
 
-   pcntm=esp32.pcnt(cfg)
+   pcnt, err = esp32.pcnt(cfg)
 
+The ``cfg`` argument is a Lua table that describes the counter limits, optional
+filters, optional watchpoints, and one or two channel definitions.
 
+Top-Level Configuration Fields
+------------------------------
 
-Argument cfg is a table with the following fields:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``high``
+   Upper limit for the pulse counter.
 
-- ``high``
-  
-  - The upper limit for the pulse counter.
-  - Type: number
+``low``
+   Lower limit for the pulse counter.
 
-- ``low``
-  
-  - The lower limit for the pulse counter.
-  - Type: number
+``accumulator``
+   Optional boolean. When ``true``, the driver accumulates values instead of
+   resetting at the limits. Default is ``false``.
 
-- ``accumulator`` (optional)
-  
-  - Determines whether the counter should accumulate values or reset on reaching limits.
-  - Type: boolean
-  - Default: false
+``glitch``
+   Optional glitch-filter duration in nanoseconds. Default is ``0`` which means
+   no filter.
 
-- ``glitch`` (optional) glitch filter
-  
-  - Sets a filter to ignore glitches (spurious pulses) on the input signal. Value is in nano seconds.
-  - Type: number
-  - Default: 0 (no filter)
+``watch``
+   Optional watchpoint configuration table.
 
-- ``watch`` (optional)
-  
-  - Configuration for watch points and associated callback.
-  - Type: table
-  - Fields:
+``channels``
+   Required array of channel definitions.
 
-    - ``points``
-      
-      - A list of numbers where the counter will trigger a callback.
-      - Type: array of numbers
+Watchpoint Configuration
+------------------------
 
-    - ``callback``
-      
-      - The function to call when a watch point is reached. Receives the current count as an argument.
-      - Type: function
-      - Signature: ``function(count, crossmode)``
-      - Arguments:
+If ``watch`` is provided, it must contain:
 
-        - ``count`` Watch point value that triggered the event
-        - ``crossmode`` Indicates how the PCNT unit crossed the last zero point. The possible zero cross modes are:
-          
-          - 0 Start from positive value, end to zero, i.e., +N -> 0
-          - 1 Start from negative value, end to zero, i.e., -N -> 0
-          - 2 Start from negative value, end to positive value, i.e., -N -> +M
-          - 3 Start from positive value, end to negative value, i.e., +N -> -M
+``points``
+   Array of counter values that should trigger a callback.
 
-- ``channels``
-  
-  - An array of channel configurations.
-  - Type: array of tables
-  - Structure:
+``callback``
+   Function called when one of the watchpoints is reached.
 
-    - ``gpio``
-      
-      - GPIO configuration for the channel.
-      - Type: table
-      - Fields:
-
-        - ``edge``
-          
-          - GPIO number for edge detection.
-          - Type: number
-
-        - ``level``
-          
-          - GPIO number for level detection.
-          - Type: number
-
-    - ``action``
-      
-      - Action configuration for the channel.
-      - Type: table
-      - Fields:
-
-        - ``edge``
-          
-          - Actions for positive and negative edges.
-          - Type: table
-          - Fields:
-
-            - ``positive``
-              
-              - Action on positive edge.
-              - Type: string
-              - Options: "HOLD", "INCREASE", "DECREASE"
-
-            - ``negative``
-              
-              - Action on negative edge.
-              - Type: string
-              - Options: "HOLD", "INCREASE", "DECREASE"
-
-        - ``level``
-          
-          - Actions for high and low levels.
-          - Type: table
-          - Fields:
-
-            - ``high``
-              
-              - Action when the level is high.
-              - Type: string
-              - Options: "KEEP", "INVERSE", "HOLD"
-
-            - ``low``
-              
-              - Action when the level is low.
-              - Type: string
-              - Options: "KEEP", "INVERSE", "HOLD"
-
-Return Object
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-The `esp32.pcnt` function returns an object with the following methods:
-
-- ``start()``
-  
-  - Starts the pulse counter.
-
-- ``stop()``
-  
-  - Stops the pulse counter.
-
-- ``count()``
-  
-  - Returns the current count value.
-
-- ``clear()``
-  
-  - Clears the counter.
-
-
-Usage Example
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-This Lua example is designed to mirror the functionality of the `Rotary Encoder C Code Example <https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotary_encoder>`_.
+Callback signature:
 
 .. code-block:: lua
 
-    local gpioA = 0
-    local gpioB = 2
+   function(count, crossmode)
 
-    pcnt,err = esp32.pcnt{
-        high = 100,
-        low = -100,
-        glitch=1000,
-        watch = {
-            points = {-100, -50, 0, 50, 100},
-            callback = function(count)
-                trace("Watch point reached with count: ", count)
-            end
-        },
-        channels = {
-            { -- Channel 1
-                gpio = {
-                    edge = gpioA,
-                    level = gpioB
-                },
-                action = {
-                    edge = {
-                        positive = "DECREASE",
-                        negative = "INCREASE"
-                    },
-                    level = {
-                        high = "KEEP",
-                        low = "INVERSE"
-                    }
-                }
+Arguments:
+
+- ``count``: The watchpoint value that triggered the callback.
+- ``crossmode``: How the counter crossed zero most recently.
+
+Possible zero-cross modes:
+
+- ``0``: ``+N -> 0``
+- ``1``: ``-N -> 0``
+- ``2``: ``-N -> +M``
+- ``3``: ``+N -> -M``
+
+Channel Configuration
+---------------------
+
+Each entry in ``channels`` is a table with ``gpio`` and ``action`` sub-tables.
+
+``gpio`` fields:
+
+- ``edge``: GPIO used for edge detection.
+- ``level``: GPIO used for control/level detection.
+
+``action.edge`` fields:
+
+- ``positive``: Action on positive edge.
+- ``negative``: Action on negative edge.
+
+Valid edge actions:
+
+- ``"HOLD"``
+- ``"INCREASE"``
+- ``"DECREASE"``
+
+``action.level`` fields:
+
+- ``high``: Behavior when the control level is high.
+- ``low``: Behavior when the control level is low.
+
+Valid level actions:
+
+- ``"KEEP"``
+- ``"INVERSE"``
+- ``"HOLD"``
+
+PCNT Object Methods
+-------------------
+
+The object returned by ``esp32.pcnt()`` provides the following methods:
+
+``pcnt:start()``
+   Starts counting.
+
+``pcnt:stop()``
+   Stops counting.
+
+``pcnt:count()``
+   Returns the current counter value.
+
+``pcnt:clear()``
+   Clears the current counter value.
+
+Rotary Encoder Example
+----------------------
+
+The following example mirrors the functionality of Espressif's `rotary encoder
+PCNT example
+<https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotary_encoder>`_.
+
+The example assumes the encoder signals are already pulled to a valid logic
+level. Many rotary encoder modules include pull-up resistors. If you use a bare
+mechanical encoder, add suitable pull-ups or pull-downs for your board.
+
+.. code-block:: lua
+
+   local gpioA = 0
+   local gpioB = 2
+
+   local pcnt, err = esp32.pcnt{
+      high = 100,
+      low = -100,
+      glitch = 1000,
+      watch = {
+         points = {-100, -50, 0, 50, 100},
+         callback = function(count)
+            trace("Watch point reached with count:", count)
+         end
+      },
+      channels = {
+         {
+            gpio = {
+               edge = gpioA,
+               level = gpioB
             },
-            {  -- Channel 2
-                gpio = {
-                    edge = gpioB,
-                    level = gpioA
-                },
-                action = {
-                    edge = {
-                        positive = "INCREASE",
-                        negative = "DECREASE"
-                    },
-                    level = {
-                        high = "KEEP",
-                        low = "INVERSE"
-                    }
-                }
+            action = {
+               edge = {
+                  positive = "DECREASE",
+                  negative = "INCREASE"
+               },
+               level = {
+                  high = "KEEP",
+                  low = "INVERSE"
+               }
             }
-        }
-    }
-    if pcnt then
-       pcnt:start()
-       timer=ba.timer(function() trace("Pulse count:",pcnt:count()) return true end)
-       timer:set(1000)
-    else
-       trace(err)
-    end
+         },
+         {
+            gpio = {
+               edge = gpioB,
+               level = gpioA
+            },
+            action = {
+               edge = {
+                  positive = "INCREASE",
+                  negative = "DECREASE"
+               },
+               level = {
+                  high = "KEEP",
+                  low = "INVERSE"
+               }
+            }
+         }
+      }
+   }
 
+   if pcnt then
+      pcnt:start()
+      local timer = ba.timer(function()
+         trace("Pulse count:", pcnt:count())
+         return true
+      end)
+      timer:set(1000)
+   else
+      trace(err)
+   end
 
-How to Use the Example
-~~~~~~~~~~~~~~~~~~~~~~~~
+How the Example Works
+---------------------
 
-This section provides an example of how to use the ESP32's Pulse Counter (PCNT) functionality with a rotary encoder.
+This configuration is designed for a quadrature rotary encoder:
 
-Hardware Required
-~~~~~~~~~~~~~~~~~~~~~~~~
+- Channel 1 looks at ``gpioA`` as the edge source and ``gpioB`` as the control
+  level.
+- Channel 2 swaps the two signals.
+- The level configuration inverts counting direction depending on the state of
+  the other encoder line.
 
-- An ESP development board.
-- An EC11 rotary encoder, or other encoders capable of producing quadrature waveforms.
+That is what allows the counter to move up or down as the encoder is rotated in
+different directions.
 
-Connection
-~~~~~~~~~~~~~~~~~~~~~~~~
+Hardware Setup
+--------------
 
-Connect the ESP development board and the rotary encoder as follows:
+The example assumes:
+
+- an ESP development board, and
+- an EC11 rotary encoder or another encoder that outputs quadrature waveforms.
+
+Wiring Example
+~~~~~~~~~~~~~~
+
+Connect the encoder as follows:
 
 .. code-block:: text
 
-    +--------+              +---------------------------------+
-    |        |              |                                 |
-    |      A +--------------+ GPIO 0 (internal pull-up)       |
-    |        |              |                                 |
-    +-------+|              |                                 |
-    |     | |  GND +--------------+ GND                       |
-    +-------+|              |                                 |
-    |        |              |                                 |
-    |      B +--------------+ GPIO 2 (internal pull-up)       |
-    |        |              |                                 |
-    +--------+              +---------------------------------+
+   +--------+              +---------------------------------+
+   |        |              |                                 |
+   |      A +--------------+ GPIO 0                         |
+   |        |              |                                 |
+   +-------+|              |                                 |
+   |     | |  GND +--------------+ GND                       |
+   +-------+|              |                                 |
+   |        |              |                                 |
+   |      B +--------------+ GPIO 2                         |
+   |        |              |                                 |
+   +--------+              +---------------------------------+
 
 In this setup:
 
-- Connect pin A (CLK) of the rotary encoder to GPIO 0 on the ESP development board.
-- Connect pin B (DT) of the rotary encoder to GPIO 2 on the ESP development board.
-- Connect the GND pin of the rotary encoder to the GND pin on the ESP development board.
+- encoder pin **A (CLK)** connects to GPIO 0,
+- encoder pin **B (DT)** connects to GPIO 2, and
+- encoder **GND** connects to board **GND**.
 
-This configuration allows the ESP32 to read the quadrature waveforms generated by the rotary encoder through GPIO 0 and GPIO 2. In this example, each complete rotary step will result in PCNT counter increasing or decreasing by 4.
+With the example configuration above, one full rotary detent typically changes
+the PCNT counter by four counts because the hardware sees four signal edges per
+quadrature cycle.
+
+The PCNT API configures the pulse counter peripheral. It does not, by itself,
+turn on GPIO pull-up or pull-down resistors. Treat signal conditioning as part
+of the hardware setup.
+
+Practical Guidance
+------------------
+
+- Use the glitch filter when mechanical switches or noisy signals cause false
+  counts.
+- Use watchpoints when you want low-overhead notifications at important count
+  thresholds.
+- For rotary encoders, expect to do some board-specific tuning of pull-ups,
+  filter values, and direction mapping.

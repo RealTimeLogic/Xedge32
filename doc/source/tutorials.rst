@@ -1,38 +1,68 @@
 Tutorials and AUX APIs
-=======================
+======================
 
-- `Xedge32 Tutorials <https://realtimelogic.com/xedge32-tutorials/>`_:
-  Comprehensive guides to master Xedge32's functionalities, tailored for both beginners and advanced users.
+This documentation set focuses on the Xedge32-specific south bridge APIs. In
+practice, most Xedge32 projects also make use of the broader Lua, Xedge, and
+Barracuda App Server documentation. The links below are the quickest way to
+expand beyond the ESP32 hardware pages in this manual.
 
-- `Online Interactive Lua Tutorial <https://tutorial.realtimelogic.com/Lua-Types.lsp>`_:
-  An engaging, hands-on tutorial for learning Lua, the programming language used in Xedge32, available online.
+Recommended Learning Resources
+------------------------------
 
-- `GitHub Xedge32 Examples <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_:
-  A rich collection of practical examples and code snippets for Xedge32, hosted on GitHub.
+- `How Xedge32, Xedge, and Barracuda App Server Work Together
+  <https://realtimelogic.com/articles/How-Xedge32-Xedge-and-Barracuda-App-Server-Work-Together>`_
+  The best first read when you need to understand which documentation set to
+  use for each layer.
+- `Xedge32 Tutorials <https://realtimelogic.com/xedge32-tutorials/>`_
+  A collection of step-by-step guides focused on getting productive with
+  Xedge32.
+- `Online Interactive Lua Tutorial <https://tutorial.realtimelogic.com/Lua-Types.lsp>`_
+  A hands-on introduction to Lua for users who are new to the language.
+- `GitHub Xedge32 Examples <https://github.com/RealTimeLogic/LSP-Examples/tree/master/ESP32>`_
+  Ready-to-run example programs and reference code for ESP32 targets.
+- `Mako Server Tutorials <https://makoserver.net/tutorials/>`_
+  Broader tutorials that often apply directly to Xedge32 because both products
+  share the same underlying development model.
 
-- `Mako Server Tutorials <https://makoserver.net/tutorials/>`_:
-  Extensive tutorials from the Mako Server, Xedge32's larger counterpart, which are also applicable and beneficial for Xedge32 users.
+How Xedge32 Fits Together
+-------------------------
 
+Xedge32 is easiest to understand when you view it as three layers working
+together:
 
+1. **Barracuda App Server**
+   This is the underlying runtime and IoT foundation. It provides the majority
+   of the network, protocol, security, storage, and web capabilities used by
+   Xedge32 applications.
 
-Xedge32 Components and Documentation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+   - `Lua API <https://realtimelogic.com/ba/doc/?url=lua.html>`_
+   - `IoT Protocols <https://realtimelogic.com/ba/doc/?url=IoT.html>`_
+   - `Product page <https://realtimelogic.com/products/barracuda-application-server/>`_
 
-Keep in mind that this document exclusively covers Xedge32-specific features. Xedge32 is composed of three software components:
+2. **Xedge**
+   Xedge is the Lua-oriented development environment and workflow layer. It
+   gives you the browser-based editor, rapid prototyping model, and application
+   runtime used on several platforms, not only ESP32.
 
-1. **Barracuda App Server**: The cornerstone of Xedge32, this advanced IoT toolkit constitutes 90% of its functionality. Serving as a foundational tool for embedded systems and IoT applications, it provides web server capabilities, data encryption, and multi-protocol support, making it the backbone for secure and scalable IoT projects.
+   - `Xedge API and how-to documentation <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_
+   - `Online demo <https://tutorial.realtimelogic.com/rtl/>`_
 
-  - `Lua API <https://realtimelogic.com/ba/doc/?url=lua.html>`_
-  - `IoT Protocols <https://realtimelogic.com/ba/doc/?url=IoT.html>`_
-  - `Product page <https://realtimelogic.com/products/barracuda-application-server/>`_
+3. **Xedge32 for ESP32**
+   This is the ESP32-specific extension layer documented in this manual. It
+   adds the south bridge API for GPIO, ADC, UART, RMT, camera access, and other
+   peripherals.
 
-2. **Xedge**: A generic, Lua-based development platform (REPL) that facilitates rapid prototyping without the need for frequent compile and deploy cycles and is applicable beyond just ESP32.
+   - `Introduction <../index.html>`_
 
-  - `Xedge API and howto <https://realtimelogic.com/ba/doc/?url=Xedge.html>`_
-  - `Online demo <https://tutorial.realtimelogic.com/rtl/>`_
+Why This Matters
+----------------
 
+New users often start by reading only the ESP32 peripheral pages. That is a
+good starting point, but most real applications combine:
 
-3. **Xedge32 for ESP32**: Specifically designed for the ESP32 microcontroller, this component leverages the Xedge framework and Barracuda App Server. It enables easier utilization of ESP32's hardware features like GPIOs through Lua.
+- Xedge32 peripheral access,
+- generic Xedge application behavior, and
+- Barracuda App Server networking or IoT protocol features.
 
-  - `Introduction <../index.html>`_
-
+If you keep those three layers in mind while learning, the rest of the
+documentation becomes much easier to navigate.

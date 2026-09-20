@@ -1,137 +1,187 @@
+.. _I2C API:
+
 I2C API
-========================
+=======
 
-The I2C API enables communication with I2C-enabled devices on your ESP32.
+The I2C API lets Xedge32 communicate with sensors, displays, EEPROMs, and other
+peripherals that use the I2C bus. It exposes a straightforward master-side API
+that is well suited for both direct register access and small driver modules
+written in Lua.
 
-To use the I2C API, begin by creating an I2C master object with ``esp32.i2cmaster``, specifying the I2C port, SDA GPIO, SCL GPIO, and desired communication speed. This bus-based API allows for direct interactions with I2C devices using simplified methods.
+The typical workflow is:
 
-**I2C Interactions:**
+1. Create an I2C master object.
+2. Probe the device address if needed.
+3. Read from or write to the target device.
+4. Close the bus object when you are done.
 
-- **Device Check:** Use ``i2cm:probe`` to verify if an I2C device is connected at a specific address.
+I2C is a shared two-wire bus. Many sensors can use the same SDA and SCL pins as
+long as each device has a unique address. Most small breakout boards already
+include pull-up resistors, but bare sensors often do not. If the bus behaves
+unreliably, check power, ground, address selection, and pull-ups before changing
+the Lua code.
 
-- **Simple Read:** For a simpler read operation that does not require a specific register, use  ``i2cm:read`` to retrieve data.
+Creating an I2C Master
+----------------------
 
-- **Read Data From Register:** Use  ``i2cm:readfrom`` to read from a specified register of the device without issuing a stop condition between the write and read operations.
-
-- **Write Data:** Use  ``i2cm:write`` to send data directly to the I2C device.
-
-- **Close Connection:** When finished, release the I2C bus by calling  ``i2cm:close``.
-
-
-esp32.i2cmaster
-----------------
-
-Create an I2C master object.
+Function signature:
 
 .. code-block:: lua
 
-   i2cm=esp32.i2cmaster(port, pinSDA, pinSCL, speed)
+   i2cm = esp32.i2cmaster(port, pinSDA, pinSCL, speed)
 
+Parameters
+~~~~~~~~~~
 
-**Parameters:**
+- ``port``: I2C controller number, for example ``0``.
+- ``pinSDA``: GPIO pin used for the SDA line.
+- ``pinSCL``: GPIO pin used for the SCL line.
+- ``speed``: Bus speed in Hertz.
 
-- **port** (``int``): I2C port number - e.g. 0
-- **pinSDA** (``int``): the GPIO number used for the I2C Serial Data 
-- **pinSCL** (``int``): the GPIO number used for the I2C Serial Clock
-- **speed** (``int``): the clock speed
+Use the 7-bit I2C address shown in the device data sheet, for example ``0x76``.
+Do not left-shift the address; Xedge32 passes the address to the ESP-IDF driver
+in normal 7-bit form.
+
+Return Value
+~~~~~~~~~~~~
+
+The function returns an I2C master object.
 
 I2C Master Object Methods
---------------------------
+-------------------------
 
-**Note:** Some methods may block for up to the specified timeout. In real-time applications where responsiveness is critical, consider running these methods in a separate thread or on a dedicated LSP page, as described in the `Lua Thread Library documentation <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#thread_lib>`_.
+.. note::
 
+   Some operations may block for up to the specified timeout. If predictable
+   responsiveness matters, consider running longer I2C transactions in a
+   separate thread or on a dedicated LSP page. See the `Lua thread library
+   documentation
+   <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#thread_lib>`_.
 
-i2cm:probe(address, [timeout])
-------------------------------
+``i2cm:probe(address [, timeout])``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Probes a device at the specified address to verify if an I2C device is connected at this address.
+Checks whether a device responds at the given address.
 
-**Parameters:**
+Parameters:
 
-- **address** (``int``): The I2C device address
-- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+- ``address``: I2C device address.
+- ``timeout``: Optional timeout in milliseconds. Default is ``500``.
 
-**Returns**:
-``true`` if the device responds, otherwise ``nil``, ``error code``.
+Returns ``true`` if the device responds. Otherwise returns ``nil, error``.
 
-i2cm:read(address, len, [timeout])
-----------------------------------
-Read from Device: For a simpler read operation that does not require a specific register, use i2cm:read to retrieve data.
+``i2cm:read(address, len [, timeout])``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Parameters:**
+Reads raw data directly from the device without first selecting a register.
 
-- **address** (``int``): I2C device address
-- **len** (``int``): Number of bytes to read 
-- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+Parameters:
 
-**Returns**:
-``x, err``: The data read as a Lua string if successful, or ``nil``, ``error code`` if the operation fails.
+- ``address``: I2C device address.
+- ``len``: Number of bytes to read.
+- ``timeout``: Optional timeout in milliseconds. Default is ``500``.
 
+Returns the data as a Lua string on success, otherwise ``nil, error``.
 
-i2cm:readfrom(address, register, len, [timeout])
-------------------------------------------------
-Reads data from a specified register on the I2C device. This method does not send a stop condition between the write and read operations, ensuring a repeated start.
+``i2cm:readfrom(address, registerOrBytes, len [, timeout])``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Parameters:**
+Reads data from a specific device register. This method performs the common
+write-then-read transaction without issuing a stop condition between the two
+phases, which results in a repeated start.
 
-- **address** (``int``): I2C device address
-- **register** (``int``): Register address to read from
-- **len** (``int``): Number of bytes to read
-- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+Parameters:
 
-**Returns**:
-``x, err``: The data read as a Lua string if successful, or ``nil``, ``error code`` if the operation fails.
+- ``address``: I2C device address.
+- ``registerOrBytes``: Register selector to write before reading. This can be a
+  single numeric byte such as ``0xF7`` or a Lua string when the device needs a
+  multi-byte register address.
+- ``len``: Number of bytes to read.
+- ``timeout``: Optional timeout in milliseconds. Default is ``500``.
 
-i2cm:write(address, data, [timeout])
-------------------------------------
-Writes data to the specified I2C device.
+Returns the data as a Lua string on success, otherwise ``nil, error``.
 
-**Parameters:**
+``i2cm:write(address, data [, timeout])``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- **address** (``int``): I2C device address
-- **data** (``string`` or ``int``): Data to write, as a single byte or string
-- **timeout** (``int``, optional): Timeout duration in ms, defaults to 500ms
+Writes data to the target device.
 
-**Returns**:
-``true`` on success; otherwise, ``nil``, ``error code`` is returned.
+Parameters:
 
-i2cm:close()
-------------
-Closes the I2C connection and releases allocated resources for the device.
+- ``address``: I2C device address.
+- ``data``: Either a Lua string or a single byte value.
+- ``timeout``: Optional timeout in milliseconds. Default is ``500``.
 
-**Returns**:
-``true`` on success; otherwise, ``nil``, ``error code`` is returned.
+Returns ``true`` on success, otherwise ``nil, error``.
 
+``i2cm:close()``
+~~~~~~~~~~~~~~~~
 
-I2C Example
-------------------
+Closes the I2C master object and releases the associated resources.
 
-The following example shows the read and write functions in the :ref:`BME280 Lua Module <BME280 Module>`. Variable regAddr is the register to read in the BME280 chip.
+Returns ``true`` on success, otherwise ``nil, error``.
+
+Example
+-------
+
+The example below demonstrates the same style of operations typically used in a
+:ref:`BME280 Module` driver: probing the device, writing a configuration
+register, reading from a specific register, and then performing a plain read.
 
 .. code-block:: lua
 
-	-- Initialize the I2C master
-	local i2cm = esp32.i2cmaster(0, 21, 22, 400000)  -- Port 0, SDA on GPIO 21, SCL on GPIO 22, Speed 400kHz
+   -- Initialize the I2C master
+   local i2cm = esp32.i2cmaster(0, 21, 22, 400000)
 
-	-- Probe the device at address 0x76
-	local found = i2cm:probe(0x76)
-	if found then
-	    print("Device found at address 0x76")
-	else
-	    print("Device not found")
-	end
+   -- Probe the device at address 0x76
+   local found = i2cm:probe(0x76)
+   if found then
+      print("Device found at address 0x76")
+   else
+      print("Device not found")
+   end
 
-	-- Write a value to a register
-	i2cm:write(0x76, "\xF4\x27")  -- Write 0x27 to register 0xF4 at address 0x76
+   -- Write a value to a register
+   i2cm:write(0x76, "\xF4\x27")
 
-	-- Read multiple bytes from a specific register
-	local data = i2cm:readfrom(0x76, 0xF7, 8)  -- Read 8 bytes from register 0xF7 at address 0x76
-	print("Data read from register:", data)
+   -- Read multiple bytes from a specific register
+   local data = i2cm:readfrom(0x76, 0xF7, 8)
+   print("Data read from register:", data)
 
-	-- Perform a simple read from the device without specifying a register
-	local simple_data = i2cm:read(0x76, 4)  -- Read 4 bytes directly from address 0x76
-	print("Simple data read:", simple_data)
+   -- Perform a simple read without specifying a register
+   local simple_data = i2cm:read(0x76, 4)
+   print("Simple data read:", simple_data)
 
-	-- Close the I2C connection when done
-	i2cm:close()
+   -- Close the I2C connection when done
+   i2cm:close()
 
+Simple Address Scanner
+----------------------
+
+If you do not know which address a sensor uses, scan the common 7-bit address
+range:
+
+.. code-block:: lua
+
+   local i2cm <close> = esp32.i2cmaster(0, 21, 22, 100000)
+
+   for address = 0x03, 0x77 do
+      if i2cm:probe(address, 50) then
+         trace(string.format("I2C device found at 0x%02X", address))
+      end
+   end
+
+Practical Guidance
+------------------
+
+- Use ``probe`` during bring-up when you are not yet sure which address a
+  device is using.
+- Use ``readfrom`` for most register-based sensors.
+- Use ``read`` for devices or protocols that stream data without a register
+  pointer phase.
+- If every address fails, verify that SDA and SCL are not swapped and that the
+  sensor shares ground with the ESP32.
+- If communication works at ``100000`` but not ``400000``, the bus wiring,
+  pull-ups, or sensor may not support the faster speed reliably.
+- Close the bus object when a transaction sequence is complete, especially in
+  longer-running applications.

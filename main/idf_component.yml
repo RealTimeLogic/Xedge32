@@ -1,18 +1,81 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/mdns: '*'
+  espressif/mdns: '==1.12.0'
+  ## Enhanced version of the linenoise line editing library.
+  ## fix(esp_linenoise): correct history index logic to prevent overwritin… (IEC-527)
+  espressif/esp_linenoise:
+    git: https://github.com/jjsch-dev/idf-extra-components.git
+    path: esp_linenoise
+    version: "4f894830195a3971e0c0c3a2ff5e9fef24ef8a59"
   ## Required IDF version
   idf:
-    version: '>=4.1.0'
-  # # Put list of dependencies here
-  # # For components maintained by Espressif:
-  # component: "~1.0.0"
-  # # For 3rd party components:
-  # username/component: ">=1.0.0,<2.0.0"
-  # username2/component2:
-  #   version: "~1.0.0"
-  #   # For transient dependencies `public` flag can be set.
-  #   # `public` flag doesn't have an effect dependencies of the `main` component.
-  #   # All dependencies of `main` are public by default.
-  #   public: true
-  espressif/esp32-camera: ^2
+    version: '>=6.1,<6.2'
+  ## Driver for the camera via parallel port.
+  espressif/esp32-camera: 
+    version: "==2.1.7"
+    rules: 
+      - if: 'target in ["esp32", "esp32s3"]'
+  ## Driver for the camera via MIPI/V4L2 (ESP32-P4)
+  espressif/esp_video:
+    version: "==2.4.1"
+    rules:
+      - if: 'target == "esp32p4"'
+  ## Drivers de los sensores de camara (OV5647, etc)
+  espressif/esp_cam_sensor:
+    version: "==2.4.0"
+    rules:
+      - if: 'target == "esp32p4"'
+  ## esp_video 2.4.1 requires esp_ipa 2.3.* on ESP32-P4. Pin it directly so
+  ## the build cannot silently fall back to the obsolete vendored 2.0.0 copy.
+  espressif/esp_ipa:
+    version: "==2.3.0"
+    rules:
+      - if: 'target == "esp32p4"'
+  ## W5500 is a hardwired TCP/IP embedded Ethernet controller that enables easier internet connection for embedded systems using SPI.
+  espressif/w5500:
+    version: "==1.0.1"
+    rules:
+      - if: 'target in ["esp32", "esp32s3"]'
+      - if: "$CONFIG{ETH_USE_SPI_ETHERNET} == True && $CONFIG{XEDGE_ETH_PHY_W5500} == True"
+  ## DM9051 is a single-chip 10/100Mbps Ethernet controller with an SPI interface. It integrates a 10/100Mbps Ethernet MAC and PHY.
+  espressif/dm9051:
+    version: "^1.1.0"
+    rules:
+      - if: 'target in ["esp32", "esp32s3"]'
+      - if: "$CONFIG{ETH_USE_SPI_ETHERNET} == True && $CONFIG{XEDGE_ETH_PHY_DM9051} == True"
+  ## The LAN87xx series are single-port 10/100 Mbps Ethernet PHY transceivers for RMII.
+  espressif/lan87xx:
+    version: "^1.0.0"
+    rules:
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_LAN8720} == True'
+  ## IP101 is a single port 10/100 MII/RMII/TP/Fiber Fast Ethernet Transceiver.
+  espressif/ip101:
+    version: "==1.1.0"
+    rules:
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_IP101} == True'
+  ## With the KSZ80xx series, Microchip offers single-chip 10BASE-T/100BASE-TX Ethernet Physical Layer Transceivers (PHY) for RMII.
+  espressif/ksz80xx:
+    version: "^1.0.0"
+    rules:
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_KSZ8041} == True'
+  ## The RTL8201F/SR8201F is a single port 10/100Mb Ethernet Transceiver with auto MDIX for RMII.
+  espressif/rtl8201:
+    version: "^1.0.1"
+    rules:
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_RTL8201} == True'
+  ## DP83848 is a single port 10/100Mb/s Ethernet Physical Layer Transceiver for RMII.
+  espressif/dp83848:
+    version: "^1.0.0"
+    rules:
+      - if: 'target in ["esp32", "esp32p4"]'
+      - if: '$CONFIG{ETH_USE_ESP32_EMAC} == True && $CONFIG{XEDGE_ETH_PHY_DP83848} == True'
+  espressif/esp_hosted:
+    version: "==2.12.3"
+    rules:
+      - if: 'target == "esp32p4"'
+
+

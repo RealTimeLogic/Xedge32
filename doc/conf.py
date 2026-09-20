@@ -18,10 +18,10 @@
 # -- Project information -----------------------------------------------------
 
 project = 'Xedge32'
-copyright = '2025, RTL'
+copyright = '2026, RTL'
 author = 'RTL'
 
-"master_doc = 'index'"
+master_doc = 'index'
 
 # -- General configuration ---------------------------------------------------
 
@@ -33,6 +33,8 @@ extensions = [
     'sphinx_lua',
     'sphinx.ext.autosectionlabel'
 ]
+
+autosectionlabel_prefix_document = True
 
 # Available options and default values
 lua_source_path = ["./"]

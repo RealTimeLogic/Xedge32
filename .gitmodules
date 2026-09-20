@@ -1,9 +1,11 @@
 [submodule "main/BAS"]
 	path = main/BAS
 	url = https://github.com/RealTimeLogic/BAS.git
+        ignore = dirty
 [submodule "main/BAS-Resources"]
 	path = main/BAS-Resources
 	url = https://github.com/RealTimeLogic/BAS-Resources.git
+        ignore = dirty
 [submodule "main/LPeg"]
 	path = main/LPeg
 	url = https://github.com/roberto-ieru/LPeg.git

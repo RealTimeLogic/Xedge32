@@ -32,40 +32,46 @@ As outlined in the tutorial [Your First Xedge32 Project](https://realtimelogic.c
 
 **Note:** [Xedge32](https://realtimelogic.com/ba/ESP32/) is built on the more generic [Xedge](https://realtimelogic.com/products/xedge/), which itself is based on the [Barracuda App Server library](https://realtimelogic.com/products/barracuda-application-server/). Xedge32, Xedge, and the Barracuda App Server are OEM software components designed for easy integration into OEM products. All components are [designed to be extended](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code).
 
-To compile the source code, you must use the latest ESP-IDF, which can be found on [GitHub](https://github.com/espressif/esp-idf).
+Prerequisites:
 
-The following Linux commands show all steps required for installing the development tools, downloading the required source code, and compiling the code:
-
+```bash
+sudo apt -y update
+sudo apt -y install git zip
 ```
-   sudo apt -y update
-   sudo apt -y install git wget zip flex bison gperf python3 python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0
 
-   cd
-   # remove old installation, if any
-   rm -rf .espressif esp/esp-idf
 
-   # Install the esp-idf
-   mkdir esp
-   cd esp
-   git clone -b v5.5.3 --recursive https://github.com/espressif/esp-idf.git
-   esp-idf/install.sh
-   source esp-idf/export.sh
+## Install ESP-IDF 6.1.
 
-   # Download and update Xedge32; You can install it in any directory
-   cd ~/esp
-   git clone --recursive --recurse-submodules https://github.com/RealTimeLogic/xedge32.git xedge
-   cd xedge
-   git submodule update --init --remote
+See the [ESP-IDF Release v6.1](https://github.com/espressif/esp-idf/releases/tag/v6.1) for details.
 
-   # Build the Xedge resource Xedge.zip, convert it to C, and copy the C file to the Xedge directory
-   chmod +x BuildESP32ResourceFile.sh
-   ./BuildESP32ResourceFile.sh
+## Clone Xedge32 and initialize its submodules.
 
+```bash
+git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
+cd xedge
+git submodule update --init --recursive
+```
+
+## Rebuild the embedded Xedge.zip resource after changing its Lua resources.
+
+```bash
+chmod +x BuildESP32ResourceFile.sh
+./BuildESP32ResourceFile.sh
+```
+
+## Select one target:
+
+```bash
    #set target to one of:
    #idf.py set-target esp32
    #idf.py set-target esp32s3
+   #idf.py set-target esp32p4
+```
 
-   # Configure Xedge32 options such as enabling CAM and mDNS. Details below.
+## Configure and build
+
+```bash
+   # Configure Xedge32 options (See Configuring Xedge32 below)
    #idf.py menuconfig
 
    # Build the code
@@ -82,24 +88,24 @@ To upload the firmware to your ESP32, follow these steps:
    - WSL: idf.py -p /dev/ttyS4 -b 115200 flash monitor
 
 
-# Configuring Xedge32
+## Configuring Xedge32
 
 To configure Xedge32, use the `idf.py menuconfig` command. This allows you to enable various features such as mDNS, Camera, OPC UA, and softTPM eFuse registers. Below is an overview of each feature, along with configuration tips.
 
-## Configuration Steps
+### Configuration Steps
 
-### 1. Enable mDNS
+#### 1. Enable mDNS
 
 mDNS (Multicast DNS) enables local network discovery, making it possible to access Xedge32 by navigating to `http://xedge32.local` in your browser. You can customize this name within your Lua script if desired.
 
-### 2. Enable OPC UA
+#### 2. Enable OPC UA
 
 [OPC UA](https://realtimelogic.com/products/opc-ua/) is an industrial protocol useful for machine-to-machine communication. To enable OPC UA:
 
 - Use `idf.py menuconfig` and select the OPC UA option.
 - After configuring through menuconfig, ensure that you also choose "Yes" when prompted by `BuildESP32ResourceFile.sh`.
 
-### 3. Enable softTPM eFuse
+#### 3. Enable softTPM eFuse
 
 The softTPM eFuse option allows for secure storage of secrets directly in eFuse registers, making them permanently accessible on the device. This feature is part of the advanced security configuration settings. For full details on available configuration options, refer to the configuration section in the [generic Xedge build documentation](https://realtimelogic.com/ba/examples/xedge/readme.html).
 

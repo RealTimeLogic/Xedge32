@@ -31,7 +31,6 @@ static const char TAG[]={"X"};
 esp_err_t cfgInit(void)
 {
    esp_err_t err = nvs_flash_init();
-
    if((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NVS_NEW_VERSION_FOUND))
    {
       ESP_LOGE(TAG, "NVS init failed! Erasing memory.");
@@ -218,11 +217,21 @@ esp_err_t cfgEraseSdCard(void)
  */
 esp_err_t cfgGetNet(netConfig_t* cfg)
 {
+   memset(cfg, 0, sizeof(*cfg));
+   strcpy(cfg->adapter, "close");
+   cfg->spi.hostId = 2;
+   cfg->spi.clk = -1;
+   cfg->spi.mosi = -1;
+   cfg->spi.miso = -1;
+   cfg->spi.cs = -1;
+   cfg->spi.irq = -1;
+   cfg->spi.freq = 40000000;
+   cfg->phyRstPin = -1;
+   cfg->phyMdioPin = -1;
+   cfg->phyMdcPin = -1;
+
    size_t size = sizeof(cfg->adapter);
-   if(nvs_get_str(nvsh, "netAdapter", cfg->adapter, &size) != ESP_OK)
-   {
-      strcpy(cfg->adapter, "close");     
-   }
+   nvs_get_str(nvsh, "netAdapter", cfg->adapter, &size);
    
    size = sizeof(cfg->ssid);
    nvs_get_str(nvsh, "netSsid", cfg->ssid, &size);

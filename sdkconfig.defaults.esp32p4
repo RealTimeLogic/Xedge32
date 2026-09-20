@@ -1,0 +1,42 @@
+# Support ESP32-P4 revisions < 3.0 (required for v1.3 chip)
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_1=y
+
+# CPU Frequency 
+# The 400 MHz option became available with ESP32-P4 chip revision v3.x, 
+# which upgraded the HP system's dual-core RISC-V processor, increasing the max frequency 
+# from 360 MHz to 400 MHz. [chip revision v3.x] The previous chip revision v1.x had a 
+# default clock of 360 MHz, with 400 MHz available only on request.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_360=y
+
+# Flash Size 
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# Console output
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Xedge registers several filesystems before esp_video creates /dev/video0.
+# Espressif recommends 20 VFS slots for camera applications.
+CONFIG_VFS_MAX_COUNT=20
+
+# Flash Partition Table
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="ESP32p4-partitions.csv"
+
+# Ethernet
+CONFIG_ETH_ENABLED=y
+CONFIG_ETH_USE_ESP32_EMAC=y
+CONFIG_ETH_USE_SPI_ETHERNET=n
+
+# ESP32-P4 Function EV Board companion ESP32-C6 over SDIO
+CONFIG_ESP_HOSTED_CP_TARGET_ESP32C6=y
+CONFIG_ESP_HOSTED_P4_DEV_BOARD_FUNC_BOARD=y
+CONFIG_ESP_HOSTED_SDIO_HOST_INTERFACE=y
+
+# Sensor
+CONFIG_CAM_ENABLED=y
+CONFIG_CAMERA_OV5647=y
+
+# Development profile; release variants override OPC UA and console settings.
+CONFIG_mDNS_ENABLED=y
+CONFIG_OPCUA_ENABLED=n

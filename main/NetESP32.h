@@ -50,7 +50,7 @@ typedef struct
    int32_t phyMdcPin;         /**< Mdc pin of the internal PHY. */
 } netConfig_t;
 
-bool netInit(void); 
+esp_err_t netInit(void);
 esp_err_t netConnect(netConfig_t* cfg);
 esp_err_t netWifiConnect(char* ssid, char* password);
 esp_err_t netEthConnect(void);

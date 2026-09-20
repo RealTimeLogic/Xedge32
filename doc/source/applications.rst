@@ -1,64 +1,116 @@
 Applications
-=============
+============
 
 Creating and Managing Xedge32 Applications
---------------------------------------------
+------------------------------------------
 
-An Xedge32 application is essentially a Lua-based application packaged as a ZIP file. This convenient packaging allows you to upload and execute the application directly on the Xedge32 platform without unpacking. Follow these steps to get your application up and running:
+An Xedge32 application is typically packaged as a ZIP file containing Lua code
+and, when needed, supporting assets such as HTML, CSS, JavaScript, images, and
+configuration scripts. Xedge32 can run this ZIP file directly, which makes
+deployment simple and keeps the upload workflow friendly for both development
+and production use.
+
+This packaging model is helpful because it lets you move a complete application
+onto the device as a single artifact instead of uploading individual files one
+by one.
 
 Uploading Your Application
 --------------------------
 
-1. **Firmware Update & App Upload Page**: To upload your application, you can simply drag and drop the ZIP file onto the "Firmware Update & App Upload" page. Access this page by clicking the three dots at the top right corner of the Xedge32 interface and selecting "Firmware Update & App Upload."
+You can install an application ZIP file in several ways:
 
-2. **Web File Manager**: Another method involves navigating to the Web File Manager, where you can drag and drop your ZIP file. Afterward, add the ZIP file as an application via the Xedge32 IDE.
+1. **Firmware Update & App Upload page**
+   Open the page from the three-dot menu in the upper-right corner of the
+   Xedge32 interface and drag the ZIP file into the browser window.
+2. **Web File Manager**
+   Upload the ZIP file manually, then add it as an application from the Xedge32
+   IDE.
+3. **WebDAV**
+   Mount the device as a drive, copy the ZIP file over, and then enable it as
+   an application from the IDE.
 
-3. **WebDAV Plugin**: Alternatively, mount the device as a network drive using the WebDAV plugin. Upload the ZIP file and then, similar to the previous methods, add the ZIP file as an application using the Xedge32 IDE.
-
-The first option is notably the most straightforward: It automatically installs the ZIP file as an application on your device. Certain packaged applications may require this approach due to `specific post-installation configuration scripts <mkapp_>`_ that must be run.
+The first method is the easiest for most users because it uploads and installs
+the ZIP file in one step. Some packaged applications also depend on this path
+because they include `post-installation configuration scripts <mkapp_>`_ that
+should run automatically during installation.
 
 ZIP File Applications
-----------------------
+---------------------
 
-A ZIP file is considered a ready-to-run deployed application, distinct from directly creating and uploading Lua files to the Xedge32. This upload feature also provides the flexibility to unpack the ZIP file post-upload, allowing for modifications to the code directly on the Xedge32.
+A ZIP file uploaded as an application is treated as a ready-to-run deployment
+unit. This is different from editing loose Lua files directly on the device.
 
-**Note:** While you can open files within an uploaded ZIP file, saving them is not an option. 
+This approach gives you two useful workflows:
 
-For additional insights on leveraging the second and third options, refer to the tutorials `Designing Your First Professional Embedded Web Interface, section Getting Started <https://realtimelogic.com/articles/Designing-Your-First-Professional-Embedded-Web-Interface#upload>`_ and `Your First Embedded Single Page Application, section Uploading the SPA and Server-Side Code <https://realtimelogic.com/articles/Your-First-Embedded-Single-Page-Application#upload>`_.
+- keep the application packaged when you want a clean deployment artifact, or
+- unpack and modify the application on the device when you want to iterate
+  directly in Xedge32.
+
+.. note::
+
+   You can inspect files stored inside an uploaded ZIP archive, but you cannot
+   save changes back into the archive itself. If you want to edit files on the
+   device, unpack the application first.
+
+For more examples of the upload workflow, see:
+
+- `Designing Your First Professional Embedded Web Interface
+  <https://realtimelogic.com/articles/Designing-Your-First-Professional-Embedded-Web-Interface#upload>`_
+- `Your First Embedded Single Page Application
+  <https://realtimelogic.com/articles/Your-First-Embedded-Single-Page-Application#upload>`_
 
 .. _mkapp:
 
 Creating an Xedge32 Application
 -------------------------------
 
-To craft an Xedge32 application, compile your Lua code and any necessary CSS, HTML, etc., into a ZIP file. Ensure the directory name is not included within the ZIP. For instance, if you include a `.preload` script, this file should reside at the root of the ZIP.
+To build your own application package:
 
-An Xedge32 application may also contain a `.config` script for specifying additional details and executing code post-installation. Should your ZIP file include a `.config` script, it must return a table with these optional entries:
+1. Gather your Lua files and any supporting assets.
+2. Place them in a directory structure exactly as you want them to appear in
+   the application.
+3. Create a ZIP file from the *contents* of that directory, not from the
+   directory itself.
 
-- **String name**: Designates the application's name in the Xedge32's left pane menu. The ZIP file's name is used if the name is absent.
-- **Boolean autostart**: If true, the application's autostart flag is activated, and its status is set to running, enabling automatic startup post-upload.
-- **Function install**: Executes for new installations.
-- **Function upgrade**: Invoked when the application is re-uploaded.
+In practice, this means files such as ``.preload`` or ``.config`` must be at
+the root of the ZIP archive if you want Xedge32 to detect them correctly.
 
-Example code:
+Optional ``.config`` Script
+---------------------------
+
+An application may include a ``.config`` script for metadata and installation
+hooks. If present, the script must return a Lua table with any of the following
+optional fields:
+
+- ``name``: String shown for the application in the Xedge32 left-hand pane. If
+  omitted, the ZIP filename is used.
+- ``autostart``: Boolean that enables automatic startup and marks the app as
+  running after installation.
+- ``install``: Function called for a new installation.
+- ``upgrade``: Function called when an existing application is updated.
+
+Example ``.config`` Script
+--------------------------
 
 .. code-block:: lua
 
    -- Argument 'io' is the application's IO instance
    local function install(io)
-      trace("install", io:realpath("")) -- Prints empty string if ZIP file
-      return "This message is sent to the browser and displayed after completing the installation"
-
+      trace("install", io:realpath(""))
+      return "This message is sent to the browser and displayed after installation"
    end
 
    local function upgrade(io)
-      return "This message is sent to the browser and displayed after completing the upgrade"
+      return "This message is sent to the browser and displayed after upgrade"
    end
 
-
    return {
-      name="MY APP",
-      autostart=true,
-      install=install,
-      upgrade=upgrade
+      name = "MY APP",
+      autostart = true,
+      install = install,
+      upgrade = upgrade
    }
+
+The ``install`` and ``upgrade`` hooks are a good place to perform first-run
+setup, initialize directories, migrate stored data, or provide a helpful status
+message back to the browser.

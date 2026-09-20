@@ -1,94 +1,143 @@
+.. _Access Point Mode:
 
 Access Point Mode
-===================
+=================
 
-After successfully :ref:`flashing the firmware <flashing-the-firmware>` onto your ESP32 for the first time, Xedge32 automatically configures the ESP32 to operate in Access Point Mode.  The default name of this access point is ``xedge32``.
+After you :ref:`flash the firmware <flashing-the-firmware>` for the first
+time, Xedge32 starts in **Access Point Mode**. In this mode, the ESP32 creates
+its own Wi-Fi network so you can connect to the device even before it has been
+configured for your local network.
+
+The default access point name is ``xedge32``. This startup mode is especially
+useful during first-time setup, lab work, and field service, since it gives you
+an immediate path to the device without requiring a pre-existing network.
 
 Connecting to Xedge32
-------------------------------------
+---------------------
 
-1. **Connecting to the Access Point**:
+Use the following sequence the first time you connect:
 
-   - On your device, connect to the ``xedge32`` Wi-Fi network. The default password is 12345678 (can be changed).
+1. Connect your phone or computer to the ``xedge32`` Wi-Fi network.
+   The default password is ``12345678``.
+2. Open a browser and navigate to `http://xedge32.local
+   <http://xedge32.local>`_.
+3. If your computer does not support mDNS, use the default AP address
+   ``http://192.168.190.0`` instead.
+4. The first page you see is a default 404 page. Click the ``Xedge IDE`` link
+   to open the :ref:`Xedge IDE Web Editor <Xedge32>`.
 
-2. **Accessing the Web Interface**:
+.. note::
 
-   - Open a web browser and navigate to `http://xedge32.local <http://xedge32.local>`_. 
-   - **Note**: If you're using a computer that does not support mDNS, you will not be able to access the URL ``http://xedge32.local``. Instead, use the IP address ``http://192.168.190.0``.
+   The default SSID and password are intended for initial onboarding. If you
+   plan to keep a device in Access Point Mode for extended development or field
+   use, update the configuration to match your deployment requirements.
 
-3. **Navigating to Xedge32 IDE**:
+.. note::
 
-   - Upon accessing ``http://xedge32.local``, you'll be greeted with a default 404 page. Here, click on the ``Xedge IDE`` link to proceed to the :ref:`Xedge IDE Web Editor<Xedge32>`.
+   Custom firmware builds can use a different AP address. If
+   ``xedge32.local`` does not resolve and the default address does not respond,
+   open the serial console and check the boot log for the printed AP IP
+   address.
 
 Access Point Mode Considerations
-------------------------------------
+--------------------------------
 
-While in Access Point Mode, be aware that the web-based editor will be a basic HTML textarea, not the advanced `Visual Studio Code-like editor <https://realtimelogic.com/ba/doc/en/Xedge.html#monaco>`_ you will see if your computer can access the Internet. If you prefer to keep your ESP32 in Access Point Mode for development, it's recommended to use a computer that is connected to the ESP32 via Wi-Fi and simultaneously to the Internet through a wired connection, as shown in the figure below. This setup ensures that the advanced web-based code editor can be loaded from the Internet.
+Access Point Mode is primarily a setup and recovery mode. It is fully usable,
+but there are a few details worth knowing:
+
+- The built-in editor always works, but on computers without Internet access it
+  falls back to a basic HTML text area instead of the richer Monaco-based
+  editor.
+- If you want the more advanced browser editor while still keeping the ESP32 in
+  Access Point Mode, use a computer that is connected to the ESP32 over Wi-Fi
+  and to the Internet over another interface such as Ethernet.
+- This mode is also convenient when you are bringing up a device on a workbench
+  and do not yet want it to join a production network.
 
 .. figure:: img/Xedge32-IDE-Access-Point-Mode.svg
    :alt: Xedge32 IDE Access Point Mode
 
-   Figure 1: Loading the advanced code editor when in Access Point Mode
+   Figure 1: Loading the advanced editor while the ESP32 remains in Access
+   Point Mode.
 
 Switching to Station Mode
-------------------------------------
+-------------------------
 
-**Station Mode** is the recommended mode for Xedge32, as it enables the full range of IoT features available in this tool. To switch from **Access Point Mode** to **Station Mode**, follow these steps:
+**Station Mode** is the recommended operating mode for most projects because it
+lets Xedge32 join your normal network and use the full set of IoT-oriented
+features.
 
-1. **Accessing the Lua Shell**:
+To switch from Access Point Mode to Station Mode:
 
-   - Click the three dots (``...``) in the upper right corner of the Xedge editor.
-   - Select **Lua Shell** to open the web-based :ref:`LuaShell32`.
+1. Open the web interface and click the three dots (``...``) in the upper-right
+   corner.
+2. Select **Lua Shell** to open :ref:`LuaShell32`.
+3. Run the following command:
 
-2. **Programming Station Mode**:
+   .. code-block:: lua
 
-   - In LuaShell32, enter the following command to connect to your Wi-Fi network::
+      esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
 
-       esp32.netconnect("wifi", {ssid="your-Wi-Fi-SSID", pwd="password"})
+4. Replace ``your-Wi-Fi-SSID`` and ``password`` with your own credentials.
+5. Wait while the ESP32 attempts to join the network.
 
-     Replace ``your-Wi-Fi-SSID`` and ``password`` with your actual Wi-Fi credentials.
+If the connection succeeds, the device stays in Station Mode. If the connection
+attempt fails during initial configuration, Xedge32 falls back to Access Point
+Mode so you can correct the settings and try again.
 
-3. **Switching Modes**:
+Reconnecting After the Mode Change
+----------------------------------
 
-   - The ESP32 will attempt to switch from **Access Point Mode** to **Station Mode**.
-   - If the connection is successful, the ESP32 remains in **Station Mode**.
-   - If the connection fails, the ESP32 reverts to **Access Point Mode**.
+Once the ESP32 has joined your network:
 
-4. **Reconnecting the ESP32 when in Station Mode**:
+- If your computer supports mDNS, reconnect by browsing to
+  ``http://xedge32.local/``.
+- If your computer does not support mDNS, find the new IP address in your
+  router's DHCP client list. The device typically appears as ``xedge``.
 
-   - If your computer supports mDNS, reconnect with the ESP32 by navigating to ``http://xedge32.local/`` or simply refresh the browser window.
-   - If your computer does not support mDNS, find the ESP32's new IP address assigned by your router. This is typically found on the router's DHCP client list page, where the ESP32 should appear as ``xedge``.
+.. note::
 
-   **Note:** Upon switching from Access Point Mode to Station Mode, and if you are accessing the Xedge IDE via http://xedge32.local/. If your computer and the ESP32 are on the same network, when the ESP32 switches to AP Mode, the IDE will automatically reconnect to the ESP32. Initially, a 'disconnect' error will appear in the Xedge IDE console, followed by several 'reconnect' errors. After a short duration, a "connected" message will confirm successful reconnection.
-
+   If you were already connected to the IDE through ``http://xedge32.local/``
+   and both your computer and the ESP32 can still reach each other after the
+   mode change, the IDE may reconnect automatically. It is normal to briefly
+   see disconnect and reconnect messages in the IDE console before the final
+   ``connected`` message appears.
 
 Station Mode Considerations
-------------------------------------
+---------------------------
 
-Here are the best practices for navigating to your ESP32 when in Station Mode:
+Once your device runs in Station Mode, one of the following connection methods
+is usually the most convenient:
 
-   -  **http://xedge32.local:** You can navigate to http://xedge32.local/ if you are using the Pre-Compiled Firmware or have enabled mDNS when you compiled your own firmware. **Note:**
+- ``http://xedge32.local/`` if you are using the precompiled firmware or a
+  custom build with mDNS enabled.
+- The DHCP-assigned IP address if you prefer direct IP access.
+- A DHCP reservation on your router if you want the same IP address every time.
+- A permanent public URL by enabling the SharkTrust Let's Encrypt plugin from
+  `Xedge's configuration menu
+  <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
 
-      - You can change the mdns name using :ref:`esp32-execute-label`.
-      - mDNS can be slower than standard DNS. This is because mDNS typically requires additional time to resolve local network names into IP addresses. In some cases, this might lead to noticeable delays when accessing your device. Given the potential slower response times with mDNS, you may consider using the alternative methods to connect to your ESP32.
+Additional notes:
 
-   -  **IP Address Assignment:** The ESP32 gets an IP address from the network's DHCP (Dynamic Host Configuration Protocol). Usually, your router will assign the same IP address each time the ESP32 reconnects to the network. You can bookmark this IP address in your web browser. That way, the next time you power on your ESP32, you can simply click the bookmark to connect to it.
-
-   -  **Consistent IP Address with DHCP Reservations:** If you want to make sure the ESP32 always uses the same IP address, most routers allow you to reserve that IP address specifically for your device using `DHCP reservations <https://portforward.com/dhcp-reservation/>`_. This ensures consistent IP address assignment for the ESP32.
-
-   -  **Using Let's Encrypt Plugin - SharkTrust:** As an alternative, you can also enable a permanent URL for your ESP32 by activating the Let's Encrypt plugin called SharkTrust through the `Xedge's configuration menu <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
-
-By following the above instructions, you can easily browse to your your ESP32 device without using a serial connection to discover the IP address assignment.
-
-
+- You can change the mDNS name by using :ref:`esp32-execute-label`.
+- mDNS is convenient, but it may resolve more slowly than normal DNS on some
+  networks.
+- Bookmarking a stable IP address or using a DHCP reservation is often the most
+  practical choice for long-term development.
 
 Switching Back to Access Point Mode
-------------------------------------
+-----------------------------------
 
-**Important:** In Station Mode, after at least one successful Station Mode Mode connection, the ESP32 will not automatically switch back to Access Point Mode, even if it fails to establish a connection. This behavior is intentional and serves as a security measure. To revert to Access Point Mode manually:
+After the ESP32 has successfully connected in Station Mode at least once, it
+does not automatically revert to Access Point Mode if later network attempts
+fail. This behavior is intentional and helps prevent accidental exposure of the
+device as an access point.
 
-- In LuaShell32, execute the following command::
+To switch back manually, run the following command in :ref:`LuaShell32`:
 
-    esp32.netconnect"wifi"
+.. code-block:: lua
 
-This command will switch the ESP32 back to **Access Point Mode**.
+   esp32.netconnect"wifi"
+
+This disconnects the device from Wi-Fi Station Mode and restores the original
+Access Point Mode behavior.

@@ -1,79 +1,120 @@
+.. _BME280 Module:
+
 BME280 Module
 =============
 
-This module provides an easy-to-use interface for communicating with the BME280 chip, a popular environmental sensor that measures temperature, humidity, and pressure.
+This Lua module provides a simple, high-level interface to the Bosch BME280
+sensor family. It is a convenient starting point if you want to read
+temperature, humidity, and pressure from Lua without writing low-level I2C
+register code yourself.
 
-.. note:: The Lua module is included in the Xedge32 firmware but may be removed in later versions and provided as a separate module.
+The module communicates with the sensor through the :ref:`I2C API <I2C API>`.
+If you want to understand the lower-level interaction, see the `BME280 Lua
+source code
+<https://github.com/RealTimeLogic/Xedge-ESP32/blob/master/Lua-Examples/.lua/bme280.lua>`_.
 
+.. note::
 
-The Bosch Sensortec BME280/BMP280 temperature/air pressure/humidity sensor communicates with the ESP32 using the :ref:`I2C interface <I2C API>`. See the `BME280 Lua Source Code <https://github.com/RealTimeLogic/Xedge-ESP32/blob/master/Lua-Examples/.lua/bme280.lua>`_ for details.
+   The module is currently included in the Xedge32 firmware, but in future
+   versions it may be shipped separately.
 
-Usage
------
+Typical Workflow
+----------------
 
-To use this module, you first need to create a BME280 object by calling the ``create`` function and passing the following parameters:
+Using the module normally looks like this:
 
-module.create()
----------------
+1. Create a BME280 object.
+2. Call ``bme:read()`` whenever you want a new sensor reading.
+3. Reuse the object for repeated measurements.
+
+For a first test, power the breakout from the voltage recommended by the
+breakout board vendor, connect GND to ESP32 GND, and verify the I2C address
+with the :ref:`I2C API <I2C API>` scanner before debugging the BME280 module
+itself.
+
+Creating a BME280 Object
+------------------------
+
+Function signature:
 
 .. code-block:: lua
 
-   bme=require"bme280".create(port, address, sda, scl, settings)
+   bme = require"bme280".create(port, address, sda, scl [, settings])
 
-Create a BME280 object.
+Parameters
+~~~~~~~~~~
 
-**Parameters:**
+- ``port``: I2C port number, for example ``0``.
+- ``address``: I2C address of the sensor, typically ``0x76``.
+- ``sda``: GPIO used for I2C data.
+- ``scl``: GPIO used for I2C clock.
+- ``settings``: Optional table with driver-specific configuration values.
 
-- ``port`` (``int``): I2C port number, e.g., ``0``
-- ``address`` (``int``): the BME280 I2C address, typically ``0x76``
-- ``sda`` (``int``): the GPIO number used for the I2C Serial Data
-- ``scl`` (``int``): the GPIO number used for the I2C Serial Clock
-- ``settings`` (``table``, optional): a Lua table with settings. See the `WeatherStation demo <https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug#ready-to-run-sparkplug-enabled-weather-station-example>`_ for example code.
+The optional ``settings`` table is useful when you want to match a particular
+oversampling or measurement setup. See the `Weather Station demo
+<https://github.com/RealTimeLogic/LSP-Examples/tree/master/Sparkplug#ready-to-run-sparkplug-enabled-weather-station-example>`_
+for a more advanced example.
 
-**Returns:**
+Return Value
+~~~~~~~~~~~~
 
-- A new BME280 object.
+The function returns a new BME280 object.
 
 BME280 Object Methods
 ---------------------
 
-bme:read()
-~~~~~~~~~~~
+``bme:read()``
+~~~~~~~~~~~~~~
+
+Function signature:
 
 .. code-block:: lua
 
    local temperature, humidity, pressure = bme:read()
 
+This method reads the current measurement values from the sensor.
 
-Reads the temperature, humidity, and pressure from the BME280 sensor.
+Return values:
 
-**Returns:**
+- ``temperature`` in degrees Celsius,
+- ``humidity`` in percent relative humidity, and
+- ``pressure`` in Pascals.
 
-- Three values: the temperature (in degrees Celsius), the humidity (as a percentage), and the pressure (in Pascals).
-
-BME280 Examples
-----------------
-
-Basic example
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Here's an example of how to use the ``bme280`` module:
+Basic Example
+-------------
 
 .. code-block:: lua
 
-    local bmeModule = require"bme280"
-    local port = 0
-    local address = 0x76
-    local sda = 5
-    local scl = 6
-    local bme = bmeModule.create(port, address, sda, scl)
-    local temp, hum, pres = bme:read()
+   local bmeModule = require"bme280"
+   local port = 0
+   local address = 0x76
+   local sda = 5
+   local scl = 6
 
-This example creates a new BME280 object, reads the temperature, humidity, and pressure from the sensor, and stores the values in the ``temp``, ``hum``, and ``pres`` variables. Note that we've assumed that the I2C port, address, SDA, and SCL pins are specified as local variables. You may need to adjust these variables to fit your specific use case.
+   local bme = bmeModule.create(port, address, sda, scl)
+   local temp, hum, pres = bme:read()
+
+   trace("Temperature:", temp)
+   trace("Humidity:", hum)
+   trace("Pressure:", pres)
+
+This example creates the sensor object once, reads one sample, and stores the
+three returned values in local variables.
+
+Practical Notes
+---------------
+
+- The BME280 and BMP280 are closely related devices, but only BME280 sensors
+  provide humidity readings.
+- If communication fails, first verify the I2C address and the selected SDA/SCL
+  pins.
+- Many breakout boards use ``0x76`` or ``0x77`` depending on how the address
+  pin is wired.
+- Some boards are BME280-compatible at the connector but actually contain a
+  BMP280. A BMP280 does not report humidity.
 
 Online Examples
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------
 
 - `bme280.xlua <https://github.com/RealTimeLogic/LSP-Examples/blob/master/ESP32/bme280.xlua>`_
 - `Weather Station <https://github.com/surfskidude/weather-station>`_
-
