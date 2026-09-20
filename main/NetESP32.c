@@ -50,7 +50,7 @@
     #include "esp_eth_phy_rtl8201.h" 
 #elif CONFIG_XEDGE_ETH_PHY_DP83848
     #include "esp_eth_phy_dp83848.h"
-#elif CONFIG_XEDGE_ETHERNET_SPI_W5500
+#elif CONFIG_XEDGE_ETH_PHY_W5500
     #include "esp_eth_mac_w5500.h"
     #include "esp_eth_phy_w5500.h"
 #elif CONFIG_XEDGE_ETH_PHY_DM9051 
@@ -904,13 +904,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
    mac_config.rx_task_stack_size = CONFIG_ETHERNET_EMAC_TASK_STACK_SIZE;
    eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
-#if CONFIG_ETH_USE_ESP32_EMAC
    phy_config.phy_addr = CONFIG_ETHERNET_PHY_ADDR;
-#endif
-#if CONFIG_ETH_USE_SPI_ETHERNET
-   if(netIsAdapterSpi(cfg->adapter))
-      phy_config.phy_addr = CONFIG_XEDGE_ETHERNET_SPI_PHY_ADDR;
-#endif
    phy_config.reset_gpio_num = cfg->phyRstPin; 
 
 #if CONFIG_ETH_USE_ESP32_EMAC
@@ -994,7 +988,7 @@ static esp_err_t netEthStart(netConfig_t* cfg)
    /* w5500 ethernet driver is based on spi driver */
    else if(!strcmp("W5500", cfg->adapter))
    {
-#if CONFIG_XEDGE_ETHERNET_SPI_W5500
+#if CONFIG_XEDGE_ETH_PHY_W5500
       spi_device_interface_config_t spi_devcfg = {0};
       err = netSpiInit(&cfg->spi, &spi_devcfg);
       if(err != ESP_OK)
