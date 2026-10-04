@@ -286,13 +286,10 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
       }
    }
 #else
-   IoStat sb;
    int status=0;
    IoIntfPtr io = aux->dio;
    size_t size=0;
-   static const char pmkey[]={"cert/softpmkey.bin"};
-   if(io->statFp(io, "cert", &sb))
-      io->mkDirFp(io, "cert", 0);
+   static const char pmkey[]={"softpmkey.bin"};
    ResIntf* fp = io->openResFp(io,pmkey,OpenRes_READ,&status,0);
    if(fp)
    {

@@ -80,6 +80,10 @@ LThreadMgr Documentation:
 
 #include "BaESP32.h"
 #include "CfgESP32.h"
+#if CONFIG_mDNS_ENABLED
+#include <mdns.h>
+#include <esp_netif.h>
+#endif
 
 #define ECHK ESP_ERROR_CHECK
 
@@ -3196,6 +3200,167 @@ static int lerase(lua_State* L)
    return 0;
 }
 
+#if CONFIG_mDNS_ENABLED
+/* Lua API adapted from BamDNS.c; all responder work remains in ESP-IDF. */
+#define MDNS_META "ESP32.mDNS"
+typedef struct {
+   char name[64];
+   BaBool active;
+} LMdns;
+static ThreadMutex mdnsMutex;
+
+/* Serialize ownership checks while allowing other Lua work during IDF calls. */
+static void mdnsEnter(void)
+{
+   ThreadMutex_release(soDispMutex);
+   ThreadMutex_set(&mdnsMutex);
+}
+
+static void mdnsLeave(void)
+{
+   ThreadMutex_release(&mdnsMutex);
+   ThreadMutex_set(soDispMutex);
+}
+
+static int mdnsLuaClose(lua_State* L)
+{
+   LMdns* o = (LMdns*)luaL_checkudata(L,1,MDNS_META);
+   esp_err_t err = ESP_OK;
+   mdnsEnter();
+   if(o->active)
+   {
+      err = mdns_delegate_hostname_remove(o->name);
+      if(err == ESP_OK || err == ESP_ERR_INVALID_STATE)
+      {
+         o->active = FALSE;
+         err = ESP_OK;
+      }
+   }
+   mdnsLeave();
+   if(err != ESP_OK)
+   {
+      /* Keep ownership so an explicit close can be retried. GC is best effort. */
+      ESP_LOGW("mDNS", "Cannot remove alias: %s", esp_err_to_name(err));
+      return pushErr(L,esp_err_to_name(err));
+   }
+   return 0;
+}
+
+static int mdnsLuaStatus(lua_State* L)
+{
+   LMdns* o = (LMdns*)luaL_checkudata(L,1,MDNS_META);
+   char primary[MDNS_NAME_BUF_LEN];
+   const char* error = 0;
+   mdnsEnter();
+   if(!o->active)
+      error = "closed";
+   else if(mdns_hostname_get(primary) != ESP_OK || !mdns_hostname_exists(o->name))
+      error = "mDNS hostname is not registered";
+   mdnsLeave();
+   if(error)
+      return pushErr(L,error);
+   lua_pushboolean(L,TRUE);
+   return 1;
+}
+
+static int mdnsLuaCreate(lua_State* L)
+{
+   size_t len;
+   const char* name;
+   const char* error = 0;
+   LMdns* o;
+   esp_netif_t* netif;
+   esp_netif_ip_info_t ip4;
+   mdns_ip_addr_t addresses[2] = {0};
+   unsigned count = 0;
+   char primary[MDNS_NAME_BUF_LEN];
+   esp_err_t err;
+   luaL_checktype(L,1,LUA_TSTRING);
+   name = lua_tolstring(L,1,&len);
+   luaL_argcheck(L,len == strlen(name),1,"name contains NUL");
+   if(!len || len > 63 || name[0] == '-' || name[len-1] == '-')
+      return pushErr(L,"invalid name or network configuration");
+   for(size_t i = 0; i < len; ++i)
+      if(!((name[i] >= 'a' && name[i] <= 'z') ||
+           (name[i] >= 'A' && name[i] <= 'Z') ||
+           (name[i] >= '0' && name[i] <= '9') || name[i] == '-'))
+         return pushErr(L,"invalid name or network configuration");
+   o = (LMdns*)lua_newuserdatauv(L,sizeof(LMdns),0);
+   o->active = FALSE;
+   for(size_t i = 0; i <= len; ++i)
+      o->name[i] = name[i] >= 'A' && name[i] <= 'Z' ? name[i]+('a'-'A') : name[i];
+   /* Attach cleanup before any native registration can succeed. */
+   if(luaL_newmetatable(L, MDNS_META))
+   {
+      static const luaL_Reg lib[] = {
+         {"status",mdnsLuaStatus},
+         {"close", mdnsLuaClose},
+         {"__close", mdnsLuaClose},
+         {"__gc", mdnsLuaClose},
+         {NULL, NULL}
+      };
+      lua_pushvalue(L, -1);
+      lua_setfield(L, -2, "__index");
+      luaL_setfuncs(L,lib,0);
+   }
+   lua_setmetatable(L, -2); /* Set meta for userdata */
+   netif = esp_netif_get_default_netif();
+   if(!netif || !esp_netif_is_netif_up(netif))
+      return pushErr(L,"invalid name or network configuration");
+   if(esp_netif_get_ip_info(netif,&ip4) == ESP_OK && ip4.ip.addr)
+   {
+      addresses[count].addr.type = ESP_IPADDR_TYPE_V4;
+      addresses[count++].addr.u_addr.ip4 = ip4.ip;
+   }
+#if CONFIG_LWIP_IPV6
+   {
+      esp_ip6_addr_t ip6;
+      if(esp_netif_get_ip6_global(netif,&ip6) == ESP_OK ||
+         esp_netif_get_ip6_linklocal(netif,&ip6) == ESP_OK)
+      {
+         addresses[count].addr.type = ESP_IPADDR_TYPE_V6;
+         addresses[count++].addr.u_addr.ip6 = ip6;
+      }
+   }
+#endif
+   if(!count)
+      return pushErr(L,"invalid name or network configuration");
+   if(count == 2)
+      addresses[0].next = &addresses[1];
+   mdnsEnter();
+   err = mdns_hostname_get(primary);
+   if(err == ESP_OK && mdns_hostname_exists(o->name))
+      error = "mDNS hostname already in use";
+   else if(err == ESP_OK)
+   {
+      err = mdns_delegate_hostname_add(o->name,addresses);
+      /* IDF can return OK even when its worker could not allocate the host. */
+      if(err == ESP_OK)
+      {
+         o->active = mdns_hostname_exists(o->name);
+         if(!o->active)
+            err = ESP_ERR_NO_MEM;
+      }
+   }
+   mdnsLeave();
+   if(error)
+      return pushErr(L,error);
+   if(err != ESP_OK)
+      return pushErr(L,esp_err_to_name(err));
+   return 1;
+}
+
+static void mdnsLuaOpen(lua_State* L)
+{
+   ThreadMutex_constructor(&mdnsMutex);
+   lua_getglobal(L,"ba");
+   lua_pushcfunction(L,mdnsLuaCreate);
+   lua_setfield(L,-2,"createmdns");
+   lua_pop(L,1);
+}
+#endif
+
+
 static int lexecute(lua_State* L)
 {
    const char* cmd = luaL_checkstring(L,1);
@@ -3398,7 +3563,8 @@ static const luaL_Reg esp32Lib[] = {
 };
 
 static const luaL_Reg basLib[] = {
-   {"mac", lmac}
+   {"mac", lmac},
+   {NULL, NULL}
 };
 
 #define RESERVED_PIN (void*)1  // Define a flag for reserved pins
@@ -3442,4 +3608,7 @@ void installESP32Libs(lua_State* L)
    lua_getglobal(L, "ba");
    luaL_setfuncs(L,basLib,0);
    lua_pop(L,1);
+#if CONFIG_mDNS_ENABLED
+   mdnsLuaOpen(L);
+#endif
 }

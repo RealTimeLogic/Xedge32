@@ -281,6 +281,80 @@ Example:
 After restarting, the device can be reached at ``http://myesp.local`` if mDNS
 is available on your network.
 
+``ba.createmdns(name)`` compatibility
+----------------------------------------
+
+Xedge32 provides a compatibility implementation of the BAS
+`mDNS hostname responder API <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#mdns>`_
+when ``CONFIG_mDNS_ENABLED`` is enabled. It uses ESP-IDF's existing multicast
+DNS (mDNS) responder and adds a temporary hostname alias. The configured
+Xedge32 hostname and ``esp32.execute("mdns", name)`` remain unchanged.
+
+The required ``name`` argument is a string containing one ASCII hostname
+label, 1 to 63 bytes, without ``.local``. Letters, digits, and internal
+hyphens are allowed. Names are case-insensitive; leading or trailing
+hyphens and dots are invalid. Configuration tables are not accepted.
+
+Call this function after a network interface has obtained an IP address.
+It returns a responder userdata on success, or ``nil, error`` on a local
+setup failure. Invalid hostname strings also return ``nil, error``.
+A missing or non-string name, or an embedded NUL byte, raises a Lua
+argument error. Lua allocation errors can
+also propagate.
+
+The name must not already belong to the local responder, including Xedge32's
+configured hostname or another live compatibility object. Registration does
+not establish name uniqueness on the network or client reachability.
+
+Responder methods
+~~~~~~~~~~~~~~~~~
+
+``responder:status()``
+   Returns ``true`` while the object owns a registered alias. Returns
+   ``nil, "closed"`` after closure, or ``nil, error`` if the alias is no
+   longer registered. It does not test network connectivity or expose
+   individual ESP-IDF socket failures.
+
+``responder:close()``
+   Queues removal of this object's alias and returns no values on success.
+   Repeated calls are safe. If ESP-IDF cannot queue removal, it returns
+   ``nil, error`` and retains ownership so the caller can retry. This
+   failure return is an ESP32 extension to the generic API.
+
+Both methods require the responder userdata as their receiver and take no
+additional arguments. An invalid receiver raises a Lua argument error.
+Keep the userdata alive while the name is needed. Garbage collection and
+Lua's ``__close`` mechanism also attempt cleanup; a native cleanup failure
+is logged. The alias is not saved in NVRAM.
+
+.. code-block:: lua
+
+   -- Run after the network has obtained an IP address.
+   local responder = assert(ba.createmdns("myapp"))
+   assert(responder:status())
+
+   function onunload()
+      -- The closure keeps the responder alive for the application's lifetime.
+      responder:close()
+   end
+
+Clients with mDNS support can use ``http://myapp.local/`` with the existing
+web server. This function does not create a listener or configure HTTPS
+certificates.
+
+Platform differences
+~~~~~~~~~~~~~~~~~~~~
+
+- The alias uses a snapshot of the default network interface's addresses at
+  creation: at most one IPv4 address and, when enabled, one IPv6 address.
+  Close and recreate it after an address or interface change.
+- ESP-IDF handles the responder's interfaces and network behavior. The
+  compatibility object does not own separate sockets or a separate task.
+- Removal is asynchronous. Immediate recreation of the same name can return
+  an error until ESP-IDF processes the removal. Existing client caches may
+  retain the old records until their TTL expires; alias removal does not
+  guarantee the generic responder's goodbye announcement.
+
 ``xedge.event()``
 -----------------
 
