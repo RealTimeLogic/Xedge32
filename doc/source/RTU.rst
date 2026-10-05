@@ -61,7 +61,7 @@ RTU request methods require a unit identifier from 1 through 247, defaulting to
 transmitted. A rejected request leaves the client usable.
 
 Responses and closure
---------------------
+---------------------
 
 Requests are transmitted one at a time. After a response is validated and its
 callback returns, the next queued request can transmit. Closing from the callback

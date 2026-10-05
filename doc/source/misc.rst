@@ -144,9 +144,9 @@ SPI Ethernet configuration fields:
 
 RMII Ethernet configuration fields:
 
-- ``rst``: PHY reset GPIO.
-- ``mdio``: MDIO GPIO.
-- ``mdc``: MDC GPIO.
+- ``rst``: Required integer PHY reset GPIO; ``-1`` disables GPIO-controlled reset.
+- ``mdio``: Required integer MDIO GPIO; ``-1`` uses the target's default pin.
+- ``mdc``: Required integer MDC GPIO; ``-1`` uses the target's default pin.
 
 If ``cfg`` is omitted while the device is already running in Wi-Fi Station
 Mode, the device switches back to Access Point Mode.
@@ -166,6 +166,9 @@ Examples:
 
    -- Configure RMII Ethernet with a DP83848 PHY
    esp32.netconnect("DP83848", {rst = 5, mdio = 18, mdc = 23})
+
+   -- ESP32-P4 with IP101: default MDC/MDIO pins, no GPIO-controlled PHY reset.
+   esp32.netconnect("IP101", {rst = -1, mdio = -1, mdc = -1})
 
    -- Return from Station Mode to Access Point Mode
    esp32.netconnect"wifi"
@@ -269,7 +272,9 @@ Supported commands:
 - ``"restart"``: Restart the ESP32.
 - ``"killmain"``: Stop the main process that powers LuaShell32 and reclaim its
   memory.
-- ``"mdns"``: Change the mDNS name.
+- ``"mdns"``: Configure the default mDNS hostname. With a name, save it for
+  the next restart. Without a name, disable the default hostname immediately
+  and keep it disabled after restarts.
 
 Example:
 
@@ -279,7 +284,30 @@ Example:
    esp32.execute"restart"
 
 After restarting, the device can be reached at ``http://myesp.local`` if mDNS
-is available on your network.
+is available on your network. Passing a name also re-enables a previously
+disabled default hostname after that restart.
+
+When SharkCA supplies a name through ``ba.createmdns`` (see below),
+you can disable the additional default name and its HTTP service
+advertisement:
+
+.. code-block:: lua
+
+   -- Disable the default name; the SharkCA-created name keeps working.
+   esp32.execute"mdns" -- Equivalent to esp32.execute("mdns").
+
+This setting is saved in non-volatile storage. It does not close existing
+``ba.createmdns`` objects or prevent new ones from resolving their names for
+web browsers. Repeating the disable call is safe. Clients may retain the
+old default name in their DNS cache until it expires. The web server remains
+accessible by IP address and by any active ``ba.createmdns`` name.
+
+The optional second argument is a string containing 1 to 79 bytes without
+embedded NUL bytes. Omit it, or pass nil, to disable the default name. An
+empty string or a value of another type raises a Lua argument error. A
+successful mDNS command returns no values; a configuration or native mDNS
+failure returns ``nil, error`` with an ESP-IDF error-name string. Check the
+second return value when handling failures programmatically.
 
 ``ba.createmdns(name)`` compatibility
 ----------------------------------------
@@ -287,8 +315,11 @@ is available on your network.
 Xedge32 provides a compatibility implementation of the BAS
 `mDNS hostname responder API <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#mdns>`_
 when ``CONFIG_mDNS_ENABLED`` is enabled. It uses ESP-IDF's existing multicast
-DNS (mDNS) responder and adds a temporary hostname alias. The configured
-Xedge32 hostname and ``esp32.execute("mdns", name)`` remain unchanged.
+DNS (mDNS) responder and adds a temporary hostname that browsers can resolve.
+The default Xedge32 hostname can coexist with this name, or you can disable
+it using ``esp32.execute("mdns")``. This is useful when SharkCA creates the
+hostname that clients will use. Disabling the default name keeps the shared
+mDNS responder available for these objects.
 
 The required ``name`` argument is a string containing one ASCII hostname
 label, 1 to 63 bytes, without ``.local``. Letters, digits, and internal
@@ -345,9 +376,14 @@ certificates.
 Platform differences
 ~~~~~~~~~~~~~~~~~~~~
 
-- The alias uses a snapshot of the default network interface's addresses at
-  creation: at most one IPv4 address and, when enabled, one IPv6 address.
-  Close and recreate it after an address or interface change.
+- The alias follows the default network interface: at most one IPv4 address
+  and, when enabled, one IPv6 address. IP acquisition/loss and interface
+  up/down events refresh existing objects automatically; no recreation is
+  needed after DHCP address changes or reconnection. An offline default
+  interface clears the alias's addresses until connectivity returns.
+- Address updates affect new DNS replies. ESP-IDF does not send an unsolicited
+  announcement for these standalone aliases, so clients can retain a cached
+  address until its TTL expires (normally 120 seconds).
 - ESP-IDF handles the responder's interfaces and network behavior. The
   compatibility object does not own separate sockets or a separate task.
 - Removal is asynchronous. Immediate recreation of the same name can return

@@ -7,6 +7,8 @@ ESP32 board. The precompiled firmware targets:
 - **Standard ESP32 boards with PSRAM**, such as ESP32 WROVER, with at least
   4 MB flash and 4 MB RAM.
 - **ESP32-S3 boards**, with at least 8 MB flash and 8 MB RAM.
+- **ESP32-P4 boards matching the Function EV Board profile**, with 16 MB flash
+  and IP101 Ethernet. See :ref:`esp32-p4-firmware` for installation details.
 
 If you are completely new to Xedge32, start with the precompiled firmware and
 the default onboarding workflow. More advanced build and upgrade paths are
@@ -25,6 +27,8 @@ For the easiest first installation, use the web installer on the `Xedge32
 installation page <https://realtimelogic.com/downloads/bas/ESP32/#install>`_.
 That installer is the quickest route to a working device because it avoids
 manual flash addresses and command-line tools.
+
+For ESP32-P4, follow :ref:`esp32-p4-firmware` below.
 
 If you need more control over flashing, board selection, or firmware variants,
 continue with the manual instructions below.
@@ -90,8 +94,10 @@ following firmware packages:
 - `ESP32 Xedge firmware <https://realtimelogic.com/downloads/bas/Xedge32-Firmware.zip>`_
 - `ESP32-S3 Xedge firmware <https://realtimelogic.com/downloads/bas/Xedge32-S3-Firmware.zip>`_
   which includes two firmware variants. See :ref:`firmware-options`.
+- `ESP32-P4 Xedge firmware <https://realtimelogic.com/downloads/bas/Xedge-P4-Firmware.zip>`_
+  with separate instructions under :ref:`esp32-p4-firmware`.
 
-After downloading, extract the flash tool archive and the firmware ZIP file.
+For ESP32 and ESP32-S3, extract the flash tool archive and the firmware ZIP file.
 
 Then follow these steps:
 
@@ -154,12 +160,6 @@ Finish the Flash Process
 13. When ``LuaShell32 ready`` appears, continue with
     :ref:`configesp32`.
 
-.. image:: https://realtimelogic.com/images/Xedg32-Flash-Firmware.png
-   :alt: Firmware Upload Tool
-
-The screenshot above shows the flash tool on the left and a terminal window on
-the right. The merged firmware option is simpler because it packages the
-required firmware parts into a single file.
 
 Common Flashing Issues
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -238,6 +238,23 @@ Two runtime variants are provided for ESP32-S3 boards:
    the runtime console. If you use ``xedge-s0.bin``, you can usually keep using
    the same USB-to-UART connection.
 
+.. _esp32-p4-firmware:
+
+ESP32-P4 Firmware
+^^^^^^^^^^^^^^^^^
+
+Upload the **ESP32-P4** firmware:
+
+.. code-block:: sh
+
+   wget https://realtimelogic.com/downloads/bas/Xedge-P4-Firmware.zip
+   unzip Xedge-P4-Firmware.zip
+   cd esp32p4
+
+   # Flash the merged firmware for a first installation:
+
+   # python -m esptool --chip esp32p4 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size detect --flash_freq 80m 0x0 merged-xedge.bin
+
 Firmware Option 2: Compile the Code
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -253,9 +270,10 @@ build-time configuration changes, or tighter control over the final image.
 Configure the ESP32
 -------------------
 
-After flashing, reboot the ESP32. On first boot, Xedge32 starts in Access Point
-Mode. From there, you can either connect over serial or connect to the device's
-Wi-Fi access point and use the web-based shell.
+After flashing, reboot the ESP32. On ESP32 and ESP32-S3, Xedge32 starts in
+Access Point Mode on first boot. From there, you can either connect over serial
+or connect to the device's Wi-Fi access point and use the web-based shell.
+For ESP32-P4, see the network and console notes in :ref:`esp32-p4-firmware`.
 
 Relevant guides:
 
@@ -278,6 +296,16 @@ Using Ethernet
 .. code-block:: lua
 
    esp32.netconnect("W5500", {spi-settings})
+
+For ESP32-P4 boards with an IP101 PHY wired to the default P4 Ethernet pins:
+
+.. code-block:: lua
+
+   -- Use the default P4 MDC/MDIO pins without a GPIO-controlled PHY reset.
+   esp32.netconnect("IP101", {rst = -1, mdio = -1, mdc = -1})
+
+The ``-1`` values select the default MDC/MDIO pins and disable GPIO-controlled
+PHY reset; they do not autodetect the board's wiring.
 
 On a successful connection, the configuration is stored so the device can
 reconnect automatically after the next restart.

@@ -72,12 +72,17 @@ static void startMdnsService()
 {
    //initialize mDNS service
    char buf[80]={0};
-   const char* ptr = ESP_OK == mDnsCfg(buf) ? buf : "Xedge32";
+   const char* ptr = ESP_OK == mDnsGet(buf) ? buf : "Xedge32";
    ESP_ERROR_CHECK(mdns_init());
+   /* Keep the responder available for ba.createmdns when the default is off.
+      PatchMdns.cmake permits an empty primary hostname with delegated names. */
    mdns_hostname_set(ptr);
-   HttpTrace_printf(9,"mDNS: %s\n",ptr); 
-   mdns_instance_name_set("Xedge32");
-   mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+   HttpTrace_printf(9,"mDNS: %s\n",*ptr ? ptr : "default hostname disabled");
+   if(*ptr)
+   {
+      mdns_instance_name_set("Xedge32");
+      mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+   }
 }
 #else
 #define startMdnsService()
@@ -286,10 +291,17 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
       }
    }
 #else
+   IoStat sb;
    int status=0;
    IoIntfPtr io = aux->dio;
    size_t size=0;
-   static const char pmkey[]={"softpmkey.bin"};
+   /* softpmkey.bin used to be stored in "cert". The following makes it
+    * backward compatible for older installations.
+    */
+   static const char _pmkey[]={"cert/softpmkey.bin"};
+   const char* pmkey=_pmkey;
+   if(io->statFp(io, pmkey, &sb))
+      pmkey+=5;
    ResIntf* fp = io->openResFp(io,pmkey,OpenRes_READ,&status,0);
    if(fp)
    {

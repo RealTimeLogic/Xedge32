@@ -46,15 +46,18 @@ esp_err_t cfgInit(void)
 }
 
 
-/**
-   Save mDNS name in NVRAM if 'namebuf' is set, otherwise read mDNS name from
-   NVRAM and copy to 'namebuf'.
- */
+/* An empty saved name disables the default hostname; missing means Xedge32. */
 #if CONFIG_mDNS_ENABLED
-esp_err_t mDnsCfg(char namebuf[80])
+esp_err_t mDnsGet(char namebuf[80])
 {
    size_t size=80;
-   return namebuf[0] ? nvs_set_str(nvsh, "mdns", namebuf) : nvs_get_str(nvsh, "mdns",namebuf,&size);
+   return nvs_get_str(nvsh,"mdns",namebuf,&size);
+}
+
+esp_err_t mDnsSet(const char* name)
+{
+   esp_err_t err = nvs_set_str(nvsh,"mdns",name);
+   return err == ESP_OK ? nvs_commit(nvsh) : err;
 }
 #endif
 

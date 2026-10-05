@@ -3203,11 +3203,77 @@ static int lerase(lua_State* L)
 #if CONFIG_mDNS_ENABLED
 /* Lua API adapted from BamDNS.c; all responder work remains in ESP-IDF. */
 #define MDNS_META "ESP32.mDNS"
-typedef struct {
+typedef struct LMdns {
+   struct LMdns* next;
    char name[64];
    BaBool active;
 } LMdns;
 static ThreadMutex mdnsMutex;
+static LMdns* mdnsAliases;
+static BaBool mdnsEvents;
+
+typedef struct {
+   mdns_ip_addr_t addr[2];
+   unsigned count;
+} LMdnsAddresses;
+
+/* Run in TCP/IP context so selecting and reading the default netif cannot
+   race its removal. An offline interface supplies an empty address list. */
+static esp_err_t mdnsAddresses(void* arg)
+{
+   LMdnsAddresses* a = (LMdnsAddresses*)arg;
+   esp_netif_t* netif = esp_netif_get_default_netif();
+   esp_netif_ip_info_t ip4;
+   memset(a,0,sizeof(*a));
+   if(!netif || !esp_netif_is_netif_up(netif))
+      return ESP_OK;
+   if(esp_netif_get_ip_info(netif,&ip4) == ESP_OK && ip4.ip.addr)
+   {
+      a->addr[a->count].addr.type = ESP_IPADDR_TYPE_V4;
+      a->addr[a->count++].addr.u_addr.ip4 = ip4.ip;
+   }
+#if CONFIG_LWIP_IPV6
+   {
+      esp_ip6_addr_t ip6;
+      if(esp_netif_get_ip6_global(netif,&ip6) == ESP_OK ||
+         esp_netif_get_ip6_linklocal(netif,&ip6) == ESP_OK)
+      {
+         a->addr[a->count].addr.type = ESP_IPADDR_TYPE_V6;
+         a->addr[a->count++].addr.u_addr.ip6 = ip6;
+      }
+   }
+#endif
+   if(a->count == 2)
+      a->addr[0].next = &a->addr[1];
+   return ESP_OK;
+}
+
+/* IDF event task: native data only, never acquire the BAS/Lua mutex here. */
+static void mdnsNetworkEvent(void* arg, esp_event_base_t base,
+                             int32_t id, void* data)
+{
+   LMdnsAddresses a;
+   (void)arg; (void)base; (void)data;
+   switch(id)
+   {
+      case IP_EVENT_STA_GOT_IP: case IP_EVENT_STA_LOST_IP:
+      case IP_EVENT_ETH_GOT_IP: case IP_EVENT_ETH_LOST_IP:
+      case IP_EVENT_GOT_IP6:
+      case IP_EVENT_NETIF_UP: case IP_EVENT_NETIF_DOWN:
+         break;
+      default: return;
+   }
+   ThreadMutex_set(&mdnsMutex);
+   if(mdnsAliases && esp_netif_tcpip_exec(mdnsAddresses,&a) == ESP_OK)
+      for(LMdns* o = mdnsAliases; o; o = o->next)
+      {
+         esp_err_t err = mdns_delegate_hostname_set_address(
+            o->name,a.count ? a.addr : NULL);
+         if(err != ESP_OK)
+            ESP_LOGW("mDNS", "Cannot refresh alias: %s", esp_err_to_name(err));
+      }
+   ThreadMutex_release(&mdnsMutex);
+}
 
 /* Serialize ownership checks while allowing other Lua work during IDF calls. */
 static void mdnsEnter(void)
@@ -3222,7 +3288,7 @@ static void mdnsLeave(void)
    ThreadMutex_set(soDispMutex);
 }
 
-static int mdnsLuaClose(lua_State* L)
+static int mdnsClose(lua_State* L, BaBool gc)
 {
    LMdns* o = (LMdns*)luaL_checkudata(L,1,MDNS_META);
    esp_err_t err = ESP_OK;
@@ -3230,20 +3296,36 @@ static int mdnsLuaClose(lua_State* L)
    if(o->active)
    {
       err = mdns_delegate_hostname_remove(o->name);
-      if(err == ESP_OK || err == ESP_ERR_INVALID_STATE)
+      if(err == ESP_OK || err == ESP_ERR_INVALID_STATE || gc)
       {
+         LMdns** link = &mdnsAliases;
+         while(*link != o) link = &(*link)->next;
+         *link = o->next;
          o->active = FALSE;
+         if(gc && err != ESP_OK && err != ESP_ERR_INVALID_STATE)
+            ESP_LOGW("mDNS", "Cannot remove collected alias: %s", esp_err_to_name(err));
          err = ESP_OK;
       }
    }
    mdnsLeave();
    if(err != ESP_OK)
    {
-      /* Keep ownership so an explicit close can be retried. GC is best effort. */
+      /* Explicit close retains ownership on a queue failure so it can retry. */
       ESP_LOGW("mDNS", "Cannot remove alias: %s", esp_err_to_name(err));
       return pushErr(L,esp_err_to_name(err));
    }
    return 0;
+}
+
+static int mdnsLuaClose(lua_State* L)
+{
+   return mdnsClose(L,FALSE);
+}
+
+static int mdnsLuaGC(lua_State* L)
+{
+   /* Even failed native cleanup must unlink userdata before Lua frees it. */
+   return mdnsClose(L,TRUE);
 }
 
 static int mdnsLuaStatus(lua_State* L)
@@ -3269,10 +3351,7 @@ static int mdnsLuaCreate(lua_State* L)
    const char* name;
    const char* error = 0;
    LMdns* o;
-   esp_netif_t* netif;
-   esp_netif_ip_info_t ip4;
-   mdns_ip_addr_t addresses[2] = {0};
-   unsigned count = 0;
+   LMdnsAddresses addresses;
    char primary[MDNS_NAME_BUF_LEN];
    esp_err_t err;
    luaL_checktype(L,1,LUA_TSTRING);
@@ -3296,7 +3375,7 @@ static int mdnsLuaCreate(lua_State* L)
          {"status",mdnsLuaStatus},
          {"close", mdnsLuaClose},
          {"__close", mdnsLuaClose},
-         {"__gc", mdnsLuaClose},
+         {"__gc", mdnsLuaGC},
          {NULL, NULL}
       };
       lua_pushvalue(L, -1);
@@ -3304,42 +3383,41 @@ static int mdnsLuaCreate(lua_State* L)
       luaL_setfuncs(L,lib,0);
    }
    lua_setmetatable(L, -2); /* Set meta for userdata */
-   netif = esp_netif_get_default_netif();
-   if(!netif || !esp_netif_is_netif_up(netif))
-      return pushErr(L,"invalid name or network configuration");
-   if(esp_netif_get_ip_info(netif,&ip4) == ESP_OK && ip4.ip.addr)
-   {
-      addresses[count].addr.type = ESP_IPADDR_TYPE_V4;
-      addresses[count++].addr.u_addr.ip4 = ip4.ip;
-   }
-#if CONFIG_LWIP_IPV6
-   {
-      esp_ip6_addr_t ip6;
-      if(esp_netif_get_ip6_global(netif,&ip6) == ESP_OK ||
-         esp_netif_get_ip6_linklocal(netif,&ip6) == ESP_OK)
-      {
-         addresses[count].addr.type = ESP_IPADDR_TYPE_V6;
-         addresses[count++].addr.u_addr.ip6 = ip6;
-      }
-   }
-#endif
-   if(!count)
-      return pushErr(L,"invalid name or network configuration");
-   if(count == 2)
-      addresses[0].next = &addresses[1];
    mdnsEnter();
+   if(!mdnsEvents)
+   {
+      err = esp_event_handler_register(IP_EVENT,ESP_EVENT_ANY_ID,
+                                       mdnsNetworkEvent,NULL);
+      if(err != ESP_OK)
+      {
+         mdnsLeave();
+         return pushErr(L,esp_err_to_name(err));
+      }
+      mdnsEvents = TRUE;
+   }
+   err = esp_netif_tcpip_exec(mdnsAddresses,&addresses);
+   if(err != ESP_OK || !addresses.count)
+   {
+      mdnsLeave();
+      return pushErr(L,"invalid name or network configuration");
+   }
    err = mdns_hostname_get(primary);
    if(err == ESP_OK && mdns_hostname_exists(o->name))
       error = "mDNS hostname already in use";
    else if(err == ESP_OK)
    {
-      err = mdns_delegate_hostname_add(o->name,addresses);
+      err = mdns_delegate_hostname_add(o->name,addresses.addr);
       /* IDF can return OK even when its worker could not allocate the host. */
       if(err == ESP_OK)
       {
          o->active = mdns_hostname_exists(o->name);
          if(!o->active)
             err = ESP_ERR_NO_MEM;
+         else
+         {
+            o->next = mdnsAliases;
+            mdnsAliases = o;
+         }
       }
    }
    mdnsLeave();
@@ -3373,18 +3451,35 @@ static int lexecute(lua_State* L)
 #if CONFIG_mDNS_ENABLED
    else if(cmd[0] == 'm') /* mdns */
    {
-      size_t len;
-      const char* name = luaL_checklstring(L,2,&len);
-      if(len >= 80) /* See main.c: startMdnsService */
-         goto L_err;
-      mDnsCfg((char*)name);
+      const char* name = "";
+      esp_err_t err = ESP_OK;
+      if(!lua_isnoneornil(L,2))
+      {
+         size_t len;
+         luaL_checktype(L,2,LUA_TSTRING);
+         name = lua_tolstring(L,2,&len);
+         luaL_argcheck(L,len && len < 80 && len == strlen(name),2,
+                       "expected a nonempty hostname shorter than 80 bytes");
+      }
+      mdnsEnter();
+      if(!*name)
+      {
+         char primary[MDNS_NAME_BUF_LEN];
+         err = mdns_hostname_get(primary);
+         if(err == ESP_OK && *primary)
+         {
+            err = mdns_service_remove("_http","_tcp");
+            if(err == ESP_ERR_NOT_FOUND) err = ESP_OK;
+            if(err == ESP_OK) err = mdns_hostname_set("");
+         }
+      }
+      if(err == ESP_OK) err = mDnsSet(name);
+      mdnsLeave();
+      if(err != ESP_OK) return pushErr(L,esp_err_to_name(err));
    }
 #endif
    else
    {
-#if CONFIG_mDNS_ENABLED
-     L_err:
-#endif
       luaL_argerror(L, 1, cmd);
    }
    return 0;
