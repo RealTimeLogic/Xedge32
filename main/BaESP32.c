@@ -58,6 +58,7 @@ LThreadMgr Documentation:
     https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/AsynchLua.c
 */ 
 
+#include <limits.h>
 #include <esp_adc/adc_oneshot.h>
 #include <esp_adc/adc_continuous.h>
 #include <esp_adc/adc_cali.h>
@@ -923,8 +924,8 @@ static const luaL_Reg gpioObjLib[] = {
 static int lgpio(lua_State* L)
 {
    gpio_config_t cfg;
-   gpio_num_t pin=(gpio_num_t)lua_tointeger(L, 1);
-   if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
+   lua_Integer pin=luaL_checkinteger(L, 1);
+   if(!GPIO_IS_VALID_GPIO(pin))
       luaL_argerror(L, 1, "Invalid pin");
    const char* mode = luaL_checkstring(L,2);
    cfg.mode = 'I' == mode[0] && !mode[2] ? GPIO_MODE_INPUT :
@@ -932,6 +933,8 @@ static int lgpio(lua_State* L)
        ('O' == mode[0] ? GPIO_MODE_OUTPUT_OD :
         ('I' == mode[0] && !mode[5] ? GPIO_MODE_INPUT_OUTPUT :
          GPIO_MODE_INPUT_OUTPUT_OD)));
+   if((cfg.mode & GPIO_MODE_DEF_OUTPUT) && !GPIO_IS_VALID_OUTPUT_GPIO(pin))
+      luaL_argerror(L, 1, "Invalid output pin");
    if(activeGPIO[pin])
       throwPinInUse(L,pin);
    lInitConfigTable(L, 3);
@@ -965,7 +968,7 @@ static int lgpio(lua_State* L)
    {
       /* Userdata at -1 and callback ix is 4 */
       gpio->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
-      gpio_isr_handler_add(pin, gpioInterruptHandler, (void *)pin); 
+      gpio_isr_handler_add(pin, gpioInterruptHandler, (void *)(intptr_t)pin);
    }
    return 1;
 }
@@ -1600,8 +1603,14 @@ typedef struct
   const uint8_t* data;
 } write_buffer_t;
 
-// Default timeout for I2C operations, 500ms unless specified in Lua
-#define I2CWT(L,ix) ((TickType_t)luaL_optinteger(L,ix,500)/portTICK_PERIOD_MS)
+// ESP-IDF expects milliseconds; -1 means wait forever.
+static int I2CWT(lua_State* L, int ix)
+{
+   lua_Integer timeout = luaL_optinteger(L, ix, 500);
+   if(timeout < -1 || timeout > INT_MAX)
+      luaL_argerror(L, ix, "Invalid timeout");
+   return (int)timeout;
+}
 
 // Get I2C master userdata from Lua
 static LI2CMaster* I2CMaster_getUD(lua_State* L)
@@ -1708,7 +1717,7 @@ static int I2CMaster_probe(lua_State* L)
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    
    // Retrieve optional timeout from Lua, defaulting to I2CWT if not provided
-   TickType_t timeout = I2CWT(L, 3);
+   int timeout = I2CWT(L, 3);
    
    // Get the address from Lua
    uint16_t address = (uint16_t) luaL_checkinteger(L, 2);
@@ -1733,7 +1742,7 @@ static int I2CMaster_write(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
-   TickType_t timeout = I2CWT(L, 4);
+   int timeout = I2CWT(L, 4);
 
    // Configure the device address on the bus
    esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
@@ -1772,7 +1781,7 @@ static int I2CMaster_read(lua_State* L)
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
    size_t recblen = (size_t)luaL_checkinteger(L, 3);
-   TickType_t timeout = I2CWT(L, 4);
+   int timeout = I2CWT(L, 4);
 
    // Configure the device address
    esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
@@ -1830,7 +1839,7 @@ static int I2CMaster_readfrom(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
-   TickType_t timeout = I2CWT(L, 5);
+   int timeout = I2CWT(L, 5);
 
    esp_err_t ret_val = I2CMaster_addDevice(i2cm, address);
 
@@ -1889,8 +1898,10 @@ static int I2CMaster_close(lua_State* L)
    
    if(i2cm->bus_handle)
    {
-      activeGPIO[i2cm->bus_cfg.sda_io_num] = 0; 
-      activeGPIO[i2cm->bus_cfg.scl_io_num] = 0;
+      if(activeGPIO[i2cm->bus_cfg.sda_io_num] == (LGPIO*)i2cm)
+         activeGPIO[i2cm->bus_cfg.sda_io_num] = 0;
+      if(activeGPIO[i2cm->bus_cfg.scl_io_num] == (LGPIO*)i2cm)
+         activeGPIO[i2cm->bus_cfg.scl_io_num] = 0;
       i2c_del_master_bus(i2cm->bus_handle);
       i2cm->bus_handle = 0;
    }
@@ -1931,25 +1942,36 @@ static const luaL_Reg i2cMasterLib[] = {
 static int li2cMaster(lua_State* L)
 {
   // Get the I2C port from Lua and validate its range
-  i2c_port_t port = (i2c_port_t)luaL_checkinteger(L, 1); 
+  lua_Integer port = luaL_checkinteger(L, 1);
   
   if((port < 0) || (port >= I2C_NUM_MAX))
   {
      luaL_error(L, "Port num. range err.");
   }
+  lua_Integer sda = luaL_checkinteger(L, 2);
+  lua_Integer scl = luaL_checkinteger(L, 3);
+  if(!GPIO_IS_VALID_OUTPUT_GPIO(sda))
+     luaL_argerror(L, 2, "Invalid pin");
+  if(!GPIO_IS_VALID_OUTPUT_GPIO(scl) || scl == sda)
+     luaL_argerror(L, 3, "Invalid pin");
    // Allocate memory for the new I2C master object and register it in Lua
   LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(L, sizeof(LI2CMaster), BAI2CMASTER, i2cMasterLib);   
   // Configure the I2C bus parameters (clock source, port, SDA, SCL, and pullup resistors)
   i2cm->bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
   i2cm->bus_cfg.i2c_port = port;
-  i2cm->bus_cfg.sda_io_num = luaL_checkinteger(L, 2);  // pinSDA
-  i2cm->bus_cfg.scl_io_num = luaL_checkinteger(L, 3);  // pinSCL
+  i2cm->bus_cfg.sda_io_num = sda;
+  i2cm->bus_cfg.scl_io_num = scl;
   i2cm->bus_cfg.glitch_ignore_cnt = 7;
   i2cm->bus_cfg.flags.enable_internal_pullup = 1;
   // Configure the I2C device parameters (7-bit address, initial address 0, and bus speed)
    i2cm->dev_cfg.dev_addr_length = I2C_ADDR_BIT_LEN_7;
   i2cm->dev_cfg.device_address = 0;
   i2cm->dev_cfg.scl_speed_hz = luaL_checkinteger(L, 4);// speed 
+  // Reject occupied pins before the driver can reconfigure them.
+  if(activeGPIO[sda])
+     throwPinInUse(L, sda);
+  if(activeGPIO[scl])
+     throwPinInUse(L, scl);
   // Create a new I2C master bus with the configured settings
   esp_err_t ret_val = i2c_new_master_bus(&i2cm->bus_cfg, &i2cm->bus_handle);
   // Check if bus creation was successful; if not, return an error
@@ -1957,17 +1979,6 @@ static int li2cMaster(lua_State* L)
   {
      return pushEspRetVal(L, ret_val, "i2cm", TRUE);
   }
-  // Check if SDA pin is already in use, raise error if so
-  if(activeGPIO[i2cm->bus_cfg.sda_io_num])
-  {
-     throwPinInUse(L, i2cm->bus_cfg.sda_io_num);
-  }
-  // Check if SCL pin is already in use, raise error if so
-  if(activeGPIO[i2cm->bus_cfg.scl_io_num])
-  {
-     throwPinInUse(L, i2cm->bus_cfg.scl_io_num);
-  }
-  
   activeGPIO[i2cm->bus_cfg.sda_io_num] = (LGPIO*)i2cm;
   activeGPIO[i2cm->bus_cfg.scl_io_num] = (LGPIO*)i2cm;
 
@@ -2881,8 +2892,8 @@ static const luaL_Reg uartObjLib[] = {
  */
 static int luart(lua_State* L)
 {
-   uart_port_t port=(uart_port_t)lua_tointeger(L, 1);
-   if(port < UART_NUM_0 || port > UART_NUM_MAX)
+   lua_Integer port=luaL_checkinteger(L, 1);
+   if(port < UART_NUM_0 || port >= UART_NUM_MAX)
       luaL_argerror(L, 1, "Invalid port");
    lInitConfigTable(L, 2);
    lua_getfield(L, 2, "callback"); /* callback IX is now 3 */
