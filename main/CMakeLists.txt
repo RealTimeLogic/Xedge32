@@ -78,3 +78,5 @@ set_source_files_properties(
 include("${CMAKE_CURRENT_LIST_DIR}/PatchLinenoise.cmake")
 
 include("${CMAKE_CURRENT_LIST_DIR}/PatchMdns.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/PatchRmt.cmake")

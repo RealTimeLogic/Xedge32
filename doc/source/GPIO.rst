@@ -82,6 +82,26 @@ appears inverted.
 
 Releases the GPIO object and frees the underlying hardware resources.
 
+.. _hardware-resource-lifetime:
+
+Hardware Object Lifetime
+------------------------
+
+Keep a Lua reference to each GPIO, ADC, PCNT, PWM, I2C, UART, or RMT object
+while it is in use. Queued callbacks do not keep these objects alive.
+Explicit ``object:close()`` is preferable to waiting for garbage collection.
+It returns boolean ``true`` on success, or ``nil`` and an error string.
+Closing an already closed object succeeds. Pending callbacks are discarded
+when the object is closed.
+
+I2C, UART, and PWM reject overlapping operations on the same object while a
+blocking call is in progress. Another thread's ``close()`` returns an error
+in this case; wait for the operation to finish before closing it.
+
+If native driver cleanup fails, Xedge32 retains the object and its resources
+and retries cleanup automatically. Its pins remain reserved until cleanup
+succeeds. A failed close does not make the object available for new I/O.
+
 .. _GpioExamples:
 
 Examples

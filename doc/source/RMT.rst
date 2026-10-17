@@ -1,6 +1,9 @@
 RMT API
 =======
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The ESP32 RMT peripheral, short for **Remote Control**, is a timing-oriented
 signal engine that can both transmit and receive precisely timed digital pulse
 sequences. It was originally introduced for infrared remote-control protocols,
@@ -167,12 +170,14 @@ TX Configuration Options
 Required fields:
 
 - ``gpio``: Output GPIO pin.
-- ``resolution``: Tick resolution in Hertz.
+- ``resolution``: Required integer tick rate in Hertz, from ``1`` to
+  ``80000000``, subject to the hardware limits in :ref:`rmt-clock-limits`.
 
 Optional fields:
 
 - ``mem``: Memory or DMA buffer sizing. Default is ``64``.
-- ``queue``: Transaction queue depth. Default is ``4``.
+- ``queue``: Transaction queue depth. Default is ``4``. A depth of ``1`` allows one
+  outstanding transmission.
 - ``invert``: Invert the outgoing logic level. Default is ``false``.
 - ``dma``: Enable DMA backend. Default is ``false``.
 - ``opendrain``: Configure the GPIO in open-drain mode. Default is ``false``.
@@ -180,9 +185,43 @@ Optional fields:
 
 Optional carrier modulation fields:
 
-- ``dutycycle``: Carrier duty cycle.
-- ``frequency``: Carrier frequency in Hertz. Maximum is ``80000000``.
-- ``polaritylow``: Select the logic level on which the carrier is applied.
+- ``dutycycle``: Optional number specifying the fraction of each carrier period
+  spent high. When supplied with a nonzero ``frequency``, it must be strictly
+  between ``0`` and ``1`` and produce valid high/low tick counts as described
+  below. Omitting it leaves carrier modulation disabled.
+- ``frequency``: Integer carrier frequency in Hertz, required when
+  ``dutycycle`` is supplied. ``0`` disables modulation. Positive values must
+  satisfy the hardware tick limits below; ``80000000`` is not a usable carrier
+  frequency, even though the RMT source clock runs at that rate.
+- ``polaritylow``: Optional boolean, default ``false``. Select the logic level
+  on which the carrier is applied.
+
+.. _rmt-clock-limits:
+
+Clock and Carrier Limits
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+TX and RX reject invalid resolutions with a Lua error rather than restarting
+the device. ESP-IDF rounds the requested resolution to a hardware divider.
+Classic ESP32 uses an 80 MHz source clock and a channel divider from 1 to 256,
+so its lowest actual tick rate is ``312500`` Hz. For example, requesting
+``100000`` Hz fails. ESP32-S3 and ESP32-P4 also have a shared group divider and
+can support lower rates. Channels in the same group must use compatible
+resolutions; an existing channel can therefore limit later channel choices.
+
+Carrier modulation uses the group's effective clock, which may differ from
+both 80 MHz and the TX channel's tick rate. For a positive carrier frequency,
+ESP-IDF computes the total period ticks by integer division of group-clock Hz
+by carrier Hz, truncates ``total_ticks * dutycycle`` to obtain high ticks, and
+uses the remaining ticks for low ticks. Each pulse length must be from ``1``
+to ``65536`` ticks. Non-finite duty cycles, zero-length pulses, and counts above
+that limit raise a Lua error. A rejected configuration releases its newly
+allocated channel, allowing a subsequent valid constructor to reuse it.
+
+For an 80 MHz group clock, ``frequency=38000, dutycycle=0.5`` is valid;
+``frequency=80000000, dutycycle=0.5`` is invalid because one pulse rounds to
+zero ticks. The highest representable carrier frequency at that group clock
+is 40 MHz with a duty cycle of 0.5. Lower group clocks reduce that maximum.
 
 TX Object Methods
 -----------------
@@ -417,7 +456,8 @@ RX Configuration Options
 Required fields:
 
 - ``gpio``: Input GPIO pin.
-- ``resolution``: Tick resolution in Hertz.
+- ``resolution``: Required integer tick rate in Hertz, from ``1`` to
+  ``80000000``, subject to the hardware limits in :ref:`rmt-clock-limits`.
 - ``callback``: Lua function called when a receive job completes.
 
 Optional fields:

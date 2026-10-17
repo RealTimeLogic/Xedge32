@@ -59,6 +59,8 @@ LThreadMgr Documentation:
 */ 
 
 #include <limits.h>
+#include <stdatomic.h>
+#include <stddef.h>
 #include <esp_adc/adc_oneshot.h>
 #include <esp_adc/adc_continuous.h>
 #include <esp_adc/adc_cali.h>
@@ -78,6 +80,9 @@ LThreadMgr Documentation:
 #include <esp_ota_ops.h>
 #include "esp_idf_version.h"
 #include "soc/soc_caps.h"
+#if CONFIG_IDF_TARGET_ESP32 && CONFIG_SPIRAM
+#include "esp_private/esp_gpio_reserve.h"
+#endif
 
 #include "BaESP32.h"
 #include "CfgESP32.h"
@@ -96,28 +101,26 @@ LThreadMgr Documentation:
 */
 ThreadMutex* soDispMutex;
 
-/*
-  A mutex used for protecting small regions
-*/
-static ThreadMutex rMutex;
 #define GPIO_QUEUE_SIZE 10 /* See executeLuaGpioCB() */
 
 typedef struct LGPIO
 {
-   int callbackRef;
+   int selfRef;
    gpio_num_t pin;
    int queueLen;
    gpio_mode_t mode;
+   BaBool isrInstalled;
    U8 queue[GPIO_QUEUE_SIZE]; /* holds GPIO level(s) high/low */
 } LGPIO;
 
 typedef struct
 {
    ThreadJob super;
-   gpio_num_t pin;
+   int selfRef;
 } GpioThreadJob;
 
-/* Array of pointers with len GPIO_NUM_MAX */
+/* Pin owners (or reserved marker 1). Every real owner starts with int selfRef;
+   recovery uses that BAS weak reference without keeping unused objects alive. */
 LGPIO* activeGPIO[GPIO_NUM_MAX];
 
 
@@ -127,18 +130,30 @@ LGPIO* activeGPIO[GPIO_NUM_MAX];
  *********************************************************************
  *********************************************************************/
 
-static void dispatchThreadJob(gpio_num_t pin, ThreadJob_LRun lrun);
+static void dispatchThreadJob(int selfRef, ThreadJob_LRun lrun);
 
+/* Report a Lua API argument error; type names the invalid argument/category.
+   L is the caller's Lua state, with the dispatcher mutex held.
+   Raises a Lua error and does not return normally; no Lua results are returned.
+ */
 static int throwInvArg(lua_State* L, const char* type)
 {
    return luaL_error(L,"Invalidarg %s", type); /* does not return; throws */
 }
 
+/* Reject acquisition of pin, an integer GPIO already owned/reserved.
+   L is the caller's Lua state, with the dispatcher mutex held.
+   Raises a Lua error and does not return normally; no Lua results are returned.
+ */
 static int throwPinInUse(lua_State* L, int pin)
 {
    return luaL_error(L,"Pin %d in use",pin);
 }
 
+/* Return an operational failure to Lua without throwing.
+   L is the caller's locked Lua state; msg is the error string to copy.
+   Pushes nil and msg; returns 2, the number of Lua results.
+ */
 static int pushErr(lua_State* L, const char* msg)
 {
    lua_pushnil(L);
@@ -147,6 +162,12 @@ static int pushErr(lua_State* L, const char* msg)
 }
 
 
+/* Convert an ESP-IDF result to the Lua success/error convention.
+   Inputs: locked Lua state L; native result err; optional message prefix msg;
+   throwOnInvArg selects a Lua error for ESP_ERR_INVALID_ARG instead of results.
+   ESP_OK pushes true and returns 1. Other errors push nil and an error string
+   and return 2, unless the selected invalid-argument path raises a Lua error.
+ */
 int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg, int throwOnInvArg)
 {
    if(ESP_ERR_INVALID_ARG == err && throwOnInvArg)
@@ -166,19 +187,22 @@ int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg, int throwOnInvAr
 }
 
 
-/* This function creates and pushes on the stack a userdata object
-   with one associated Lua value. The function also sets the object's
-   metatable if it is the first time the function is called with 'tname'.
-   The space for one associated Lua value is for function lReferenceCallback().
-   Params:
-     size: Required userdata size.
-     tname: The name of the metatable
-     l: Registers all functions listed in l in metatable, if created.
+/* Create, zero and push userdata, then attach its named metatable.
+   Inputs (caller holds the dispatcher mutex):
+     L: Lua state receiving the new object.
+     size: Userdata allocation size in bytes.
+     tname: Metatable name; create it and register l on first use.
+     l: NULL-terminated luaL_Reg method array.
+     nuv: Number of Lua uservalue slots (0 means none), initially nil.
+          Slot 1 holds the callback where used (see lReferenceCallback).
+          RMT requests 2 slots: slot 2 retains the linked RX/TX partner.
+   Returns the C pointer to the zeroed storage and leaves exactly one new
+   userdata on L's stack. Allocation failure raises a Lua error.
  */
-
-void* lNewUdata(lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
+void* lNewUdataUV(lua_State *L, size_t size, const char *tname,
+                  const luaL_Reg *l, int nuv)
 {
-   void* o = lua_newuserdatauv(L, size, 1);
+   void* o = lua_newuserdatauv(L, size, nuv);
    memset(o,0,size);
    if(luaL_newmetatable(L, tname))
    {  /*
@@ -194,28 +218,197 @@ void* lNewUdata(lua_State *L, size_t size, const char *tname, const luaL_Reg *l)
 }
 
 
-/* Sets userdata[associated Lua value postition 1] = callback. The
-   above code prevents the garbage collector from collecting the Lua
-   callback function as long as the user data associated with it still
-   exists. The callback is also registered in the server's weak table,
-   making it easy to push the function on the stack using the call:
-   balua_wkPush().
-   https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
-   This function returns a reference to the function, but does not
-   push any values on the stack.
-*/
-static int
-lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
+/* Expose an operational hardware result without treating invalid state or
+   arguments returned by a driver as Lua API misuse. Inputs: locked Lua state
+   L and ESP-IDF result err. Pushes true/returns 1 on ESP_OK; otherwise pushes
+   nil plus esp_err_to_name(err) and returns 2. These are Lua result counts.
+ */
+static int hardwareStatus(lua_State* L, esp_err_t err)
 {
-   lua_pushvalue(L, callbackIx);
-   baAssert(lua_type(L, userdataIx) == LUA_TUSERDATA);
-   baAssert(lua_type(L, -1) == LUA_TFUNCTION);
-   lua_setiuservalue(L, userdataIx, 1);
-   lua_pushvalue(L, callbackIx);
+   return pushEspRetVal(L,err,NULL,FALSE);
+}
+
+/* Hardware userdata, callbacks and weak references
+
+   A normal Lua reference keeps a value alive. A weak-table value can be found
+   while it exists, but the table does not prevent the garbage collector (GC)
+   from collecting it. The shared BAS weak table maps selfRef -> userdata;
+   balua_wkRef() registers it and balua_wkPush() retrieves userdata or nil.
+   selfRef is an integer lookup key, not a pointer or a Lua ownership reference.
+
+   There are three different kinds of Lua references here:
+
+   1. userdata uservalue 1 -> callback is STRONG. As long as the application
+      keeps the hardware object, its callback must remain callable even if the
+      application keeps no separate reference to the function. A callback may
+      capture its own userdata; that cycle is still collectible when nothing
+      outside the cycle references it. RMT's slot 2 similarly retains its
+      linked RX/TX partner so their native relationship cannot outlive it.
+
+   2. BAS weak table selfRef -> userdata is WEAK. Permanently registering the
+      userdata strongly would prevent GC from ever closing an abandoned object.
+      Referencing only the callback is also wrong: the function could survive
+      elsewhere after its hardware userdata has gone away. We need to find the
+      original object, not merely a still-callable function or a reused pin.
+
+      Asynchronous notifications carry selfRef through the broker and worker
+      queues. Under the dispatcher mutex each stage looks up the owner again:
+      it may be collected or closed while waiting in either queue. A nil lookup
+      is skipped; a live userdata is also checked for closed/closing state.
+      The worker keeps the retrieved userdata on its Lua stack while calling
+      slot 1. That TEMPORARY STRONG reference protects its memory during Lua
+      allocations, callback-triggered GC and error handling. It does not stop
+      a callback from explicitly closing the hardware, so state checks still
+      matter after calling Lua. The stack reference is released when the job
+      finishes; queued notifications alone do not keep unused hardware alive.
+
+   3. cleanupOwners is a separate STRONG table, used only when native teardown
+      fails. A driver may still hold pointers into the userdata, so GC must not
+      free it yet. hardwareRecover() retries teardown; successful cleanup
+      removes this temporary ownership. This also covers partially constructed
+      objects that have no pin registered in activeGPIO.
+
+   activeGPIO contains raw C pointers, not Lua references. It tracks pin
+   ownership and lets recovery locate pending work after a lost notification;
+   it neither keeps userdata alive nor identifies delayed events. Successful
+   cleanup clears its entries before the userdata can be freed.
+ */
+static int cleanupOwners;
+static atomic_bool hardwareRetry;
+static BaBool recoveryQueued;
+static void hardwareRecover(ThreadJob* jb, int msgh, LThreadMgr* mgr);
+
+/* Find the Lua owner of native userdata address o before retaining cleanup.
+   Inputs: locked Lua state L and the address o. Search existing stack values
+   and their uservalue-2 RMT partners; do not dereference an unrooted C pointer.
+   Returns 1 and pushes the matching userdata, or returns 0 with the stack
+   unchanged. The pushed value keeps the owner alive for the caller.
+ */
+static int pushHardwareOwner(lua_State* L, void* o)
+{
+   int top=lua_gettop(L);
+   for(int i=1; i<=top; ++i)
+   {
+      if(lua_touserdata(L,i) == o)
+      {
+         lua_pushvalue(L,i);
+         return 1;
+      }
+      if(lua_type(L,i) == LUA_TUSERDATA)
+      {
+         lua_getiuservalue(L,i,2); /* RMT partner, if present */
+         if(lua_touserdata(L,-1) == o) return 1;
+         lua_pop(L,1);
+      }
+   }
+   return 0;
+}
+
+/* Remove every activeGPIO entry owned by native userdata address o.
+   Call with the dispatcher mutex held, after native teardown succeeds.
+   Does not reset hardware or free userdata. No return value or Lua stack use.
+ */
+static void releaseHardwarePins(void* o)
+{
+   for(int i=0; i<GPIO_NUM_MAX; ++i)
+      if(activeGPIO[i] == (LGPIO*)o) activeGPIO[i]=NULL;
+}
+
+/* Finish a teardown attempt or retain its owner for another attempt.
+   Inputs: locked Lua state L, native userdata address o, and teardown result
+   err. On failure o must be discoverable on L's stack or as an RMT partner.
+   ESP_OK releases pin ownership and removes any strong cleanup reference;
+   an error retains the userdata in cleanupOwners and requests recovery.
+   Returns err unchanged (a native status, not a Lua result count). Stack
+   height is unchanged. A missing failure owner is an internal fatal error.
+ */
+static esp_err_t hardwareCleanup(lua_State* L, void* o, esp_err_t err)
+{
+   lua_rawgeti(L,LUA_REGISTRYINDEX,cleanupOwners);
+   if(err == ESP_OK)
+   {
+      releaseHardwarePins(o);
+      lua_pushnil(L);
+   }
+   else
+   {
+      int found=pushHardwareOwner(L,o);
+      baAssert(found);
+      if(!found) baFatalE(FE_MALLOC,0);
+      atomic_store(&hardwareRetry,TRUE);
+   }
+   lua_rawsetp(L,-2,o);
+   lua_pop(L,1);
+   return err;
+}
+
+/* Set userdata[associated Lua value position 1] = callback. This keeps the
+   callback alive while its userdata is reachable, without keeping otherwise
+   unused userdata alive just because it has an interrupt/event registration.
+
+   Params (validated by the caller):
+     userdataIx: Absolute stack index of userdata with at least one uservalue.
+     callbackIx: Absolute stack index of the Lua callback function.
+   The caller must hold the BAS dispatcher mutex. The Lua stack is unchanged.
+
+   Returns a BAS weak reference to the USERDATA, not to the callback. Queued
+   events carry this reference so delivery can first find the original owner.
+   A callback alone is insufficient: it may still exist after its hardware
+   userdata has been collected. eventOwner() uses balua_wkPush() to push the
+   userdata (or nil if gone); keeping it on the worker stack protects it during
+   callback execution, including GC triggered by the callback. The delivery
+   code also checks the owner's closed/closing state before calling slot 1.
+   The weak reference itself does not prevent userdata/callback cycles from
+   being collected when the application drops its last reference.
+   https://realtimelogic.com/ba/doc/en/C/reference/html/group__WeakT.html
+ */
+static int lReferenceCallback(lua_State* L, int userdataIx, int callbackIx)
+{
+   lua_pushvalue(L,callbackIx);
+   lua_setiuservalue(L,userdataIx,1);
+   lua_pushvalue(L,userdataIx);
    return balua_wkRef(L);
 }
 
-/* Checks if index 'ix' is a table and if not, creates a table at 'ix'.
+/* Resolve a queued hardware identity while protecting the retrieved owner.
+   Inputs: locked Lua state L and BAS weak reference ref, identifying userdata.
+   Pushes that userdata or nil; returns its C address or NULL respectively.
+   This does not check closed/closing state. The caller must keep the pushed
+   value on the stack while using the address and check peripheral state.
+   In a worker this stack entry occupies msgh+1; its slot 1 holds the callback.
+ */
+static void* eventOwner(lua_State* L, int ref)
+{
+   balua_wkPush(L,ref);
+   return lua_touserdata(L,-1);
+}
+
+/* Begin a broker notification: acquire the dispatcher mutex, then resolve
+   arg.ref (the queued BAS weak userdata reference) on ltMgr.Lg.
+   Returns the native owner pointer or NULL and pushes userdata or nil there.
+   Pair every call with eventEnd(), including a NULL result; the mutex remains
+   held and the pushed value roots the owner until that matching call.
+ */
+static void* eventBegin(EventBrokerCallbackArg arg)
+{
+   ThreadMutex_set(soDispMutex);
+   return eventOwner(ltMgr.Lg,arg.ref);
+}
+
+/* End the scope opened by eventBegin(); no arguments or return value.
+   Pops its one owner/nil entry from ltMgr.Lg and releases the dispatcher
+   mutex. The caller must first remove any additional temporary stack values.
+ */
+static void eventEnd(void)
+{
+   lua_pop(ltMgr.Lg,1);
+   ThreadMutex_release(soDispMutex);
+}
+
+/* Normalize the configuration argument at positive stack index ix.
+   Inputs: locked Lua state L and ix. If it already holds a table, discard
+   values above it; otherwise discard from ix upward and create an empty table.
+   Returns nothing; L's stack ends at ix with the configuration table there.
  */
 void lInitConfigTable(lua_State* L, int ix)
 {
@@ -230,9 +423,11 @@ void lInitConfigTable(lua_State* L, int ix)
 
 QueueHandle_t eventBrokerQueue; /* Initialized in NetESP32.c */
 
-/* This high-priority task waits for 'eventBrokerQueue' events and
- * dispatches them to a callback function running in the context of an
- * LThreadMgr thread.
+/* Run the FreeRTOS hardware-event broker; params is unused.
+   Queue callbacks execute in THIS task, not an LThreadMgr worker. They may
+   schedule Lua work via dispatchThreadJob(). The loop also requests a recovery
+   job when hardwareRetry is set. It never returns and returns no Lua results;
+   Lua stack/mutex handling belongs to the callbacks and recovery scheduling.
  */
 void eventBrokerTask(void *params)
 {
@@ -240,12 +435,88 @@ void eventBrokerTask(void *params)
    for(;;)
    {
       EventBrokerQueueNode n;
-      if(xQueueReceive(eventBrokerQueue, &n, portMAX_DELAY))
+      if(xQueueReceive(eventBrokerQueue, &n, pdMS_TO_TICKS(20)))
       {
          n.callback(n.arg);
       }
+      if(atomic_load(&hardwareRetry))
+      {
+         ThreadMutex_set(soDispMutex);
+         if(!recoveryQueued)
+         {
+            recoveryQueued=TRUE;
+            atomic_store(&hardwareRetry,FALSE);
+            dispatchThreadJob(0,hardwareRecover);
+         }
+         ThreadMutex_release(soDispMutex);
+      }
    }
 }
+
+
+enum { HW_RMT_TX, HW_RMT_RX, HW_PCNT_UNIT, HW_PCNT_WATCH };
+
+typedef struct
+{
+   const void* cfg;
+   void* handle;
+   void* userdata;
+   SemaphoreHandle_t done;
+   esp_err_t status;
+   int op;
+} HardwareInit;
+
+/* Execute one affinity-sensitive IDF operation on CPU 0.
+   arg points to the caller-owned HardwareInit request, kept alive while the
+   caller waits. Writes its native status, signals done, then deletes this
+   temporary task. No normal return value and no Lua API or stack use.
+ */
+static void hardwareInitTask(void* arg)
+{
+   HardwareInit* c=arg;
+   switch(c->op)
+   {
+      case HW_RMT_TX:
+         c->status=rmt_new_tx_channel(c->cfg,c->handle);
+         break;
+      case HW_RMT_RX:
+         c->status=rmt_new_rx_channel(c->cfg,c->handle);
+         break;
+      case HW_PCNT_UNIT:
+         c->status=pcnt_new_unit(c->cfg,c->handle);
+         break;
+      case HW_PCNT_WATCH:
+         c->status=pcnt_unit_register_event_callbacks(c->handle,c->cfg,c->userdata);
+         break;
+   }
+   xSemaphoreGive(c->done);
+   vTaskDelete(NULL);
+}
+
+/* Run bounded RMT/PCNT initialization on CPU 0, where IDF's shared
+   interrupts must be allocated. Caller retains the dispatcher mutex; these
+   operations neither call Lua nor wait for a Lua worker.
+   Inputs: op selects HW_RMT_TX/RX, HW_PCNT_UNIT or HW_PCNT_WATCH.
+   For creation, cfg points to the matching IDF configuration and handle points
+   to output handle storage; userdata is unused. For HW_PCNT_WATCH, cfg points
+   to pcnt_event_callbacks_t, handle is the existing unit and userdata is the
+   callback context. All inputs remain valid until this synchronous call ends.
+   Returns ESP_ERR_NO_MEM if task creation fails, otherwise the IDF status.
+   No Lua stack use or Lua results.
+ */
+static esp_err_t hardwareInit(int op, const void* cfg, void* handle, void* userdata)
+{
+   StaticSemaphore_t sem;
+   HardwareInit c={.cfg=cfg,.handle=handle,.userdata=userdata,
+                  .done=xSemaphoreCreateBinaryStatic(&sem),.op=op};
+   if(xTaskCreatePinnedToCore(hardwareInitTask,"hardwareInit",3072,&c,
+                             configMAX_PRIORITIES-1,NULL,0) != pdPASS)
+      return ESP_ERR_NO_MEM;
+   xSemaphoreTake(c.done,portMAX_DELAY);
+   vSemaphoreDelete(c.done);
+   return c.status;
+}
+
 
 
 
@@ -273,9 +544,9 @@ typedef int (*AdcLuaFilter)(lua_State* L, int msgh, struct LADC* adc);
 
 typedef struct LADC
 {
+   int selfRef;
    int type; /* 0: closed, 1: one shot, 2: continuous */
-   int pin; /* gpio */
-   int callbackRef;
+   BaBool busy, closing;
    adc_channel_t channel;
    adc_cali_handle_t caliHandle;
    union { /* Must be last, see buf below */
@@ -286,14 +557,15 @@ typedef struct LADC
          AdcLuaFilter filter;
          adc_continuous_handle_t handle;
          SemaphoreHandle_t stopSem;
+         esp_err_t stopErr;
+         atomic_bool started;
          uint16_t* blBuf;
          int blLen;
          int blBufIx;
-         int callbackRef;
          size_t bufSize;
          uint8_t running;
-         uint8_t overflow;
-         uint8_t buf[1]; /* must be last, see lNewUdata i.e. malloc */
+         atomic_bool overflow;
+         uint8_t buf[1]; /* must be last, see lNewUdataUV i.e. malloc */
       } contin;
    } u;
 } LADC;
@@ -307,50 +579,76 @@ typedef struct LADC
  */
 static void adcStopContinuousCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPIO[arg.pin];
-   baAssert(adc);
-   if(adc)
+   LADC* o=(LADC*)arg.ptr;
+   esp_err_t err=ESP_OK;
+   if(o->u.contin.started)
    {
-      activeGPIO[arg.pin]=0;
-      adc_continuous_stop(adc->u.contin.handle);
-      adc_continuous_deinit(adc->u.contin.handle);
-      xSemaphoreGive(adc->u.contin.stopSem); /* Continue with ADC_close() */
+      err=adc_continuous_stop(o->u.contin.handle);
+      if(err == ESP_OK) o->u.contin.started=FALSE;
    }
+   if(err == ESP_OK && o->u.contin.handle)
+   {
+      err=adc_continuous_deinit(o->u.contin.handle);
+      if(err == ESP_OK) o->u.contin.handle=NULL;
+   }
+   o->u.contin.stopErr=err;
+   xSemaphoreGive(o->u.contin.stopSem);
 }
 
 
-static void ADC_close(lua_State* L, LADC* o)
+/* Stop/deinitialize continuous or oneshot ADC and delete calibration.
+   Inputs: locked Lua state L and ADC userdata pointer o. Keep the owner on
+   L's stack for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+   A busy object returns ESP_ERR_INVALID_STATE without teardown.
+   Continuous stop waits for the broker with the dispatcher mutex released.
+ */
+static esp_err_t ADC_close(lua_State* L, LADC* o)
 {
-   if(o && o->type)
+   esp_err_t err=ESP_OK;
+   if(o->busy) return ESP_ERR_INVALID_STATE;
+   o->closing=TRUE;
+   if(o->type == 1 && o->u.oneShot.handle)
    {
-      int type = o->type;
-      o->type=0;
-      if(1 == type)
-      {
-         ECHK(adc_oneshot_del_unit(o->u.oneShot.handle));
-      }
-      else
-      {
-         o->u.contin.stopSem = xSemaphoreCreateBinary();
-         if( ! o->u.contin.stopSem ) baFatalE(FE_MALLOC,0);
-         EventBrokerQueueNode n = {
-            .callback=adcStopContinuousCB,.arg.pin=(gpio_num_t)o->pin};
-         ThreadMutex_release(soDispMutex);
-         xQueueSend(eventBrokerQueue, &n, portMAX_DELAY);
-         xSemaphoreTake(o->u.contin.stopSem, portMAX_DELAY);
-         ThreadMutex_set(soDispMutex);
-         vSemaphoreDelete(o->u.contin.stopSem);
-      }
-      activeGPIO[o->pin]=0;
-      if(o->caliHandle)
-      {
-#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
-         ECHK(adc_cali_delete_scheme_curve_fitting(o->caliHandle));
-#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
-         ECHK(adc_cali_delete_scheme_line_fitting(o->caliHandle));
-#endif
-      }
+      err=adc_oneshot_del_unit(o->u.oneShot.handle);
+      if(err != ESP_OK) goto done;
+      o->u.oneShot.handle=NULL;
    }
+   else if(o->type == 2 && o->u.contin.handle)
+   {
+      o->u.contin.stopSem=xSemaphoreCreateBinary();
+      if(!o->u.contin.stopSem)
+      {
+         err=ESP_ERR_NO_MEM;
+         goto done;
+      }
+      EventBrokerQueueNode n={.callback=adcStopContinuousCB,.arg.ptr=o};
+      o->busy=TRUE;
+      ThreadMutex_release(soDispMutex);
+      xQueueSend(eventBrokerQueue,&n,portMAX_DELAY);
+      xSemaphoreTake(o->u.contin.stopSem,portMAX_DELAY);
+      ThreadMutex_set(soDispMutex);
+      o->busy=FALSE;
+      vSemaphoreDelete(o->u.contin.stopSem);
+      o->u.contin.stopSem=NULL;
+      err=o->u.contin.stopErr;
+      if(err != ESP_OK) goto done;
+   }
+   if(o->caliHandle)
+   {
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+      err=adc_cali_delete_scheme_curve_fitting(o->caliHandle);
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+      err=adc_cali_delete_scheme_line_fitting(o->caliHandle);
+#endif
+      if(err != ESP_OK) goto done;
+      o->caliHandle=NULL;
+   }
+   o->type=0;
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 
@@ -363,7 +661,7 @@ static LADC* ADC_getUD(lua_State* L)
 static LADC* ADC_checkUD(lua_State* L)
 {
    LADC* o = ADC_getUD(L);
-   if( ! o->type )
+   if(!o->type || o->closing)
       luaL_error(L,"CLOSED");
    return o;
 }
@@ -371,8 +669,7 @@ static LADC* ADC_checkUD(lua_State* L)
 
 static int ADC_lclose(lua_State* L)
 {
-   ADC_close(L,ADC_getUD(L));
-   return 0;
+   return hardwareStatus(L,ADC_close(L,ADC_getUD(L)));
 }
 
 static int ADC_lread(lua_State* L)
@@ -401,7 +698,7 @@ static int ADC_lread(lua_State* L)
 
 static int adcDataFilter(lua_State* L, int msgh, LADC* adc)
 {
-   balua_wkPush(L, adc->callbackRef);
+   lua_getiuservalue(L,msgh+1,1);
    size_t size=adc->u.contin.blLen*sizeof(uint16_t);
    lua_pushlstring(L, (char*)adc->u.contin.blBuf, size);
    return LUA_OK == lua_pcall(L, 1, 0, msgh) ? 0 : -1;
@@ -425,7 +722,7 @@ static int adcMeanFilter(lua_State* L, int msgh, LADC* adc)
       n++;
    }
    uint32_t val = (uint32_t)(sum/n);
-   balua_wkPush(L, adc->callbackRef);
+   lua_getiuservalue(L,msgh+1,1);
    lua_pushinteger(L,val);
    if(adc->caliHandle)
    {
@@ -447,11 +744,12 @@ static int adcMeanFilter(lua_State* L, int msgh, LADC* adc)
  */
 static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LADC* adc = (LADC*)activeGPIO[((GpioThreadJob*)jb)->pin];
+   LADC* adc = (LADC*)eventOwner(jb->Lt,((GpioThreadJob*)jb)->selfRef);
    if(adc)
    {
       lua_State* L = jb->Lt;
-      while(adc->type)
+      int ownerIx=lua_gettop(L);
+      while(adc->type && !adc->closing)
       {
          uint32_t rLen;
          esp_err_t err =
@@ -471,6 +769,7 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
                      ADC_close(L,adc);
                      return;
                   }
+                  if(!adc->type || adc->closing) return;
                }
             }
          }
@@ -485,7 +784,7 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
             while(ESP_OK == adc_continuous_read(
                      adc->u.contin.handle, adc->u.contin.buf,
                      adc->u.contin.bufSize, &rLen, 0));
-            balua_wkPush(L, adc->callbackRef);
+            lua_getiuservalue(L,msgh+1,1);
             pushErr(L,adc->u.contin.overflow ?
                     "overflow" : esp_err_to_name(err));
             if(LUA_OK != lua_pcall(L, 2, 0, msgh))
@@ -493,6 +792,7 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
                ADC_close(L,adc);
                return;
             }
+            if(!adc->type || adc->closing) return;
             if(adc->u.contin.overflow)
             {
                while(ESP_OK == adc_continuous_read(
@@ -503,10 +803,9 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
             else
                break;
          }
-         lua_settop(L,0);
+         lua_settop(L,ownerIx);
          if(adc->u.contin.overflow)
             goto L_err;
-         adc->u.contin.running=FALSE;
       }
       adc->u.contin.running=FALSE;
    }
@@ -517,12 +816,13 @@ static void adcExecuteLuaEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void adcEventCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPIO[arg.pin];
-   if(adc && ! adc->u.contin.running)
+   LADC* adc = (LADC*)eventBegin(arg);
+   if(adc && adc->type && !adc->closing && ! adc->u.contin.running)
    {
       adc->u.contin.running = TRUE;
-      dispatchThreadJob(arg.pin, adcExecuteLuaEventCB);
+      dispatchThreadJob(arg.ref, adcExecuteLuaEventCB);
    }
+   eventEnd();
 }
 
 
@@ -530,9 +830,7 @@ static void adcEventCB(EventBrokerCallbackArg arg)
  */
 static void adcOverflowCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPIO[arg.pin];
-   if(adc)
-      adc->u.contin.overflow=TRUE;
+   adcEventCB(arg);
 }
 
 
@@ -542,9 +840,12 @@ static IRAM_ATTR bool adcOvfInterruptHandler(
    adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
    void* pin)
 {
+   LADC* adc=(LADC*)pin;
+   atomic_store(&adc->u.contin.overflow,TRUE);
    BaseType_t hwakeup = pdFALSE;
-   EventBrokerQueueNode n = {.callback=adcOverflowCB,.arg.pin=(gpio_num_t)pin};
-   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup); /* Trigger adcEventCB() */
+   EventBrokerQueueNode n = {.callback=adcOverflowCB,.arg.ref=adc->selfRef};
+   if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+      atomic_store(&hardwareRetry,TRUE); /* Trigger adcEventCB() */
    return hwakeup == pdTRUE;
 }
 
@@ -555,9 +856,11 @@ static IRAM_ATTR bool adcConvDoneInterruptHandler(
    adc_continuous_handle_t handle, const adc_continuous_evt_data_t* edata,
    void* pin)
 {
+   LADC* adc=(LADC*)pin;
    BaseType_t hwakeup = pdFALSE;
-   EventBrokerQueueNode n = {.callback=adcEventCB,.arg.pin=(gpio_num_t)pin};
-   xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup); /* Trigger adcEventCB() */
+   EventBrokerQueueNode n = {.callback=adcEventCB,.arg.ref=adc->selfRef};
+   if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+      atomic_store(&hardwareRetry,TRUE); /* Trigger adcEventCB() */
    return hwakeup == pdTRUE;
 }
 
@@ -567,15 +870,18 @@ static IRAM_ATTR bool adcConvDoneInterruptHandler(
  */
 static void adcStartContinuousCB(EventBrokerCallbackArg arg)
 {
-   LADC* adc = (LADC*)activeGPIO[arg.pin];
+   LADC* adc = (LADC*)arg.ptr;
    baAssert(adc);
    if(adc)
    {
       esp_err_t err=adc_continuous_start(adc->u.contin.handle);
+      if(err == ESP_OK) adc->u.contin.started=TRUE;
       if(ESP_OK != err)
       { /* We use the 'overflow' event to signal that we could not start */
+         ThreadMutex_set(soDispMutex);
          adc->u.contin.overflow=TRUE;
-         dispatchThreadJob(arg.pin, adcExecuteLuaEventCB);
+         dispatchThreadJob(adc->selfRef, adcExecuteLuaEventCB);
+         ThreadMutex_release(soDispMutex);
       }
    }
 }
@@ -596,8 +902,9 @@ static int ladc(lua_State* L)
 {
    esp_err_t err;
    int pin;
-   adc_oneshot_unit_handle_t oneShotHandle;
-   adc_continuous_handle_t contHandle;
+   LADC* adc=NULL;
+   adc_oneshot_unit_handle_t oneShotHandle=NULL;
+   adc_continuous_handle_t contHandle=NULL;
    uint32_t bufSize=0; /* continuous mode */
    AdcLuaFilter filter=0;
    int blLen=0;
@@ -645,6 +952,7 @@ static int ladc(lua_State* L)
       uint32_t minbl = fs / 100; /* max 100 Lua callbacks per second */
       /* block length i.e. number of samples, the conversion frame len */
       blLen=balua_checkIntField(L,3,"bl");
+      if(blLen < 0 || blLen > (INT_MAX-(int)sizeof(LADC))/4) return throwInvArg(L,"bl");
       if(blLen < minbl) blLen=minbl;
 
       /* The following calculations are based max 48K sampling.
@@ -657,7 +965,10 @@ static int ladc(lua_State* L)
          .max_store_buf_size = bufSize + safetyBuf,
          .conv_frame_size = bufSize,
       };
+      adc=(LADC*)lNewUdataUV(L,sizeof(LADC)+bufSize+blLen*sizeof(uint16_t),BAADC,adcObjLib,1);
+      adc->type=2;
       err=adc_continuous_new_handle(&adcHandleConfig, &contHandle);
+      adc->u.contin.handle=contHandle;
       if(ESP_OK != err) return pushEspRetVal(L, err, "new_handle",TRUE);
       adc_digi_pattern_config_t adcPattern[1]={
          {
@@ -669,74 +980,53 @@ static int ladc(lua_State* L)
       };
       adc_continuous_config_t adcConfig = {
          .sample_freq_hz = fs,
-         .conv_mode = ADC_CONV_SINGLE_UNIT_1, /* Other options ? */
+         .conv_mode = unitId == ADC_UNIT_1 ? ADC_CONV_SINGLE_UNIT_1 : ADC_CONV_SINGLE_UNIT_2,
          .format = ADC_OUTPUT_TYPE,
          .pattern_num = 1,
          .adc_pattern = adcPattern
       };
       err=adc_continuous_config(contHandle, &adcConfig);
-      if(ESP_OK == err)
-      {
-         adc_continuous_evt_cbs_t cbs = {
-            .on_conv_done = adcConvDoneInterruptHandler,
-            .on_pool_ovf = adcOvfInterruptHandler
-         };
-         err=adc_continuous_register_event_callbacks(
-            contHandle,&cbs,(void*)pin);
-      }
-      if(ESP_OK != err) 
-      {
-         adc_continuous_deinit(contHandle);
-         return pushEspRetVal(L, err, "continuous_config",TRUE);
-      }
+      if(err != ESP_OK) goto fail;
    }
    else /* Oneshot mode */
    {
       adc_oneshot_unit_init_cfg_t oneShotCfg = { .unit_id = unitId };
-      err=adc_oneshot_new_unit(&oneShotCfg, &oneShotHandle);
+      adc=(LADC*)lNewUdataUV(L,sizeof(LADC),BAADC,adcObjLib,1);
+      adc->type=1;
+      err=adc_oneshot_new_unit(&oneShotCfg,&oneShotHandle);
+      adc->u.oneShot.handle=oneShotHandle;
       adc_oneshot_chan_cfg_t cfg = {
          .bitwidth = bitwidth,
          .atten = atten
       };
       if(ESP_OK == err)
          err=adc_oneshot_config_channel(oneShotHandle, channel, &cfg);
-      if(ESP_OK != err)
-      {
-         adc_oneshot_del_unit(oneShotHandle);
-         return pushEspRetVal(L, err, "oneshot",TRUE);
-      }
+      if(err != ESP_OK) goto fail;
    }
-   LADC* adc = (LADC*)lNewUdata(L, sizeof(LADC)+bufSize+blLen*sizeof(uint16_t),
-                                BAADC, adcObjLib);
    activeGPIO[pin]=(LGPIO*)adc; /* mark pin in use */
    if(hasCB)
    {
       adc->u.contin.filter=filter;
-      adc->type=2;
-      adc->u.contin.handle=contHandle;
       adc->u.contin.bufSize=bufSize;
       adc->u.contin.blLen = blLen;
       adc->u.contin.blBuf = (uint16_t*)(((char*)(adc+1)) + bufSize);
       /* Userdata at -1 and callback ix is 4 */
-      adc->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
-      EventBrokerQueueNode n = {
-         .callback=adcStartContinuousCB,.arg.pin=(gpio_num_t)pin};
-      ThreadMutex_release(soDispMutex);
-      xQueueSend(eventBrokerQueue, &n, portMAX_DELAY);
-      ThreadMutex_set(soDispMutex);
+      adc->selfRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
+      adc_continuous_evt_cbs_t cbs = {
+         .on_conv_done = adcConvDoneInterruptHandler,
+         .on_pool_ovf = adcOvfInterruptHandler
+      };
+      err=adc_continuous_register_event_callbacks(
+         contHandle,&cbs,adc);
+      if(err != ESP_OK) goto fail;
    }
-   else
-   {
-      adc->type=1;
-      adc->u.oneShot.handle=oneShotHandle;
-   }
-   adc->pin=pin;
    adc->channel=channel;
    if(volt)
    {
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
       adc_cali_curve_fitting_config_t caCfg1 = {
          .unit_id = unitId,
+         .chan = channel,
          .atten = atten,
          .bitwidth = bitwidth,
       };
@@ -750,11 +1040,21 @@ static int ladc(lua_State* L)
       };
       err = adc_cali_create_scheme_line_fitting(&caCfg2, &adc->caliHandle);
 #endif
-      if(ESP_OK != err)
-         return pushEspRetVal(L, err, "calibrate",TRUE);
+      if(err != ESP_OK) goto fail;
+   }
+   if(hasCB)
+   {
+      EventBrokerQueueNode n = {
+         .callback=adcStartContinuousCB,.arg.ptr=adc};
+      ThreadMutex_release(soDispMutex);
+      xQueueSend(eventBrokerQueue, &n, portMAX_DELAY);
+      ThreadMutex_set(soDispMutex);
    }
    lua_pushinteger(L,pin);
    return 2;
+fail:
+   ADC_close(L,adc);
+   return hardwareStatus(L,err);
 }
 
 
@@ -768,63 +1068,80 @@ static int ladc(lua_State* L)
  *********************************************************************
  *********************************************************************/
 
-static void GPIO_close(lua_State* L, LGPIO* o)
+/* Remove the installed ISR and reset the GPIO pin.
+   Inputs: locked Lua state L and GPIO userdata pointer o. Keep the owner on
+   L's stack for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+ */
+static esp_err_t GPIO_close(lua_State* L, LGPIO* o)
 {
-   if(GPIO_NUM_MAX != o->pin)
+   esp_err_t err=ESP_OK;
+   if(o->isrInstalled)
    {
-      gpio_reset_pin(o->pin);
-      activeGPIO[o->pin]=0; /* should be atomic */
-      o->pin = GPIO_NUM_MAX;
+      err=gpio_isr_handler_remove(o->pin);
+      if(err != ESP_OK) goto done;
+      o->isrInstalled=FALSE;
    }
+   if(o->pin != GPIO_NUM_MAX)
+   {
+      err=gpio_reset_pin(o->pin);
+      if(err != ESP_OK) goto done;
+      o->pin=GPIO_NUM_MAX;
+   }
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 /* This CB runs in the context of a thread in the LThreadMgr.
  */
 static void executeLuaGpioCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   int queueLen,ix;
+   int queueLen=0,ix;
    U8 queue[GPIO_QUEUE_SIZE];
    GpioThreadJob* job = (GpioThreadJob*)jb;
-   ThreadMutex_set(&rMutex);
-   LGPIO* gpio = activeGPIO[job->pin];
-   if(gpio)
+   LGPIO* gpio = (LGPIO*)eventOwner(jb->Lt,job->selfRef);
+   if(gpio && gpio->pin != GPIO_NUM_MAX)
    {
       queueLen = gpio->queueLen;
       memcpy(queue,gpio->queue,queueLen);
       gpio->queueLen=0;
    }
-   ThreadMutex_release(&rMutex);
-   if(gpio)
+   if(gpio && gpio->pin != GPIO_NUM_MAX)
    {
       lua_State* L = jb->Lt;
       for(ix=0 ; ix < queueLen && GPIO_NUM_MAX != gpio->pin ; ix++)
       {
-         /* Push user's callback on the stack */
-         balua_wkPush(L, gpio->callbackRef);
+         /* Owner stays at msgh+1 while its slot-1 callback runs. */
+         lua_getiuservalue(L,msgh+1,1);
          lua_pushboolean(L, queue[ix]);
          if(LUA_OK != lua_pcall(L, 1, 0, msgh))
          {
             GPIO_close(L,gpio);
             break;
          }
-         lua_settop(L,1);
+         lua_settop(L,msgh+1);
       }
    }
 }
 
 
-/* Create a GpioThreadJob and send job to the LThreadMgr instance.
+/* Queue a Lua worker callback after the broker has accepted a notification.
+   Inputs: BAS weak userdata identity selfRef (0 for a recovery job) and worker
+   entry point lrun. Caller holds the dispatcher mutex. The job stores only
+   the identity, so lrun must resolve the owner again when it executes.
+   Returns nothing and leaves the caller's Lua stack unchanged. Job allocation
+   failure is fatal; no userdata is kept alive merely by queuing this job.
  */
-static void dispatchThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
+static void dispatchThreadJob(int selfRef, ThreadJob_LRun lrun)
 {
    GpioThreadJob* job;
    job = (GpioThreadJob*)ThreadJob_lcreate(sizeof(GpioThreadJob),lrun);
    if( ! job )
       baFatalE(FE_MALLOC,0);
-   job->pin=pin;
-   ThreadMutex_set(soDispMutex);
+   job->selfRef=selfRef;
    LThreadMgr_run(&ltMgr, (ThreadJob*)job);
-   ThreadMutex_release(soDispMutex);
 }
 
 
@@ -832,25 +1149,22 @@ static void dispatchThreadJob(gpio_num_t pin, ThreadJob_LRun lrun)
  */
 static void gpioEventCB(EventBrokerCallbackArg arg)
 {
-   LGPIO* gpio;
+   LGPIO* gpio = (LGPIO*)eventBegin(arg);
    int queueLen=0;
-   int level = gpio_get_level(arg.pin);
 
-   ThreadMutex_set(&rMutex);
-   gpio = activeGPIO[arg.pin];
-   if(gpio)
+   if(gpio && gpio->pin != GPIO_NUM_MAX)
    {
       if(gpio->queueLen < GPIO_QUEUE_SIZE)
       {
-         gpio->queue[gpio->queueLen++] = level;
+         gpio->queue[gpio->queueLen++] = gpio_get_level(gpio->pin);
          queueLen=gpio->queueLen;
       }
    }
-   ThreadMutex_release(&rMutex);
 
    /* If transitioning from empty to one element in the queue */
    if(1 == queueLen)
-      dispatchThreadJob(arg.pin,executeLuaGpioCB);
+      dispatchThreadJob(arg.ref,executeLuaGpioCB);
+   eventEnd();
 }
 
 
@@ -861,7 +1175,7 @@ static void IRAM_ATTR gpioInterruptHandler(void *arg)
 {
    EventBrokerQueueNode n = {
       .callback=gpioEventCB,
-      .arg.pin=(gpio_num_t)arg
+      .arg.ref=(int)(intptr_t)arg
    };
    xQueueSendFromISR(eventBrokerQueue, &n, 0);
 }
@@ -895,7 +1209,7 @@ static int GPIO_value(lua_State* L)
    if( GPIO_MODE_OUTPUT == o->mode || GPIO_MODE_OUTPUT_OD == o->mode ||
        lua_isboolean(L, 2))
    {
-      return pushEspRetVal(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)),0,FALSE);
+      return hardwareStatus(L,gpio_set_level(o->pin,balua_checkboolean(L, 2)));
    }
    else
    {
@@ -907,8 +1221,7 @@ static int GPIO_value(lua_State* L)
 
 static int GPIO_lclose(lua_State* L)
 {
-   GPIO_close(L,GPIO_getUD(L));
-   return 0;
+   return hardwareStatus(L,GPIO_close(L,GPIO_getUD(L)));
 }
 
 
@@ -957,18 +1270,25 @@ static int lgpio(lua_State* L)
    else
       cfg.intr_type = GPIO_INTR_DISABLE;
    cfg.pin_bit_mask = BIT64(pin);
-   LGPIO* gpio = (LGPIO*)lNewUdata(L,sizeof(LGPIO),BAGPIO,gpioObjLib);
+   LGPIO* gpio = (LGPIO*)lNewUdataUV(L,sizeof(LGPIO),BAGPIO,gpioObjLib,1);
    gpio->mode = cfg.mode;
-   gpio->pin=pin;
+   gpio->pin=GPIO_NUM_MAX;
    gpio_reset_pin(pin);
-   if(ESP_OK != gpio_config(&cfg))
-      throwInvArg(L,"config");
+   esp_err_t err=gpio_config(&cfg);
+   if(err != ESP_OK) return pushEspRetVal(L,err,"config",FALSE);
+   gpio->pin=pin;
    activeGPIO[pin]=gpio;
    if(hasCB)
    {
       /* Userdata at -1 and callback ix is 4 */
-      gpio->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
-      gpio_isr_handler_add(pin, gpioInterruptHandler, (void *)(intptr_t)pin);
+      gpio->selfRef=lReferenceCallback(L, lua_absindex(L,-1), 4);
+      err=gpio_isr_handler_add(pin,gpioInterruptHandler,(void*)(intptr_t)gpio->selfRef);
+      if(err != ESP_OK)
+      {
+         GPIO_close(L,gpio);
+         return pushEspRetVal(L,err,"ISR",FALSE);
+      }
+      gpio->isrInstalled=TRUE;
    }
    return 1;
 }
@@ -982,16 +1302,17 @@ static int lgpio(lua_State* L)
 
 #define BAPCNT "PCNT"
 #define ONREACH_QUEUE_SIZE 5
+static portMUX_TYPE pcntMux = portMUX_INITIALIZER_UNLOCKED;
 
 typedef struct
 {
+   int selfRef;
    pcnt_unit_handle_t unit;
-   int callbackRef;
-   gpio_num_t pin; // One of the GPIO pins used; We use it as index in activeGPIO 
    int noOfChannels;
+   BaBool enabled, closing;
    int qHead;
    int qTail;
-   int lCbRunning; // LPCNT_onReachLuaCB running flag
+   int lCbRunning; // Notification queued or Lua worker running; protected by pcntMux
    int onReachQueueVal[ONREACH_QUEUE_SIZE]; // holds counter values
    U8 onReachQueueCrossMode[ONREACH_QUEUE_SIZE]; // holds cross mode
    pcnt_channel_handle_t channels[1]; // Must be last
@@ -1005,46 +1326,61 @@ static LPCNT* LPCNT_getUD(lua_State* L)
 static LPCNT* LPCNT_checkUD(lua_State* L)
 {
    LPCNT* o = LPCNT_getUD(L);
-   if( ! o->callbackRef )
+   if(!o->unit || o->closing)
       luaL_error(L,"CLOSED");
    return o;
 }
 
+/* Stop/disable the counter and delete its channels and unit.
+   Inputs: locked Lua state L and PCNT userdata pointer o. Keep the owner on
+   L's stack for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+ */
 static int LPCNT_close(lua_State* L, LPCNT* o)
 {
-   if(o->noOfChannels)
+   esp_err_t err=ESP_OK;
+   o->closing=TRUE;
+   if(o->enabled)
    {
-      esp_err_t status;
-      pcnt_unit_stop(o->unit);
-      pcnt_unit_disable(o->unit);
-      for(int i=0 ; i < o->noOfChannels ; i++)
-      {
-         status = pcnt_del_channel(o->channels[i]);
-         if(ESP_OK != status)
-            HttpTrace_printf(5, "Cannot close PCNT channel %d", i, esp_err_to_name(status));
-      }
-      o->noOfChannels=0;
-      status = pcnt_del_unit(o->unit);
-      if(ESP_OK != status)
-         HttpTrace_printf(5, "Cannot close PCNT unit", esp_err_to_name(status));
-      activeGPIO[o->pin]=0; /* release */
+      err=pcnt_unit_stop(o->unit);
+      if(err != ESP_OK) goto done;
+      err=pcnt_unit_disable(o->unit);
+      if(err != ESP_OK) goto done;
+      o->enabled=FALSE;
    }
-   return 0;
+   for(int i=0;i<o->noOfChannels;++i)
+      if(o->channels[i])
+      {
+         err=pcnt_del_channel(o->channels[i]);
+         if(err != ESP_OK) goto done;
+         o->channels[i]=NULL;
+      }
+   if(o->unit)
+   {
+      err=pcnt_del_unit(o->unit);
+      if(err != ESP_OK) goto done;
+      o->unit=NULL;
+   }
+   o->noOfChannels=0;
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 static int LPCNT_lclose(lua_State* L)
 {
-   return LPCNT_close(L, LPCNT_getUD(L));
+   return hardwareStatus(L,LPCNT_close(L,LPCNT_getUD(L)));
 }
 
 static int LPCNT_start(lua_State* L)
 {
-   return pushEspRetVal(L,pcnt_unit_start(LPCNT_checkUD(L)->unit),0,FALSE);
+   return hardwareStatus(L,pcnt_unit_start(LPCNT_checkUD(L)->unit));
 }
 
 static int LPCNT_stop(lua_State* L)
 {
-   return pushEspRetVal(L,pcnt_unit_stop(LPCNT_checkUD(L)->unit),0,FALSE);
+   return hardwareStatus(L,pcnt_unit_stop(LPCNT_checkUD(L)->unit));
 }
 
 static int LPCNT_count(lua_State* L)
@@ -1052,14 +1388,14 @@ static int LPCNT_count(lua_State* L)
    int count;
    esp_err_t status = pcnt_unit_get_count(LPCNT_checkUD(L)->unit, &count);
    if(ESP_OK != status)
-      return pushEspRetVal(L,pcnt_unit_start(LPCNT_checkUD(L)->unit),0,FALSE);
+      return hardwareStatus(L,status);
    lua_pushinteger(L,count);
    return 1;
 }
 
 static int LPCNT_clear(lua_State* L)
 {
-   return pushEspRetVal(L,pcnt_unit_clear_count(LPCNT_checkUD(L)->unit),0,FALSE);
+   return hardwareStatus(L,pcnt_unit_clear_count(LPCNT_checkUD(L)->unit));
 }
 
 
@@ -1083,6 +1419,7 @@ LPCNT_throwWatchMissing(lua_State* L, const char* missing)
 static esp_err_t
 LPCNT_watch(lua_State* L, LPCNT* pcnt, int userdataIx)
 {
+   int top=lua_gettop(L);
    esp_err_t status = ESP_OK;
    int watchIx=balua_getTabField(L, 1, "watch");
    if(watchIx)
@@ -1091,7 +1428,7 @@ LPCNT_watch(lua_State* L, LPCNT* pcnt, int userdataIx)
       if( ! lua_isfunction(L, -1) )
          LPCNT_throwWatchMissing(L, "callback");
       if(pcnt)
-         pcnt->callbackRef=lReferenceCallback(L,userdataIx,lua_absindex(L,-1));
+         pcnt->selfRef=lReferenceCallback(L,userdataIx,lua_absindex(L,-1));
       int pointsIx=balua_getTabField(L, watchIx, "points");
       if( ! pointsIx )
          LPCNT_throwWatchMissing(L, "points");
@@ -1102,6 +1439,7 @@ LPCNT_watch(lua_State* L, LPCNT* pcnt, int userdataIx)
          if(lua_isnil(L, -1))
             break;
          int point = (int)luaL_checkinteger(L, -1);
+         lua_pop(L,1);
          if(pcnt)
          {
             status=pcnt_unit_add_watch_point(pcnt->unit, point);
@@ -1113,6 +1451,7 @@ LPCNT_watch(lua_State* L, LPCNT* pcnt, int userdataIx)
          }
       }
    }
+   lua_settop(L,top);
    return status;
 }
 
@@ -1164,12 +1503,15 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
       /* Only check during phase 1, the throw phase */
       if( ! channels )
       {
-         if(activeGPIO[chanCfg.edge_gpio_num])
-            throwPinInUse(L,chanCfg.edge_gpio_num);
-         if(activeGPIO[chanCfg.level_gpio_num])
-            throwPinInUse(L,chanCfg.level_gpio_num);
-         /* Select any GPIO we use. Used for activeGPIO[] lookup */ 
-         *pinPtr=chanCfg.edge_gpio_num;
+         int pins[]={chanCfg.edge_gpio_num,chanCfg.level_gpio_num};
+         for(int i=0;i<2;++i)
+         {
+            if(pins[i] == -1) continue;
+            if(!GPIO_IS_VALID_GPIO(pins[i])) return luaL_error(L,"Invalid pin");
+            if(activeGPIO[pins[i]]) throwPinInUse(L,pins[i]);
+            *pinPtr=pins[i];
+         }
+
       }
       int edgeIx=balua_getTabField(L, actionIx, "edge");
       int levelIx=balua_getTabField(L, actionIx, "level");
@@ -1186,6 +1528,9 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
          if(ESP_OK == status)
          {
             channels[noOfChannels-1]=channel;
+            LPCNT* owner=(LPCNT*)((char*)channels - offsetof(LPCNT,channels));
+            if(chanCfg.edge_gpio_num >= 0) activeGPIO[chanCfg.edge_gpio_num]=(LGPIO*)owner;
+            if(chanCfg.level_gpio_num >= 0) activeGPIO[chanCfg.level_gpio_num]=(LGPIO*)owner;
             status = pcnt_channel_set_edge_action(channel,positive,negative);
             if(ESP_OK == status)
             {
@@ -1203,9 +1548,6 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
          }
          else
             pushEspRetVal(L,status,"new_channel", FALSE);
-         /* Iterate, start at C ix */
-         for(--noOfChannels ; noOfChannels >= 0; noOfChannels--)
-            pcnt_del_channel(channels[noOfChannels]);
          return status;
       }
       lua_settop(L,channelIx-1);
@@ -1223,19 +1565,22 @@ LPCNT_channels(lua_State* L,pcnt_unit_handle_t unit,
 static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
    GpioThreadJob* job = (GpioThreadJob*)jb;
-   LPCNT* o = (LPCNT*)activeGPIO[job->pin];
+   LPCNT* o = (LPCNT*)eventOwner(jb->Lt,job->selfRef);
    if(o)
    {
       lua_State* L = jb->Lt;
-      /* This code, which can be interrupted by
-       * LPCNT_onReachInterruptHandler, is designed such that its
-       * operation should be safe. The code only updates the tail.
-       */
-      while(o->qHead != o->qTail)
+      while(o->noOfChannels && !o->closing)
       {
-         o->lCbRunning=TRUE;
+         portENTER_CRITICAL(&pcntMux);
+         if(o->qHead == o->qTail)
+         {
+            o->lCbRunning=FALSE;
+            portEXIT_CRITICAL(&pcntMux);
+            break;
+         }
+         portEXIT_CRITICAL(&pcntMux);
          /* Push user's callback on the stack */
-         balua_wkPush(L, o->callbackRef);
+         lua_getiuservalue(L,msgh+1,1);
          lua_pushinteger(L,o->onReachQueueVal[o->qTail]);
          lua_pushinteger(L,o->onReachQueueCrossMode[o->qTail]);
          if(LUA_OK != lua_pcall(L, 2, 0, msgh))
@@ -1243,12 +1588,14 @@ static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
             LPCNT_close(L, o);
             break;
          }
-         lua_settop(L,1);
+         lua_settop(L,msgh+1);
+         if(!o->noOfChannels) break;
+         portENTER_CRITICAL(&pcntMux);
          int next = o->qTail+1;
          if(next >= ONREACH_QUEUE_SIZE)
             next=0;
-         o->qTail = next; // Atomic with regards to LPCNT_onReachInterruptHandler
-         o->lCbRunning=FALSE;
+         o->qTail = next;
+         portEXIT_CRITICAL(&pcntMux);
       }
    }
 }
@@ -1259,8 +1606,10 @@ static void LPCNT_onReachLuaCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LPCNT_onReachCB(EventBrokerCallbackArg arg)
 {
-   if(activeGPIO[arg.pin])
-      dispatchThreadJob(arg.pin,LPCNT_onReachLuaCB);
+   LPCNT* o = (LPCNT*)eventBegin(arg);
+   if(o && o->noOfChannels && !o->closing)
+      dispatchThreadJob(arg.ref,LPCNT_onReachLuaCB);
+   eventEnd();
 }
 
 
@@ -1270,10 +1619,8 @@ static bool LPCNT_onReachInterruptHandler(
    pcnt_unit_handle_t unit, const pcnt_watch_event_data_t* edata, void* pin)
 {
    BaseType_t highTaskWakeup=pdFALSE;
-   LPCNT* o=(LPCNT*)activeGPIO[(gpio_num_t)pin];
-   /* This interrupt function has higher priority than step 3;
-    * thus, the following appears as an atomic operation to LPCNT_onReachLuaCB
-    */
+   LPCNT* o=(LPCNT*)pin;
+   portENTER_CRITICAL_ISR(&pcntMux);
    int next = o->qHead+1;
    if(next >= ONREACH_QUEUE_SIZE)
       next=0;
@@ -1282,13 +1629,19 @@ static bool LPCNT_onReachInterruptHandler(
       o->onReachQueueVal[o->qHead] = edata->watch_point_value;
       o->onReachQueueCrossMode[o->qHead] = edata->zero_cross_mode;
       o->qHead=next;
-      if( ! o->lCbRunning )
+   }
+   /* Retry notification even if earlier failures filled the pulse buffer. */
+   if( ! o->lCbRunning )
+   {
+      EventBrokerQueueNode n = {.callback=LPCNT_onReachCB,.arg.ref=o->selfRef};
+      o->lCbRunning=TRUE;
+      if(xQueueSendFromISR(eventBrokerQueue, &n, &highTaskWakeup) != pdTRUE)
       {
-         EventBrokerQueueNode n = {.callback=LPCNT_onReachCB,.arg.pin=(gpio_num_t)pin};
-         xQueueSendFromISR(eventBrokerQueue, &n, &highTaskWakeup);
-         o->lCbRunning=TRUE;
+         o->lCbRunning=FALSE;
+         atomic_store(&hardwareRetry,TRUE);
       }
    }
+   portEXIT_CRITICAL_ISR(&pcntMux);
    return highTaskWakeup == pdTRUE;
 }
 
@@ -1302,21 +1655,20 @@ static int lLPCNT(lua_State* L)
       .flags.accum_count = balua_getBoolField(L, 1, "accumulator", FALSE)
    };
    int noOfChannels;
-   int gpioPin=-1; /* One of the pins used. Used for activeGPIO[gpioPin] lookup */
+   int gpioPin=-1; /* Validate that at least one input pin is configured. */
    /* Validate input table and count channels. This may throw error message. */
    LPCNT_channels(L,0,&noOfChannels,0, &gpioPin);
-   baAssert(gpioPin != -1);
+   if(gpioPin == -1) return throwInvArg(L,"channel pins");
    /* Validate optional watch table: throw on error */
    LPCNT_watch(L, 0, 0);
 
-   LPCNT* pcnt = (LPCNT*)lNewUdata(
-      L, sizeof(LPCNT)+noOfChannels*sizeof(pcnt_channel_handle_t),BAPCNT, pcntLib);
-   memset(pcnt, 0, sizeof(LPCNT)); /* default vals for the struct */
-   pcnt->pin=gpioPin;
+   LPCNT* pcnt = (LPCNT*)lNewUdataUV(
+      L, sizeof(LPCNT)+noOfChannels*sizeof(pcnt_channel_handle_t),BAPCNT, pcntLib,1);
+   pcnt->noOfChannels=noOfChannels;
    int userdataIx=lua_absindex(L,-1);
 
    /* Create and configure PCNT */
-   esp_err_t status = pcnt_new_unit(&ucfg, &pcnt->unit);
+   esp_err_t status = hardwareInit(HW_PCNT_UNIT,&ucfg,&pcnt->unit,NULL);
    if(ESP_OK != status)
       return pushEspRetVal(L,status,"new_unit",TRUE);
    if(0 != balua_getIntField(L, 1, "glitch", 0))
@@ -1338,19 +1690,24 @@ static int lLPCNT(lua_State* L)
             pcnt_event_callbacks_t cbs = {
                .on_reach = LPCNT_onReachInterruptHandler,
             };
-            pcnt_unit_register_event_callbacks(pcnt->unit, &cbs, (void *)gpioPin);
-            pcnt_unit_enable(pcnt->unit);
-            pcnt_unit_clear_count(pcnt->unit);
-            activeGPIO[gpioPin]=(LGPIO*)pcnt; /* used for activeGPIO[] lookup */
-            lua_settop(L,userdataIx);
-            return 1; /* LPCNT userdata */
+            status=pcnt->selfRef ? hardwareInit(HW_PCNT_WATCH,&cbs,pcnt->unit,pcnt) : ESP_OK;
+            if(status == ESP_OK) status=pcnt_unit_enable(pcnt->unit);
+            if(status == ESP_OK)
+            {
+               pcnt->enabled=TRUE;
+               status=pcnt_unit_clear_count(pcnt->unit);
+            }
+            if(status == ESP_OK)
+            {
+               lua_settop(L,userdataIx);
+               return 1;
+            }
+            hardwareStatus(L,status);
          }
-         for( ; noOfChannels >= 0; noOfChannels--)
-            pcnt_del_channel(pcnt->channels[noOfChannels]);
+
       }
    }
-   pcnt_del_unit(pcnt->unit);
-   pcnt->noOfChannels=0; /* Closed */
+   LPCNT_close(L,pcnt);
    return 2; /* Error values from pushEspRetVal */
 }
 
@@ -1365,14 +1722,37 @@ static int lLPCNT(lua_State* L)
 
 
 typedef struct{
+   int selfRef;
    gpio_num_t pin;
    ledc_mode_t mode;
    ledc_channel_t channel;
-   int callbackRef;
    U8 running;
+   BaBool busy, closing, installed, jobQueued;
+   ledc_timer_t timer;
 } LLEDC;
 
 static int ledsRunning=0;
+static LLEDC* ledChannels[LEDC_SPEED_MODE_MAX][LEDC_CHANNEL_MAX];
+static struct
+{
+   int ref;
+   unsigned pending;
+} ledEvents[LEDC_SPEED_MODE_MAX][LEDC_CHANNEL_MAX];
+static portMUX_TYPE ledMux=portMUX_INITIALIZER_UNLOCKED;
+
+/* Inspect or consume the completion count for LEDC userdata o.
+   take=TRUE consumes one event if available; FALSE only inspects the count.
+   Returns the count BEFORE consumption, not the remaining count. The caller
+   keeps o alive; ledMux serializes the counter with the ISR. No Lua stack use.
+ */
+static unsigned ledPending(LLEDC* o, BaBool take)
+{
+   portENTER_CRITICAL(&ledMux);
+   unsigned n=ledEvents[o->mode][o->channel].pending;
+   if(n && take) --ledEvents[o->mode][o->channel].pending;
+   portEXIT_CRITICAL(&ledMux);
+   return n;
+}
 
 static LLEDC* LLEDC_getUD(lua_State* L)
 {
@@ -1382,8 +1762,9 @@ static LLEDC* LLEDC_getUD(lua_State* L)
 static LLEDC* LLEDC_checkUD(lua_State* L)
 {
    LLEDC* o = LLEDC_getUD(L);
-   if( ! o->running )
+   if(!o->running || o->closing)
       luaL_error(L,"CLOSED");
+   if(o->busy) luaL_error(L,"Busy");
    return o;
 }
 
@@ -1394,41 +1775,86 @@ static int LLEDC_duty(lua_State* L)
    uint32_t duty = (uint32_t)luaL_checkinteger(L, 2);
    uint32_t hpoint = (uint32_t)(lua_isinteger(L,3) ? lua_tointeger(L,3) :
                                 ledc_get_hpoint(o->mode,o->channel));
-   return pushEspRetVal(L,ledc_set_duty_and_update(
-                           o->mode,o->channel, duty, hpoint),0,FALSE);
+   o->busy=TRUE;
+   ThreadMutex_release(soDispMutex);
+   esp_err_t err=ledc_set_duty_and_update(
+                           o->mode,o->channel, duty, hpoint);
+   ThreadMutex_set(soDispMutex);
+   o->busy=FALSE;
+   return hardwareStatus(L,err);
 }
 
 
 static int LLEDC_fade(lua_State* L)
 {
    LLEDC* o = LLEDC_checkUD(L);
-   if(!o->callbackRef)
+   if(!o->selfRef)
       luaL_error(L,"No callback");
    uint32_t duty = (uint32_t)luaL_checkinteger(L, 2);
    uint32_t fadeTime = (uint32_t)luaL_checkinteger(L, 3);
-   return pushEspRetVal(L,ledc_set_fade_time_and_start(
-                           o->mode,o->channel,duty,fadeTime,LEDC_FADE_NO_WAIT),0,FALSE);
+   o->busy=TRUE;
+   ThreadMutex_release(soDispMutex);
+   esp_err_t err=ledc_set_fade_time_and_start(
+                           o->mode,o->channel,duty,fadeTime,LEDC_FADE_NO_WAIT);
+   ThreadMutex_set(soDispMutex);
+   o->busy=FALSE;
+   return hardwareStatus(L,err);
 }
 
 
-static void LLEDC_close(lua_State* L, LLEDC* o)
+/* Synchronize with fade completion and release channel/service ownership.
+   Inputs: locked Lua state L and LEDC userdata pointer o. Keep the owner on
+   L's stack for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+   A busy object returns ESP_ERR_INVALID_STATE without teardown.
+   The dispatcher mutex is released around the blocking fade synchronization.
+ */
+static esp_err_t LLEDC_close(lua_State* L, LLEDC* o)
 {
+   esp_err_t err=ESP_OK;
+   if(o->busy) return ESP_ERR_INVALID_STATE;
+   o->closing=TRUE;
    if(o->running)
    {
-      activeGPIO[o->pin]=0;
-      ECHK(ledc_stop(o->mode,o->channel,0));
-      if(0 == --ledsRunning)
-         ledc_fade_func_uninstall();
-      gpio_reset_pin(o->pin);
+      portENTER_CRITICAL(&ledMux);
+      ledEvents[o->mode][o->channel].ref=0;
+      portEXIT_CRITICAL(&ledMux);
+      /* Synchronize with a fade before removing its callback context. */
+      o->busy=TRUE;
+      ThreadMutex_release(soDispMutex);
+#if SOC_LEDC_SUPPORT_FADE_STOP
+      err=ledc_fade_stop(o->mode,o->channel);
+#else
+      err=ledc_set_duty_and_update(o->mode,o->channel,0,0);
+#endif
+      ThreadMutex_set(soDispMutex);
+      o->busy=FALSE;
+      if(err != ESP_OK) goto done;
+      ledc_cbs_t cb={0};
+      err=ledc_cb_register(o->mode,o->channel,&cb,NULL);
+      if(err != ESP_OK) goto done;
+      err=ledc_stop(o->mode,o->channel,0);
+      if(err != ESP_OK) goto done;
+      err=gpio_reset_pin(o->pin);
+      if(err != ESP_OK) goto done;
       o->running=FALSE;
+      ledChannels[o->mode][o->channel]=NULL;
    }
+   if(o->installed)
+   {
+      o->installed=FALSE;
+      if(--ledsRunning == 0) ledc_fade_func_uninstall();
+   }
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 
 static int LLEDC_lclose(lua_State* L)
 {
-   LLEDC_close(L,LLEDC_getUD(L));
-   return 0;
+   return hardwareStatus(L,LLEDC_close(L,LLEDC_getUD(L)));
 }
 
 
@@ -1446,15 +1872,24 @@ static const luaL_Reg ledcObjLib[] = {
  */
 static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LLEDC* led = (LLEDC*)activeGPIO[((GpioThreadJob*)jb)->pin];
-   if(led)
+   lua_State* L=jb->Lt;
+   LLEDC* o=(LLEDC*)eventOwner(L,((GpioThreadJob*)jb)->selfRef);
+   if(!o) return;
+   while(o->running && !o->closing && ledPending(o,TRUE))
    {
-      lua_State* L = jb->Lt;
-      /* Push user's callback on the stack */
-      balua_wkPush(L, led->callbackRef);
-      if(LUA_OK != lua_pcall(L, 0, 0, msgh))
-         LLEDC_close(L,led);
+      lua_getiuservalue(L,msgh+1,1);
+      if(lua_pcall(L,0,0,msgh) != LUA_OK)
+      {
+         if(o->busy)
+         {
+            o->closing=TRUE;
+            hardwareCleanup(L,o,ESP_ERR_INVALID_STATE);
+         }
+         else LLEDC_close(L,o);
+         break;
+      }
    }
+   o->jobQueued=FALSE;
 }
 
 
@@ -1462,8 +1897,13 @@ static void executeLuaLedEventCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void ledEventCB(EventBrokerCallbackArg arg)
 {
-   if(activeGPIO[arg.pin])
-      dispatchThreadJob(arg.pin, executeLuaLedEventCB);
+   LLEDC* o = (LLEDC*)eventBegin(arg);
+   if(o && o->running && !o->closing && !o->jobQueued && ledPending(o,FALSE))
+   {
+      o->jobQueued=TRUE;
+      dispatchThreadJob(arg.ref,executeLuaLedEventCB);
+   }
+   eventEnd();
 }
 
 
@@ -1477,9 +1917,18 @@ ledInterruptHandler(const ledc_cb_param_t* param, void* arg)
    {
       EventBrokerQueueNode n = {
          .callback=ledEventCB,
-         .arg.pin=(gpio_num_t)arg
+         .arg.ref=(int)(intptr_t)arg
       };
-      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+      portENTER_CRITICAL_ISR(&ledMux);
+      if(ledEvents[param->speed_mode][param->channel].ref != n.arg.ref)
+      {
+         portEXIT_CRITICAL_ISR(&ledMux);
+         return false;
+      }
+      ++ledEvents[param->speed_mode][param->channel].pending;
+      portEXIT_CRITICAL_ISR(&ledMux);
+      if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+         atomic_store(&hardwareRetry,TRUE);
    }
    return hwakeup == pdTRUE;
 }
@@ -1509,7 +1958,7 @@ static int lLedChannel(lua_State* L)
    lua_settop(L,1);
    lua_getfield(L, 1, "callback"); /* callback IX is now 2 */
    int hasCB = lua_isfunction(L, 2);
-   if(pin < GPIO_NUM_0 || pin >= GPIO_NUM_MAX)
+   if(!GPIO_IS_VALID_OUTPUT_GPIO(pin))
       luaL_argerror(L, 1, "Invalid GPIO pin");
    if(activeGPIO[pin])
       throwPinInUse(L,pin);
@@ -1517,35 +1966,43 @@ static int lLedChannel(lua_State* L)
       throwInvArg(L, "channel");
    if(timer < LEDC_TIMER_0 || timer >= LEDC_TIMER_MAX)
       throwInvArg(L, "timer");
-   if(0 == ledsRunning++)
-      ledc_fade_func_install(0);
+   if(ledChannels[mode][channel]) return luaL_error(L,"Channel in use");
+   LLEDC* led=(LLEDC*)lNewUdataUV(L,sizeof(LLEDC),BALEDC,ledcObjLib,1);
+   led->pin=pin;
+   led->mode=mode;
+   led->channel=channel;
+   led->timer=timer;
+   if(hasCB) led->selfRef=lReferenceCallback(L,lua_absindex(L,-1),2);
+   esp_err_t status=ledsRunning ? ESP_OK : ledc_fade_func_install(0);
+   if(status != ESP_OK) return hardwareStatus(L,status);
+   ++ledsRunning;
+   led->installed=TRUE;
    ledc_channel_config_t cfg={
       .gpio_num=pin,
       .speed_mode=mode,
       .channel=channel,
       .intr_type =  hasCB ? LEDC_INTR_FADE_END : LEDC_INTR_DISABLE,
       .timer_sel = timer,
-      .duty= duty
+      .duty=duty,
+      .hpoint=hpoint
    };
-   esp_err_t status = ledc_channel_config(&cfg);
-   if(ESP_OK != status)
-      return pushEspRetVal(L,status,"channel_config",FALSE);
-   status = ledc_set_duty_and_update(mode, channel, duty, hpoint);
-   if(ESP_OK != status)
-      return pushEspRetVal(L,status,"set_duty_and_update",FALSE);
-   LLEDC* led = (LLEDC*)lNewUdata(L,sizeof(LLEDC),BALEDC,ledcObjLib);
-   led->pin=pin;
-   led->mode=mode;
-   led->channel=channel;
+   status=ledc_channel_config(&cfg);
+   if(status != ESP_OK) goto fail;
    led->running=TRUE;
    activeGPIO[pin]=(LGPIO*)led;
-   if(hasCB)
-   {
-      led->callbackRef=lReferenceCallback(L, lua_absindex(L,-1), 2);
-      ledc_cbs_t cb = { .fade_cb = ledInterruptHandler };
-      ECHK(ledc_cb_register(mode,channel,&cb,(void*)pin));
-   }
+   ledChannels[mode][channel]=led;
+   portENTER_CRITICAL(&ledMux);
+   ledEvents[mode][channel].ref=led->selfRef;
+   ledEvents[mode][channel].pending=0;
+   portEXIT_CRITICAL(&ledMux);
+   /* Initialize fade state even without a Lua callback (used during close). */
+   ledc_cbs_t cb={.fade_cb=hasCB ? ledInterruptHandler : NULL};
+   status=ledc_cb_register(mode,channel,&cb,(void*)(intptr_t)led->selfRef);
+   if(status != ESP_OK) goto fail;
    return 1;
+fail:
+   LLEDC_close(L,led);
+   return hardwareStatus(L,status);
 }
 
 
@@ -1560,6 +2017,9 @@ static int lLedTimer(lua_State* L)
       throwInvArg(L, "bits");
    if(timer < LEDC_TIMER_0 || timer >= LEDC_TIMER_MAX)
       throwInvArg(L, "timer");
+   for(int i=0;i<LEDC_CHANNEL_MAX;++i)
+      if(ledChannels[mode][i] && ledChannels[mode][i]->timer == timer)
+         return luaL_error(L,"Timer in use");
    ledc_timer_config_t cfg={
       .speed_mode=mode,
       .duty_resolution=bits,
@@ -1583,6 +2043,8 @@ static int lLedTimer(lua_State* L)
 // Struct to store I2C configurations, buffers, and handles
 typedef struct
 {
+   int selfRef; /* Zero: this pin owner has no asynchronous notifications. */
+   BaBool busy, closing;
    i2c_master_bus_config_t bus_cfg;     // I2C bus configuration
    i2c_master_bus_handle_t bus_handle;  // Handle for the I2C bus
    i2c_device_config_t dev_cfg;         // I2C device configuration
@@ -1622,10 +2084,11 @@ static LI2CMaster* I2CMaster_getUD(lua_State* L)
 static LI2CMaster* I2CMaster_checkUD(lua_State* L, int checkCmd)
 {
    LI2CMaster* i2cm = I2CMaster_getUD(L);
-   if(i2cm->bus_handle == 0)
+   if(i2cm->bus_handle == 0 || i2cm->closing)
    {
       luaL_error(L, "Closed");
    }
+   if(i2cm->busy) luaL_error(L,"Busy");
    return i2cm;
 }
 
@@ -1648,22 +2111,19 @@ static LI2CMaster* I2CMaster_checkUD(lua_State* L, int checkCmd)
  */
 static int I2CMaster_addDevice(LI2CMaster* i2cm, uint16_t address)
 {
-   esp_err_t ret_val = ESP_OK;
-   
-   // If a device with a different address is already configured, remove it
-   if(i2cm->dev_handle && (i2cm->dev_cfg.device_address != address))
+   esp_err_t err=ESP_OK;
+   if(i2cm->dev_handle && i2cm->dev_cfg.device_address != address)
    {
-      ret_val = i2c_master_bus_rm_device(i2cm->dev_handle);  
+      err=i2c_master_bus_rm_device(i2cm->dev_handle);
+      if(err != ESP_OK) return err;
+      i2cm->dev_handle=NULL;
    }
-
-   // Set new device address if necessary, then add it to the bus
-   if((ret_val == ESP_OK) && (i2cm->dev_cfg.device_address != address))
+   if(!i2cm->dev_handle)
    {
-      i2cm->dev_cfg.device_address = address;     
-      ret_val = i2c_master_bus_add_device(i2cm->bus_handle, &i2cm->dev_cfg, &i2cm->dev_handle);
+      i2cm->dev_cfg.device_address=address;
+      err=i2c_master_bus_add_device(i2cm->bus_handle,&i2cm->dev_cfg,&i2cm->dev_handle);
    }
-  
-   return ret_val;
+   return err;
 }
 
 /* I2CMaster_getWriteData(L, index, wbuf)
@@ -1715,17 +2175,15 @@ static void I2CMaster_getWriteData(lua_State* L, int index, write_buffer_t* wbuf
 static int I2CMaster_probe(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
-   
    // Retrieve optional timeout from Lua, defaulting to I2CWT if not provided
    int timeout = I2CWT(L, 3);
-   
    // Get the address from Lua
    uint16_t address = (uint16_t) luaL_checkinteger(L, 2);
-   
+   i2cm->busy=TRUE;
    ThreadMutex_release(soDispMutex);
    esp_err_t ret_val = i2c_master_probe(i2cm->bus_handle, address, timeout); 
    ThreadMutex_set(soDispMutex);
-   
+   i2cm->busy=FALSE;
    return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
@@ -1759,11 +2217,12 @@ static int I2CMaster_write(lua_State* L)
       }
 
       // Transmit data
+      i2cm->busy=TRUE;
       ThreadMutex_release(soDispMutex);
       ret_val = i2c_master_transmit(i2cm->dev_handle, wbuf.data, wbuf.len, timeout); 
       ThreadMutex_set(soDispMutex);
+      i2cm->busy=FALSE;
    }
-   
    return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
@@ -1780,7 +2239,7 @@ static int I2CMaster_read(lua_State* L)
 {
    LI2CMaster* i2cm = I2CMaster_checkUD(L, TRUE);
    uint16_t address = (uint16_t)luaL_checkinteger(L, 2);
-   size_t recblen = (size_t)luaL_checkinteger(L, 3);
+   lua_Integer recblen = luaL_checkinteger(L, 3);
    int timeout = I2CWT(L, 4);
 
    // Configure the device address
@@ -1788,27 +2247,27 @@ static int I2CMaster_read(lua_State* L)
 
    if(ret_val == ESP_OK)
    {
-      if(recblen == 0)
+      if(recblen <= 0)
       {
          throwInvArg(L, "no recbuf");
       }
 
-      uint8_t* recbuf = (uint8_t*)baLMalloc(L, recblen);
+      uint8_t* recbuf = (uint8_t*)lua_newuserdatauv(L, recblen, 0);
 
       if(recbuf)
       {
+         i2cm->busy=TRUE;
          ThreadMutex_release(soDispMutex);
          ret_val = i2c_master_receive(i2cm->dev_handle, recbuf, recblen, timeout);
          ThreadMutex_set(soDispMutex);
+         i2cm->busy=FALSE;
 
          if(ret_val == ESP_OK)
          {
             lua_pushlstring(L, (char*)recbuf, recblen);
-            baFree(recbuf);
             return 1;
          }
          
-         baFree(recbuf);
       }
       else
       {
@@ -1847,29 +2306,29 @@ static int I2CMaster_readfrom(lua_State* L)
    {
       write_buffer_t wbuf;
       I2CMaster_getWriteData(L, 3, &wbuf);
-      size_t recblen = (size_t)luaL_checkinteger(L, 4);
+      lua_Integer recblen = luaL_checkinteger(L, 4);
 
-      if(recblen == 0 || wbuf.len == 0)
+      if(recblen <= 0 || wbuf.len == 0)
       {
          throwInvArg(L, "invalid buffer length");
       }
 
-      uint8_t* recbuf = (uint8_t*)baLMalloc(L, recblen);
+      uint8_t* recbuf = (uint8_t*)lua_newuserdatauv(L, recblen, 0);
 
       if(recbuf)
       {
+         i2cm->busy=TRUE;
          ThreadMutex_release(soDispMutex);
          ret_val = i2c_master_transmit_receive(i2cm->dev_handle, wbuf.data, wbuf.len, recbuf, recblen, timeout);
          ThreadMutex_set(soDispMutex);
+         i2cm->busy=FALSE;
 
          if(ret_val == ESP_OK)
          {
             lua_pushlstring(L, (char*)recbuf, recblen);
-            baFree(recbuf);
             return 1;
          }
          
-         baFree(recbuf);
       }
       else
       {
@@ -1880,33 +2339,32 @@ static int I2CMaster_readfrom(lua_State* L)
    return pushEspRetVal(L, ret_val, 0, FALSE);
 }
 
-/* i2cm:close()
- * Lua API: Closes the I2C connection and releases all resources.
- * Params: None.
- * Returns:
- *   Boolean true on success.
+/* Implement i2c:close(), __close and __gc, including partial construction.
+   Input: I2C userdata at L[1], with the dispatcher mutex held. Remove its device
+   and bus, preserving failed teardown for recovery. Busy returns nil, "Busy".
+   Pushes true and returns 1 on success, or nil plus error and returns 2.
+   A wrong userdata type raises a Lua argument error.
  */
 static int I2CMaster_close(lua_State* L)
 {
-   LI2CMaster* i2cm = I2CMaster_getUD(L);
-   
-   if(i2cm->dev_handle) 
+   LI2CMaster* o=I2CMaster_getUD(L);
+   esp_err_t err=ESP_OK;
+   if(o->busy) return pushErr(L,"Busy");
+   o->closing=TRUE;
+   if(o->dev_handle)
    {
-      i2c_master_bus_rm_device(i2cm->dev_handle);  
-      i2cm->dev_handle = 0;
+      err=i2c_master_bus_rm_device(o->dev_handle);
+      if(err != ESP_OK) goto done;
+      o->dev_handle=NULL;
    }
-   
-   if(i2cm->bus_handle)
+   if(o->bus_handle)
    {
-      if(activeGPIO[i2cm->bus_cfg.sda_io_num] == (LGPIO*)i2cm)
-         activeGPIO[i2cm->bus_cfg.sda_io_num] = 0;
-      if(activeGPIO[i2cm->bus_cfg.scl_io_num] == (LGPIO*)i2cm)
-         activeGPIO[i2cm->bus_cfg.scl_io_num] = 0;
-      i2c_del_master_bus(i2cm->bus_handle);
-      i2cm->bus_handle = 0;
+      err=i2c_del_master_bus(o->bus_handle);
+      if(err != ESP_OK) goto done;
+      o->bus_handle=NULL;
    }
-
-   return 1;
+done:
+   return hardwareStatus(L,hardwareCleanup(L,o,err));
 }
 
 static const luaL_Reg i2cMasterLib[] = {
@@ -1955,7 +2413,7 @@ static int li2cMaster(lua_State* L)
   if(!GPIO_IS_VALID_OUTPUT_GPIO(scl) || scl == sda)
      luaL_argerror(L, 3, "Invalid pin");
    // Allocate memory for the new I2C master object and register it in Lua
-  LI2CMaster* i2cm = (LI2CMaster*)lNewUdata(L, sizeof(LI2CMaster), BAI2CMASTER, i2cMasterLib);   
+  LI2CMaster* i2cm = (LI2CMaster*)lNewUdataUV(L, sizeof(LI2CMaster), BAI2CMASTER, i2cMasterLib,1);
   // Configure the I2C bus parameters (clock source, port, SDA, SCL, and pullup resistors)
   i2cm->bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
   i2cm->bus_cfg.i2c_port = port;
@@ -2003,28 +2461,31 @@ typedef struct
 
 typedef struct
 {
+   int selfRef;
    LRmtBase super;
    rmt_receive_config_t cfg;
    rmt_channel_handle_t rxChannel;
    gpio_num_t pin;
-   int callbackRef;
    rmt_symbol_word_t* symBuf;
    size_t symSize;
    size_t receivedSymbols;
    BaBool overflow;
-   BaBool pendingReceive;
+   atomic_bool pendingReceive, ready;
+   BaBool enabled, closing, jobQueued;
+   rmt_symbol_word_t* received;
 } LRmtRx;
 
 
 typedef struct LRmtTx
 {
+   int selfRef;
    LRmtBase super;
    LRmtRx* rx; /* Set when linked on the same GPIO */
    rmt_channel_handle_t txChannel;
    rmt_encoder_handle_t txEncoder;
-   BaBool enabled;
+   BaBool enabled, closing, jobQueued;
+   atomic_uint completed;
    gpio_num_t pin;
-   int callbackRef;
    int transQueueBufHead;
    int transQueueBufTail;
    int transQueueBufLen;
@@ -2039,7 +2500,7 @@ static void LRmtRx_onRxComplete(EventBrokerCallbackArg arg);
 static LRmtTx* LRmtTx_checkUD(lua_State* L)
 {
    LRmtTx* o = LRmtTx_getUD(L);
-   if( ! o->txChannel )
+   if(!o->txChannel || o->closing)
       luaL_error(L,"CLOSED");
    return o;
 }
@@ -2047,7 +2508,7 @@ static LRmtTx* LRmtTx_checkUD(lua_State* L)
 static LRmtRx* LRmtRx_checkUD(lua_State* L)
 {
    LRmtRx* o = LRmtRx_getUD(L);
-   if( ! o->rxChannel )
+   if(!o->rxChannel || o->closing)
       luaL_error(L,"CLOSED");
    return o;
 }
@@ -2110,11 +2571,16 @@ static int LRmtTx_transmit(lua_State* L)
       {
          lua_rawgeti(L, -2, 4);
          if(LUA_TTABLE != lua_type(L, -1)) goto L_err;
-         bufLen += (int)lua_rawlen(L,-1) * 8;
+         size_t bytes=lua_rawlen(L,-1);
+         if(bytes > (INT_MAX/sizeof(rmt_symbol_word_t)-(size_t)bufLen)/8)
+            return luaL_error(L,"Too many symbols");
+         bufLen += bytes*8;
          lua_pop(L,1);
       }
       else
       {
+         if(bufLen == INT_MAX/sizeof(rmt_symbol_word_t))
+            return luaL_error(L,"Too many symbols");
          bufLen++;
       }
       lua_pop(L,2);
@@ -2172,22 +2638,18 @@ static int LRmtTx_transmit(lua_State* L)
       lua_pop(L,2);
    }
    baAssert((symbolPtr - symbols) == bufLen);
+   /* Root the payload before handing it to an asynchronous driver. */
+   lua_pushvalue(L,4);
+   int payloadRef=luaL_ref(L,LUA_REGISTRYINDEX);
    esp_err_t status=rmt_transmit(
       o->txChannel,o->txEncoder,symbols,sizeof(rmt_symbol_word_t)*bufLen,&cfg);
    if(ESP_OK == status)
    {
-      lua_pushvalue(L, 4); /* rmt_symbol_word_t array */
-      baAssert(LUA_TUSERDATA == lua_type(L, -1));
-      /* We must reference buffer used by rmt_transmit() to prevent GC
-       * since rmt_transmit() keeps a reference to the buffer and does
-       * not copy it. We release this buffer in
-       * LRmtTx_executeOnTxComplete() when the data has been
-       * transmitted.
-       */
-      o->transQueueBufRef[o->transQueueBufHead]=luaL_ref(L, LUA_REGISTRYINDEX);
+      o->transQueueBufRef[o->transQueueBufHead]=payloadRef;
       o->transQueueBufHead = nextTransQueueBufHead;
    }
-   return pushEspRetVal(L, status, "transmit", TRUE);
+   else luaL_unref(L,LUA_REGISTRYINDEX,payloadRef);
+   return pushEspRetVal(L,status,"transmit",TRUE);
 }
 
 
@@ -2201,6 +2663,10 @@ static int LRmtTx_enable(lua_State* L)
    }
    else
    {
+      balua_wkUnref(L,o->selfRef); /* Invalidate completions from before disable. */
+      lua_pushvalue(L,1);
+      o->selfRef=balua_wkRef(L);
+      o->jobQueued=FALSE;
       status=rmt_enable(o->txChannel);
       if(ESP_OK == status)
          o->enabled=TRUE;
@@ -2209,9 +2675,18 @@ static int LRmtTx_enable(lua_State* L)
 }
 
 
+/* Stop TX before releasing payload buffers retained for asynchronous transmission.
+   Inputs: live TX userdata o and locked Lua state L holding its registry.
+   Returns the native rmt_disable status. On failure buffers/state are retained;
+   on success clears enabled/completions, unreferences queued buffers and resets
+   the queue indices. Leaves the Lua stack unchanged; returns no Lua results.
+ */
 static int LRmtTx_disableAndReleaseBuf(LRmtTx* o,lua_State* L)
 {
-   int status=rmt_disable(o->txChannel);
+   int status=o->enabled ? rmt_disable(o->txChannel) : ESP_OK;
+   if(status != ESP_OK) return status;
+   o->enabled=FALSE;
+   atomic_store(&o->completed,0);
    int ix=o->transQueueBufTail;
    while(ix != o->transQueueBufHead)
    {
@@ -2232,8 +2707,6 @@ static int LRmtTx_disable(lua_State* L)
    if(o->enabled)
    {
       status=LRmtTx_disableAndReleaseBuf(o,L);
-      if(ESP_OK == status)
-         o->enabled=FALSE;
    }
    else
    {
@@ -2242,27 +2715,58 @@ static int LRmtTx_disable(lua_State* L)
    return pushEspRetVal(L,status,NULL,TRUE);
 }
 
-static void LRmtTx_del(LRmtTx* o, lua_State* L)
+/* Disable TX, release payloads/encoder/channel and unlink its RX partner.
+   Inputs: locked Lua state L and RMT TX userdata pointer o. Keep the owner on
+   the stack or reachable as an RMT partner for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+   A NULL o is accepted and returns ESP_OK.
+ */
+static esp_err_t LRmtTx_del(LRmtTx* o, lua_State* L)
 {
-   if(o)
+   esp_err_t err=ESP_OK;
+   if(!o) return ESP_OK;
+   o->closing=TRUE;
+   if(o->txChannel)
    {
-      if(o->txChannel)
+      err=LRmtTx_disableAndReleaseBuf(o,L);
+      if(err != ESP_OK) goto done;
+      err=rmt_del_channel(o->txChannel);
+      if(err != ESP_OK) goto done;
+      o->txChannel=NULL;
+   }
+   if(o->txEncoder)
+   {
+      err=rmt_del_encoder(o->txEncoder);
+      if(err != ESP_OK) goto done;
+      o->txEncoder=NULL;
+   }
+   if(o->rx)
+   {
+      o->rx->super.tx=NULL;
+      if(pushHardwareOwner(L,o->rx))
       {
-         LRmtTx_disableAndReleaseBuf(o,L);
-         rmt_del_encoder(o->txEncoder);
-         rmt_del_channel(o->txChannel);
-         o->txChannel=0;
-         activeGPIO[o->pin]=0;
+         lua_pushnil(L);
+         lua_setiuservalue(L,-2,2);
+         lua_pop(L,1);
       }
       o->rx=NULL;
    }
+   if(pushHardwareOwner(L,o))
+   {
+      lua_pushnil(L);
+      lua_setiuservalue(L,-2,2);
+      lua_pop(L,1);
+   }
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 
 static int LRmtTx_close(lua_State* L)
 {
-   LRmtTx_del(LRmtTx_getUD(L), L);
-   return 0;
+   return hardwareStatus(L,LRmtTx_del(LRmtTx_getUD(L),L));
 }
 
 
@@ -2270,29 +2774,30 @@ static int LRmtTx_close(lua_State* L)
  */
 static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtBase* base = (LRmtBase*)activeGPIO[((GpioThreadJob*)jb)->pin];
-   if(base && base->tx)
+   lua_State* L=jb->Lt;
+   int ref=((GpioThreadJob*)jb)->selfRef;
+   LRmtTx* o=(LRmtTx*)eventOwner(L,ref);
+   if(!o) return;
+   while(o->txChannel && o->enabled && !o->closing && o->selfRef == ref &&
+         atomic_load(&o->completed))
    {
-      LRmtTx* o = base->tx;
-      //printf("executeOnTxComplete %d : %d\n",o->transQueueBufTail,o->transQueueBufHead); // PATCH TEST CODE
-      if(o->transQueueBufTail != o->transQueueBufHead) /* not empty */
+      atomic_fetch_sub(&o->completed,1);
+      if(o->transQueueBufTail != o->transQueueBufHead)
       {
-         lua_State* L = jb->Lt;
-         /* Release rmt_symbol_word_t array memory lock */
-         luaL_unref(L, LUA_REGISTRYINDEX, o->transQueueBufRef[o->transQueueBufTail]);
-         int next = o->transQueueBufTail+1;
-         if(next >= o->transQueueBufLen)
-            next=0;
-         o->transQueueBufTail = next;
-         if(o->callbackRef)
+         luaL_unref(L,LUA_REGISTRYINDEX,o->transQueueBufRef[o->transQueueBufTail]);
+         if(++o->transQueueBufTail == o->transQueueBufLen) o->transQueueBufTail=0;
+         if(lua_getiuservalue(L,msgh+1,1) == LUA_TFUNCTION)
          {
-            /* Push user's callback on the stack */
-            balua_wkPush(L, o->callbackRef);
-            if(LUA_OK != lua_pcall(L, 0, 0, msgh))
-               LRmtTx_del(o, L);
+            if(lua_pcall(L,0,0,msgh) != LUA_OK)
+            {
+               LRmtTx_del(o,L);
+               break;
+            }
          }
+         else lua_pop(L,1);
       }
    }
+   if(o->selfRef == ref) o->jobQueued=FALSE;
 }
 
 
@@ -2300,8 +2805,14 @@ static void LRmtTx_executeOnTxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LRmtTx_onTxComplete(EventBrokerCallbackArg arg)
 {
-   if(activeGPIO[arg.pin])
-      dispatchThreadJob(arg.pin, LRmtTx_executeOnTxComplete);
+   LRmtTx* o = (LRmtTx*)eventBegin(arg);
+   if(o && o->txChannel && o->enabled && !o->closing && !o->jobQueued &&
+      atomic_load(&o->completed))
+   {
+      o->jobQueued=TRUE;
+      dispatchThreadJob(arg.ref,LRmtTx_executeOnTxComplete);
+   }
+   eventEnd();
 }
 
 
@@ -2309,11 +2820,11 @@ static bool IRAM_ATTR LRmtTx_interruptHandler(
    rmt_channel_handle_t tx_chan, const rmt_tx_done_event_data_t *edata, void *arg)
 {
    BaseType_t hwakeup = pdFALSE;
-   LRmtBase* base = (LRmtBase*)activeGPIO[(gpio_num_t)arg];
-   if(base && base->tx)
+   LRmtTx* tx = (LRmtTx*)arg;
+   if(tx->txChannel)
    {
-      LRmtRx* rx = base->tx->rx;
-      if(rx && rx->pendingReceive)
+      LRmtRx* rx = tx->rx;
+      if(rx && atomic_exchange(&rx->pendingReceive,FALSE))
       {
          if(ESP_OK != rmt_receive(rx->rxChannel,rx->symBuf,rx->symSize,&rx->cfg))
          {
@@ -2322,18 +2833,22 @@ static bool IRAM_ATTR LRmtTx_interruptHandler(
              */
             EventBrokerQueueNode n = {
                .callback=LRmtRx_onRxComplete,
-               .arg.pin=(gpio_num_t)arg
+               .arg.ref=rx->selfRef
             };
             rx->receivedSymbols=0;
             rx->overflow = TRUE;
-            xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+            atomic_store(&rx->ready,TRUE);
+            if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+               atomic_store(&hardwareRetry,TRUE);
          }
       }
       EventBrokerQueueNode n = {
          .callback=LRmtTx_onTxComplete,
-         .arg.pin=(gpio_num_t)arg
+         .arg.ref=tx->selfRef
       };
-      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+      atomic_fetch_add(&tx->completed,1);
+      if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+         atomic_store(&hardwareRetry,TRUE);
    }
    return hwakeup == pdTRUE;
 };
@@ -2350,82 +2865,106 @@ static const luaL_Reg rmtTxLib[] = {
 };
 
 
+/* Read a frequency from the configuration table at Lua stack index 1.
+   Inputs: locked Lua state L, field name, and minimum Hz (1 for resolution,
+   0 for carrier frequency, where zero disables modulation). Returns the
+   uint32_t value in [minimum, 80000000]; pushes no Lua results and leaves the
+   stack unchanged. Raises Invalidarg before narrowing an out-of-range Lua
+   integer. Actual divider/carrier tick limits are checked by PatchRmt.cmake
+   in the driver, which knows the shared group's effective clock frequency.
+ */
+static uint32_t rmtCheckHz(lua_State* L, const char* name, int minimum)
+{
+   lua_Integer hz=balua_checkIntField(L,1,name);
+   if(hz < minimum || hz > 80000000)
+      throwInvArg(L,name);
+   return (uint32_t)hz;
+}
+
+/* Create a disabled RMT transmitter using the configuration table at index 1
+   and optional RX userdata at index 2 for sharing its GPIO. Caller holds the
+   dispatcher mutex. Validate frequencies before conversion; the driver checks
+   the actual divider and carrier high/low ticks before programming hardware.
+   On success, push/return one TX userdata, retaining a paired RX in uservalue 2.
+   Invalid arguments raise a Lua error; other native failures return nil,error.
+   The userdata finalizer owns partial construction; checked driver failures
+   also attempt immediate teardown before returning/raising.
+ */
 static int LRmtTx_create(lua_State* L)
 {
    luaL_checktype(L, 1, LUA_TTABLE);
    rmt_tx_channel_config_t txCfg = {
       .gpio_num = (uint32_t)balua_checkIntField(L,1,"gpio"),
       .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
-      .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
+      .resolution_hz = rmtCheckHz(L,"resolution",1),
       .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
       .trans_queue_depth = (uint32_t)balua_getIntField(L,1,"queue",4),
       .intr_priority = (int)balua_getIntField(L,1,"priority",0),
       .flags.invert_out=balua_getBoolField(L,1,"invert", FALSE),
       .flags.with_dma=balua_getBoolField(L,1,"dma", FALSE),
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
-      .flags.io_od_mode=balua_getBoolField(L,1,"opendrain",FALSE)
-#endif
    };
       
-   /* fixme: analyze this; ESP-IDF assert rmt_ll_tx_set_channel_clock_div if larger */
-   if(txCfg.resolution_hz > 80000000)
-      return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"resolution",TRUE);
-   if(txCfg.trans_queue_depth < 1)
+   if(txCfg.trans_queue_depth < 1 || txCfg.trans_queue_depth > (INT_MAX-sizeof(LRmtTx))/sizeof(int))
       return pushEspRetVal(L,ESP_ERR_INVALID_ARG,"queue",TRUE);
-   if(txCfg.gpio_num < GPIO_NUM_0 || txCfg.gpio_num >= GPIO_NUM_MAX)
+   if(!GPIO_IS_VALID_OUTPUT_GPIO(txCfg.gpio_num))
       luaL_argerror(L, 1, "Invalid GPIO pin");
+   /* Parse before acquiring a channel; frequency zero leaves carrier off. */
+   rmt_carrier_config_t cCfg={};
+   lua_getfield(L,1,"dutycycle");
+   if(lua_isnumber(L,-1))
+   {
+      cCfg=(rmt_carrier_config_t){
+         .duty_cycle=(float)lua_tonumber(L,-1),
+         .frequency_hz=rmtCheckHz(L,"frequency",0),
+         .flags.polarity_active_low=balua_getBoolField(L,1,"polaritylow",FALSE)
+      };
+   }
+   lua_pop(L,1);
    LRmtRx* rx=NULL;
    bool hasRx = LUA_TUSERDATA == lua_type(L, 2);
-   LRmtTx* tx = (LRmtTx*)lNewUdata(
-      L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib);
-   memset(tx,0,sizeof(LRmtTx));
-   ((LRmtBase*)tx)->tx=tx;
+   LRmtTx* tx = (LRmtTx*)lNewUdataUV(
+      L,sizeof(LRmtTx)+sizeof(int)*txCfg.trans_queue_depth,BARMTTX,rmtTxLib,2);
+   tx->super.tx=tx;
    if(activeGPIO[txCfg.gpio_num])
    {
       if(hasRx)
       {
          rx = (LRmtRx*)luaL_checkudata(L,2,BARMTRX);
-         if((LRmtRx*)activeGPIO[txCfg.gpio_num] == rx && rx->rxChannel)
+         if((LRmtRx*)activeGPIO[txCfg.gpio_num] == rx && rx->rxChannel && !rx->closing && !rx->super.tx)
          {
-            ((LRmtBase*)rx)->tx=tx;
-#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0)
-            txCfg.flags.io_loop_back=TRUE;
-#endif
             goto L_ok;
          }
       }
       throwPinInUse(L,txCfg.gpio_num);
    }
   L_ok:
-   tx->transQueueBufLen=txCfg.trans_queue_depth;
+   /* TX keeps its paired RX alive; RX's reverse pointer is unlinked on close. */
+   if(rx)
+   {
+      lua_pushvalue(L,2);
+      lua_setiuservalue(L,-2,2);
+   }
+   lua_pushvalue(L,-1);
+   tx->selfRef=balua_wkRef(L);
+   tx->transQueueBufLen=txCfg.trans_queue_depth+1;
    tx->pin=txCfg.gpio_num;
-   esp_err_t status=rmt_new_tx_channel(&txCfg, &tx->txChannel);
+   esp_err_t status=hardwareInit(HW_RMT_TX,&txCfg,&tx->txChannel,NULL);
    if(ESP_OK == status)
    {
-// Open-drain now via GPIO API (io_od_mode removed)
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
       if(balua_getBoolField(L,1,"opendrain",FALSE))
       {
          gpio_od_enable(tx->pin);
       }
-#endif
-      lua_getfield(L, 1, "dutycycle");
-      if(lua_isnumber(L, -1))
+      if(cCfg.frequency_hz)
       {
-         rmt_carrier_config_t cCfg = {
-            .duty_cycle = (float)lua_tonumber(L, -1),
-            .frequency_hz = (uint32_t)balua_checkIntField(L,1,"frequency"),
-            .flags.polarity_active_low = balua_getBoolField(L,1,"polaritylow", FALSE)
-         };
          status=rmt_apply_carrier(tx->txChannel, &cCfg);
          if(ESP_OK != status)
             goto L_err;
       }
-      lua_pop(L,1);
       rmt_tx_event_callbacks_t cb = {
          .on_trans_done = LRmtTx_interruptHandler
       };
-      status=rmt_tx_register_event_callbacks(tx->txChannel, &cb, (void*)txCfg.gpio_num);
+      status=rmt_tx_register_event_callbacks(tx->txChannel, &cb, tx);
       if(ESP_OK == status)
       {
          rmt_copy_encoder_config_t cfg={};
@@ -2434,33 +2973,61 @@ static int LRmtTx_create(lua_State* L)
          {
             lua_getfield(L, 1, "callback");
             if(lua_isfunction(L, -1))
-               tx->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+            {
+               lua_pushvalue(L,-1);
+               lua_setiuservalue(L,-3,1);
+            }
             lua_pop(L,1);
             if(rx)
+            {
                tx->rx=rx;
+               rx->super.tx=tx;
+               lua_pushvalue(L,-1);
+               lua_setiuservalue(L,2,2);
+            }
             else
                activeGPIO[tx->pin]=(LGPIO*)tx;
             return 1;
          }
       }
      L_err:
-      rmt_del_channel(tx->txChannel);
+      LRmtTx_del(tx,L);
    }
    return pushEspRetVal(L,status,NULL,TRUE);
 }
 
-static void LRmtRx_del(lua_State* L, LRmtRx* o)
+/* Close linked TX first, then disable/delete RX and release its symbol buffer.
+   Inputs: locked Lua state L and RMT RX userdata pointer o. Keep the owner on
+   the stack or reachable as an RMT partner for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+ */
+static esp_err_t LRmtRx_del(lua_State* L, LRmtRx* o)
 {
+   esp_err_t err=ESP_OK;
+   o->closing=TRUE;
+   err=LRmtTx_del(o->super.tx,L);
+   if(err != ESP_OK) goto done;
+   if(o->enabled)
+   {
+      err=rmt_disable(o->rxChannel);
+      if(err != ESP_OK) goto done;
+      o->enabled=FALSE;
+   }
    if(o->rxChannel)
    {
-      activeGPIO[o->pin]=0;
-      rmt_disable(o->rxChannel);
-      rmt_del_channel(o->rxChannel);
-      o->rxChannel=0;
-      if(o->symBuf)
-         baFree(o->symBuf);
-      LRmtTx_del(((LRmtBase*)o)->tx, L);
+      err=rmt_del_channel(o->rxChannel);
+      if(err != ESP_OK) goto done;
+      o->rxChannel=NULL;
    }
+   if(o->symBuf)
+   {
+      baFree(o->symBuf);
+      o->symBuf=NULL;
+   }
+done:
+   return hardwareCleanup(L,o,err);
 }
 
 
@@ -2468,13 +3035,11 @@ static void LRmtRx_del(lua_State* L, LRmtRx* o)
  */
 static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
 {
-   LRmtRx* o = (LRmtRx*)activeGPIO[((GpioThreadJob*)jb)->pin];
-   if(o && o->symBuf)
+   LRmtRx* o = (LRmtRx*)eventOwner(jb->Lt,((GpioThreadJob*)jb)->selfRef);
+   if(o && o->rxChannel && !o->closing && o->symBuf && atomic_exchange(&o->ready,FALSE))
    {
       lua_State* L = jb->Lt;
-      rmt_symbol_word_t* symPtr=o->symBuf;
-      // Prevent GC from calling LRmtRx_close, thus terminating this object.
-      lua_gc(L,LUA_GCSTOP);
+      rmt_symbol_word_t* symPtr=o->received;
       lua_createtable(L,0,o->receivedSymbols);
       for(size_t ix=1 ; ix <= o->receivedSymbols; ix++,symPtr++)
       {
@@ -2485,13 +3050,14 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          lua_pushinteger(L,symPtr->duration1); lua_rawseti(L,-2, 4);
          lua_rawseti(L,-2, ix);
       }
-      balua_wkPush(L, o->callbackRef);
+      lua_getiuservalue(L,msgh+1,1);
       lua_rotate(L, -2, 1);
       lua_pushboolean(L, o->overflow);
       baFree(o->symBuf);
       o->symBuf=0;
-      o->pendingReceive=o->overflow=FALSE;
-      lua_gc(L,LUA_GCRESTART);
+      o->pendingReceive=FALSE;
+      o->overflow=FALSE;
+      o->jobQueued=FALSE;
       if(LUA_OK != lua_pcall(L, 2, 0, msgh))
          LRmtRx_del(L, o);
    }
@@ -2502,8 +3068,13 @@ static void LRmtRx_executeOnRxComplete(ThreadJob* jb, int msgh, LThreadMgr* mgr)
  */
 static void LRmtRx_onRxComplete(EventBrokerCallbackArg arg)
 {
-   if(activeGPIO[arg.pin])
-      dispatchThreadJob(arg.pin, LRmtRx_executeOnRxComplete);
+   LRmtRx* o = (LRmtRx*)eventBegin(arg);
+   if(o && o->rxChannel && !o->closing && !o->jobQueued && atomic_load(&o->ready))
+   {
+      o->jobQueued=TRUE;
+      dispatchThreadJob(arg.ref,LRmtRx_executeOnRxComplete);
+   }
+   eventEnd();
 }
 
 
@@ -2511,16 +3082,19 @@ static bool IRAM_ATTR LRmtRx_interruptHandler(
    rmt_channel_handle_t channel, const rmt_rx_done_event_data_t* edata, void* arg)
 {
    BaseType_t hwakeup = pdFALSE;
-   LRmtRx* o = (LRmtRx*)activeGPIO[(gpio_num_t)arg];
+   LRmtRx* o = (LRmtRx*)arg;
    if(o && o->symBuf)
    {
       EventBrokerQueueNode n = {
          .callback=LRmtRx_onRxComplete,
-         .arg.pin=(gpio_num_t)arg
+         .arg.ref=o->selfRef
       };
+      o->received=edata->received_symbols;
       o->receivedSymbols=edata->num_symbols;
       o->overflow = !edata->flags.is_last;
-      xQueueSendFromISR(eventBrokerQueue, &n, &hwakeup);
+      atomic_store(&o->ready,TRUE);
+      if(xQueueSendFromISR(eventBrokerQueue,&n,&hwakeup) != pdTRUE)
+         atomic_store(&hardwareRetry,TRUE);
    }
    return hwakeup == pdTRUE;
 }
@@ -2535,13 +3109,15 @@ static int LRmtRx_receive(lua_State* L)
    memset(&o->cfg, 0 , sizeof(o->cfg));
    o->cfg.signal_range_min_ns = (uint32_t)balua_checkIntField(L,2,"min");
    o->cfg.signal_range_max_ns = (uint32_t)balua_checkIntField(L,2,"max");
-   o->symSize = (size_t)balua_getIntField(L,2,"len",512) * sizeof(rmt_symbol_word_t);
+   lua_Integer len=balua_getIntField(L,2,"len",512);
+   if(len <= 0 || len > INT_MAX/sizeof(rmt_symbol_word_t)) return throwInvArg(L,"len");
+   o->symSize=(size_t)len*sizeof(rmt_symbol_word_t);
    BaBool defer = balua_getBoolField(L,2,"defer", FALSE);
    o->symBuf = (rmt_symbol_word_t*)baLMalloc(L, o->symSize);
    if(o->symBuf)
    {
        /* if tx and rx linked */
-      if(((LRmtBase*)o)->tx && defer)
+      if(o->super.tx && defer)
       {
          status=ESP_OK;
          o->pendingReceive=TRUE;
@@ -2565,10 +3141,7 @@ static int LRmtRx_receive(lua_State* L)
 
 static int LRmtRx_close(lua_State* L)
 {
-   LRmtRx* o = LRmtRx_getUD(L);
-   if(o)
-      LRmtRx_del(L,o);
-   return 0;
+   return hardwareStatus(L,LRmtRx_del(L,LRmtRx_getUD(L)));
 }
 
 
@@ -2582,13 +3155,21 @@ static const luaL_Reg rmtRxLib[] = {
 };
 
 
+/* Create and enable an RMT receiver from the configuration table at index 1,
+   including its required callback. Caller holds the dispatcher mutex. Check
+   resolution before conversion; the driver rejects unrepresentable dividers
+   before programming hardware. On success, push/return one RX userdata whose
+   uservalue 1 retains the callback. Invalid arguments raise a Lua error; other
+   native failures return nil,error. Partial native initialization is torn down
+   before reporting a driver failure; GC handles earlier Lua parsing failures.
+ */
 static int LRmtRx_create(lua_State* L)
 {
    luaL_checktype(L, 1, LUA_TTABLE);
    rmt_rx_channel_config_t cfg = {
       .gpio_num = (uint32_t)balua_checkIntField(L,1,"gpio"),
       .clk_src = RMT_CLK_SRC_DEFAULT, // select clock source
-      .resolution_hz = (uint32_t)balua_checkIntField(L,1,"resolution"),
+      .resolution_hz = rmtCheckHz(L,"resolution",1),
       .mem_block_symbols = (uint32_t)balua_getIntField(L,1,"mem",64),
       .intr_priority = (int)balua_getIntField(L,1,"priority",0),
       .flags.invert_in=balua_getBoolField(L,1,"invert", FALSE),
@@ -2598,31 +3179,32 @@ static int LRmtRx_create(lua_State* L)
       luaL_argerror(L, 1, "Invalid GPIO pin");
    if(activeGPIO[cfg.gpio_num])
       throwPinInUse(L,cfg.gpio_num);
-   LRmtRx* rx = (LRmtRx*)lNewUdata(L,sizeof(LRmtRx),BARMTRX,rmtRxLib);
-   memset(rx,0,sizeof(LRmtRx));
+   LRmtRx* rx = (LRmtRx*)lNewUdataUV(L,sizeof(LRmtRx),BARMTRX,rmtRxLib,2);
    rx->pin=cfg.gpio_num;
    lua_getfield(L, 1, "callback");
    if(!lua_isfunction(L, -1))
       luaL_error(L,"Callback required");
-   rx->callbackRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
+   rx->selfRef=lReferenceCallback(L, lua_absindex(L,-2), lua_absindex(L,-1));
    lua_pop(L,1);
-   esp_err_t status=rmt_new_rx_channel(&cfg, &rx->rxChannel);
+   esp_err_t status=hardwareInit(HW_RMT_RX,&cfg,&rx->rxChannel,NULL);
    if(ESP_OK == status)
    {
       rmt_rx_event_callbacks_t cbs = {
          .on_recv_done = LRmtRx_interruptHandler,
       };
-      status=rmt_rx_register_event_callbacks(rx->rxChannel, &cbs, (void*)cfg.gpio_num);
+      status=rmt_rx_register_event_callbacks(rx->rxChannel, &cbs, rx);
       if(ESP_OK == status)
       {
          status=rmt_enable(rx->rxChannel);
          if(ESP_OK == status)
          {
+            rx->enabled=TRUE;
             activeGPIO[rx->pin]=(LGPIO*)rx;
             return 1;
          }
       }
    }
+   LRmtRx_del(L,rx);
    return pushEspRetVal(L,status,NULL,TRUE);
 }
 
@@ -2638,21 +3220,22 @@ static int LRmtRx_create(lua_State* L)
 
 
 typedef struct {
+   int selfRef;
    QueueHandle_t uartQueue; /* Used by uartTask */
    uart_port_t port;
    int patternLen;
-   int callbackRef;
    TaskHandle_t uartTaskHandle;
+   BaBool busy, closing;
 } LUart;
 
 
 typedef struct {
    ThreadJob super;
-   LUart* lu;
+   int selfRef;
    uart_event_type_t etype;
 } LUartJob;
 
-static int Uart_close(LUart* o);
+static int Uart_close(lua_State* L, LUart* o);
 
 
 /* This function runs in the context of a thread in the LThreadMgr.
@@ -2663,12 +3246,13 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    char* buf;
    int len=0;
    LUartJob* ujob=(LUartJob*)jb;
-   LUart* lu = ujob->lu;
    lua_State* L = jb->Lt;
+   LUart* lu = (LUart*)eventOwner(L,ujob->selfRef);
+   if(!lu || lu->port == UART_NUM_MAX || lu->closing) return;
    const char* emsg = 0;
    int luaStatus = LUA_OK;
    /* Push user's callback on the stack */
-   balua_wkPush(L, lu->callbackRef);
+   lua_getiuservalue(L,msgh+1,1);
    switch(ujob->etype)
    {
       case UART_BUFFER_FULL:
@@ -2686,6 +3270,7 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          lua_pushnil(L);
          lua_pushstring(L, emsg);
          luaStatus=lua_pcall(L, 2, 0, msgh);
+         if(lu->port == UART_NUM_MAX) return;
          switch(ujob->etype)
          {
             case UART_BUFFER_FULL:
@@ -2701,11 +3286,13 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          if(lu->patternLen && lu->port < UART_NUM_MAX)
          {
             len = uart_pattern_pop_pos(lu->port);
-            if(len > 0)
+            if(len >= 0)
             {
                luaL_buffinit(L, &lb);
                buf = luaL_prepbuffsize(&lb, len);
-               uart_read_bytes(lu->port, buf, len, 0);
+               int actual=uart_read_bytes(lu->port,buf,len,0);
+               if(actual < 0) actual=0;
+               len=actual;
                luaL_pushresultsize(&lb, len);
                /* Discard pattern */
                luaL_buffinit(L, &lb);
@@ -2727,16 +3314,20 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
          }
          /* Fall through */
       case UART_DATA:
+         if(lu->patternLen) break; /* Preserve bytes for the pattern event. */
          size_t size;
          if(lu->port < UART_NUM_MAX)
          {
+            size=0;
             uart_get_buffered_data_len(lu->port, &size);
             len=(int)size;
             if(len > 0)
             {
                luaL_buffinit(L, &lb);
                buf = luaL_prepbuffsize(&lb, len);
-               uart_read_bytes(lu->port, buf, len, 0);
+               int actual=uart_read_bytes(lu->port,buf,len,0);
+               if(actual < 0) actual=0;
+               len=actual;
                luaL_pushresultsize(&lb, len);
               L_execLua:
                lua_pushboolean(L,UART_PATTERN_DET == ujob->etype);
@@ -2755,7 +3346,12 @@ static void executeLuaUartCB(ThreadJob* jb, int msgh, LThreadMgr* mgr)
    }
    if(LUA_OK != luaStatus)
    {
-      Uart_close(lu);
+      if(lu->busy)
+      {
+         lu->closing=TRUE;
+         hardwareCleanup(L,lu,ESP_ERR_INVALID_STATE);
+      }
+      else Uart_close(L,lu);
    }
 }
 
@@ -2771,20 +3367,20 @@ static void uartTask(void *param)
       uart_event_t event;
       if(xQueueReceive(lu->uartQueue, &event, portMAX_DELAY))
       {
+         ThreadMutex_set(soDispMutex);
          LUartJob* ujob=(LUartJob*)ThreadJob_lcreate(
             sizeof(LUartJob),executeLuaUartCB);
          if( ! ujob )
             baFatalE(FE_MALLOC,0);
-         ujob->lu=lu;
+         ujob->selfRef=lu->selfRef;
          ujob->etype = event.type;
-         ThreadMutex_set(soDispMutex);
          LThreadMgr_run(&ltMgr, (ThreadJob*)ujob);
-         ThreadMutex_release(soDispMutex);
          if(UART_BUFFER_FULL == event.type || UART_FIFO_OVF == event.type)
          {
             uart_flush_input(lu->port);
             xQueueReset(lu->uartQueue);
          }
+         ThreadMutex_release(soDispMutex);
       }
    }
 }
@@ -2799,8 +3395,9 @@ static LUart* Uart_getUD(lua_State* L)
 static LUart* Uart_checkUD(lua_State* L)
 {
    LUart* o = Uart_getUD(L);
-   if(o->port == UART_NUM_MAX)
+   if(o->port == UART_NUM_MAX || o->closing)
       luaL_error(L,"CLOSED");
+   if(o->busy) luaL_error(L,"Busy");
    return o;
 }
 
@@ -2810,10 +3407,12 @@ static int Uart_read(lua_State* L)
 {
    size_t size;
    LUart* o = Uart_checkUD(L);
-   if(o->callbackRef)
+   if(o->selfRef)
       return luaL_error(L,"RX callback");
    lua_Integer msSec = luaL_optinteger(L, 2, 0);
-   ECHK(uart_get_buffered_data_len(o->port,&size));
+   if(msSec < 0 || msSec > INT_MAX) return throwInvArg(L,"timeout");
+   esp_err_t err=uart_get_buffered_data_len(o->port,&size);
+   if(err != ESP_OK) return hardwareStatus(L,err);
    if(size || msSec)
    {
       luaL_Buffer lb;
@@ -2821,10 +3420,12 @@ static int Uart_read(lua_State* L)
          size=1024;
       luaL_buffinit(L, &lb);
       char* buf = luaL_prepbuffsize(&lb, size);
+      o->busy=TRUE;
       ThreadMutex_release(soDispMutex);
       int len = uart_read_bytes(
          o->port,buf,size,msSec ? (TickType_t)(msSec/portTICK_PERIOD_MS) : 0);
       ThreadMutex_set(soDispMutex);
+      o->busy=FALSE;
       if(len > 0)
       {
          luaL_pushresultsize(&lb, len);
@@ -2842,9 +3443,12 @@ static int Uart_write(lua_State* L)
    size_t size;
    LUart* o = Uart_checkUD(L);
    const char* data = luaL_checklstring(L, 2, &size);
+   o->busy=TRUE;
    ThreadMutex_release(soDispMutex);
-   uart_write_bytes(o->port, data, size);
+   int written=uart_write_bytes(o->port, data, size);
    ThreadMutex_set(soDispMutex);
+   o->busy=FALSE;
+   if(written < 0 || (size_t)written != size) return pushErr(L,"write failed");
    return 0;
 }
 
@@ -2852,28 +3456,42 @@ static int Uart_write(lua_State* L)
 static int Uart_txsize(lua_State* L)
 {
    size_t size;
-   uart_get_tx_buffer_free_size(Uart_checkUD(L)->port, &size);
+   esp_err_t err=uart_get_tx_buffer_free_size(Uart_checkUD(L)->port,&size);
+   if(err != ESP_OK) return hardwareStatus(L,err);
    lua_pushinteger(L,size);
    return 1;
 }
 
-static int Uart_close(LUart* o)
+/* Stop the UART event task and delete the driver.
+   Inputs: locked Lua state L and UART userdata pointer o. Keep the owner on
+   L's stack for hardwareCleanup(). Supports
+   partial construction and repeated close; failed native teardown is retained
+   for recovery. Returns ESP_OK or the native failure code, NOT a Lua result
+   count. Leaves the Lua stack unchanged.
+   A busy object returns ESP_ERR_INVALID_STATE without teardown.
+ */
+static int Uart_close(lua_State* L, LUart* o)
 {
+   esp_err_t err=ESP_OK;
+   if(o->busy) return ESP_ERR_INVALID_STATE;
+   o->closing=TRUE;
+   if(o->uartTaskHandle)
+   {
+      vTaskDelete(o->uartTaskHandle);
+      o->uartTaskHandle=NULL;
+   }
    if(o->port < UART_NUM_MAX)
    {
-      uart_driver_delete(o->port);
-      if(o->uartTaskHandle)
-         vTaskDelete(o->uartTaskHandle);
-      o->port=UART_NUM_MAX;
+      err=uart_driver_delete(o->port);
+      if(err == ESP_OK) o->port=UART_NUM_MAX;
    }
-   return 0;
+   return hardwareCleanup(L,o,err);
 }
 
 /* uart:close() */
 static int Uart_lclose(lua_State* L)
 {
-   Uart_close(Uart_getUD(L));
-   return 0;
+   return hardwareStatus(L,Uart_close(L,Uart_getUD(L)));
 }
 
 
@@ -2914,7 +3532,7 @@ static int luart(lua_State* L)
    /* The following is used if pattern enabled */
    const char* pattern = balua_getStringField(L, 2, "pattern", 0);
    int maxlen = (int)balua_getIntField(L, 2, "maxlen", 0);
-   int chr_tout = (int)balua_getIntField(L, 2, "timeout", 0);
+   int chr_tout = (int)balua_getIntField(L, 2, "timeout", pattern ? 9 : 0);
    int pre_idle = (int)balua_getIntField(L, 2, "preidle", 0);
    int post_idle = (int)balua_getIntField(L, 2, "postidle", 0);
 
@@ -2930,66 +3548,157 @@ static int luart(lua_State* L)
          UART_HW_FLOWCTRL_DISABLE,
       .source_clk = UART_SCLK_DEFAULT,
    };
+   int pins[]={txpin,rxpin,rtspin,ctspin};
+   for(int i=0;i<4;++i)
+      if(pins[i] != UART_PIN_NO_CHANGE)
+      {
+         if(!GPIO_IS_VALID_GPIO(pins[i]) ||
+            ((i==0 || i==2) && !GPIO_IS_VALID_OUTPUT_GPIO(pins[i])))
+            return throwInvArg(L,"pin");
+         if(activeGPIO[pins[i]]) return throwPinInUse(L,pins[i]);
+      }
+   LUart* lu=(LUart*)lNewUdataUV(L,sizeof(LUart),BALUART,uartObjLib,1);
+   lu->port=UART_NUM_MAX;
+   lu->patternLen=hasCB && pattern ? strlen(pattern) : 0;
+   if(hasCB) lu->selfRef=lReferenceCallback(L,lua_absindex(L,-1),3);
    QueueHandle_t uartQueue=0;
    if(rxbufsize < 1024) rxbufsize=1024;
    if(txbufsize < 1024) txbufsize=1024;
-   if(ESP_OK != uart_driver_install(
-         port, rxbufsize, txbufsize, 10, hasCB ? &uartQueue : 0, 0))
-   {
-      throwInvArg(L,"install");
-   }
-   if(ESP_OK != uart_param_config(port, &cfg))
-   {
-      uart_driver_delete(port);
-      throwInvArg(L,"config");
-   }
-   if(ESP_OK != uart_set_pin(port, txpin, rxpin, rtspin, ctspin))
-   {
-      uart_driver_delete(port);
-      throwInvArg(L,"setpin");
-   }
+   esp_err_t err=uart_driver_install(port,rxbufsize,txbufsize,10,hasCB ? &uartQueue : 0,0);
+   if(err != ESP_OK) return pushEspRetVal(L,err,"install",FALSE);
+   lu->port=port;
+   for(int i=0;i<4;++i)
+      if(pins[i] != UART_PIN_NO_CHANGE) activeGPIO[pins[i]]=(LGPIO*)lu;
+   err=uart_param_config(port, &cfg);
+   if(err != ESP_OK) goto fail;
+   err=uart_set_pin(port, txpin, rxpin, rtspin, ctspin);
+   if(err != ESP_OK) goto fail;
    if(rs485)
-      uart_set_mode(port, UART_MODE_RS485_HALF_DUPLEX);
+   {
+      err=uart_set_mode(port,UART_MODE_RS485_HALF_DUPLEX);
+      if(err != ESP_OK) goto fail;
+   }
    if(hasCB)
    {
       if(pattern)
       {
-         if(ESP_OK != uart_enable_pattern_det_baud_intr(
-               port,pattern[0],(uint8_t)strlen(pattern),chr_tout,pre_idle,post_idle))
-         {
-            uart_driver_delete(port);
-            throwInvArg(L,"pattern");
-         }
+         err=uart_enable_pattern_det_baud_intr(
+            port,pattern[0],(uint8_t)strlen(pattern),chr_tout,post_idle,pre_idle);
+         if(err != ESP_OK) goto fail;
          if(maxlen)
          {
-            esp_err_t status=uart_pattern_queue_reset(port, maxlen);
-            if(ESP_OK != status)
-            {
-               uart_driver_delete(port);
-               return pushEspRetVal(L, status, "queue_reset", TRUE);
-            }
+            err=uart_pattern_queue_reset(port,maxlen);
+            if(err != ESP_OK) goto fail;
          }
       }
       else if(chr_tout > 0)
       {
-         if(ESP_OK != uart_set_rx_timeout(port, chr_tout))
-         {
-            uart_driver_delete(port);
-            throwInvArg(L,"timeout");
-         }
+         err=uart_set_rx_timeout(port,chr_tout);
+         if(err != ESP_OK) goto fail;
       }
    }
-   LUart* lu = (LUart*)lNewUdata(L, sizeof(LUart), BALUART, uartObjLib);
-   lu->port=port;
-   lu->patternLen= hasCB && pattern ? strlen(pattern) : 0;
    if(hasCB)
    {
-      lu->callbackRef=lReferenceCallback(L, lua_absindex(L, -1), 3);
       lu->uartQueue=uartQueue;
-      xTaskCreate(
-         uartTask,"uart",1024,lu,configMAX_PRIORITIES-1,&lu->uartTaskHandle);
+      if(xTaskCreate(uartTask,"uart",1024,lu,configMAX_PRIORITIES-1,
+                     &lu->uartTaskHandle) != pdPASS)
+      {
+         err=ESP_ERR_NO_MEM;
+         goto fail;
+      }
    }
    return 1;
+fail:
+   Uart_close(L,lu);
+   return hardwareStatus(L,err);
+}
+
+
+/* Retry failed native cleanup and resume work whose notification was lost.
+   Inputs: LThreadMgr job jb supplies the locked Lua state jb->Lt; msgh is its
+   Lua error-handler index; mgr is unused. No hardware identity is required.
+   Snapshot cleanupOwners before calling __gc, because cleanup mutates that
+   table. Then scan activeGPIO, including linked RMT TX, and schedule pending
+   work using each peripheral's existing duplicate-job guards.
+   Returns no value or Lua results; temporary Lua values are removed, leaving
+   the entry stack height unchanged. Failed cleanup requests another retry;
+   recoveryQueued is cleared when this pass finishes.
+ */
+static void hardwareRecover(ThreadJob* jb, int msgh, LThreadMgr* mgr)
+{
+   lua_State* L=jb->Lt;
+   lua_newtable(L);
+   int owners=lua_gettop(L), count=0;
+   lua_rawgeti(L,LUA_REGISTRYINDEX,cleanupOwners);
+   lua_pushnil(L);
+   while(lua_next(L,-2)) lua_rawseti(L,owners,++count);
+   lua_pop(L,1);
+   for(int i=1;i<=count;++i)
+   {
+      lua_rawgeti(L,owners,i);
+      luaL_getmetafield(L,-1,"__gc");
+      lua_pushvalue(L,-2);
+      if(lua_pcall(L,1,0,msgh) != LUA_OK)
+      {
+         lua_pop(L,1);
+         atomic_store(&hardwareRetry,TRUE);
+      }
+      lua_pop(L,1);
+   }
+   lua_pop(L,1);
+   for(int pin=0;pin<GPIO_NUM_MAX;++pin)
+   {
+      void* owner=activeGPIO[pin];
+      if(!owner || owner == (void*)1) continue;
+      /* Read the common first member, then root the userdata before using it. */
+      int ref=*(int*)owner;
+      while(ref)
+      {
+         balua_wkPush(L,ref);
+         LRmtTx* tx=luaL_testudata(L,-1,BARMTTX);
+         LRmtRx* rx=luaL_testudata(L,-1,BARMTRX);
+         LLEDC* led=luaL_testudata(L,-1,BALEDC);
+         LADC* adc=luaL_testudata(L,-1,BAADC);
+         LPCNT* pcnt=luaL_testudata(L,-1,BAPCNT);
+         if(tx && tx->enabled && !tx->closing && !tx->jobQueued && atomic_load(&tx->completed))
+         {
+            tx->jobQueued=TRUE;
+            dispatchThreadJob(ref,LRmtTx_executeOnTxComplete);
+         }
+         if(rx && rx->enabled && !rx->closing && !rx->jobQueued && atomic_load(&rx->ready))
+         {
+            rx->jobQueued=TRUE;
+            dispatchThreadJob(ref,LRmtRx_executeOnRxComplete);
+         }
+         if(led && led->running && !led->closing && !led->jobQueued && ledPending(led,FALSE))
+         {
+            led->jobQueued=TRUE;
+            dispatchThreadJob(ref,executeLuaLedEventCB);
+         }
+         if(adc && adc->type == 2 && adc->u.contin.started && !adc->closing && !adc->u.contin.running)
+         {
+            adc->u.contin.running=TRUE;
+            dispatchThreadJob(ref,adcExecuteLuaEventCB);
+         }
+         if(pcnt && pcnt->enabled && !pcnt->closing)
+         {
+            BaBool schedule=FALSE;
+            portENTER_CRITICAL(&pcntMux);
+            if(pcnt->qHead != pcnt->qTail && !pcnt->lCbRunning)
+            {
+               pcnt->lCbRunning=TRUE;
+               schedule=TRUE;
+            }
+            portEXIT_CRITICAL(&pcntMux);
+            if(schedule) dispatchThreadJob(ref,LPCNT_onReachLuaCB);
+         }
+         /* A shared RMT pin lists RX only; TX also needs completion recovery.
+            Existing job flags suppress duplicates from multi-pin owners. */
+         ref=rx && rx->super.tx ? rx->super.tx->selfRef : 0;
+         lua_pop(L,1);
+      }
+   }
+   recoveryQueued=FALSE;
 }
 
 
@@ -3043,6 +3752,16 @@ static int lwscan(lua_State* L)
    return 1;
 }
 
+/* Copy src including its terminator into the size-byte network field dst.
+   Raises Invalidarg before copying an oversized string. L must be locked;
+   this helper returns no value and leaves the Lua stack unchanged on success. */
+static void netCopyString(lua_State* L, char* dst, size_t size, const char* src)
+{
+   if(strlen(src) >= size)
+      throwInvArg(L, "network string length");
+   strcpy(dst, src);
+}
+
 /**
  * @brief Connect to a WiFi or wired network by providing the required configuration parameters.
  *
@@ -3059,10 +3778,8 @@ static int lwscan(lua_State* L)
 static int lnetconnect(lua_State* L)
 {
 netConfig_t cfg = {0};
-   
    // Set the network adapter from Lua string argument.
-   strcpy(cfg.adapter, (char*)luaL_checkstring(L, 1));
-   
+   netCopyString(L, cfg.adapter, sizeof(cfg.adapter), luaL_checkstring(L, 1));
    // Disconnects the network when the configuration table argument is not provided. 
    if(lua_gettop(L) == 1)
    {
@@ -3072,8 +3789,8 @@ netConfig_t cfg = {0};
    else if(!strcmp("wifi", cfg.adapter))
    {
       luaL_checktype(L, 2, LUA_TTABLE);
-      strcpy(cfg.ssid, balua_checkStringField(L, 2, "ssid"));
-      strcpy(cfg.password, balua_checkStringField(L, 2, "pwd"));
+      netCopyString(L, cfg.ssid, sizeof(cfg.ssid), balua_checkStringField(L, 2, "ssid"));
+      netCopyString(L, cfg.password, sizeof(cfg.password), balua_checkStringField(L, 2, "pwd"));
    }
    // Load the parameters for Ethernet by SPI.
    else if(netIsAdapterSpi(cfg.adapter))
@@ -3621,7 +4338,7 @@ static int lota(lua_State *L)
    }
    if( ! strcmp("begin",action) )
    {
-      LOTA* ota=(LOTA*)lNewUdata(L, sizeof(LOTA), BAOTA, otaObjLib);
+      LOTA* ota=(LOTA*)lNewUdataUV(L, sizeof(LOTA), BAOTA, otaObjLib,1);
       const esp_partition_t *partition = esp_ota_get_next_update_partition(NULL);
       esp_err_t err = esp_ota_begin(partition, OTA_SIZE_UNKNOWN, &ota->handle);
       if(LUA_OK != err)
@@ -3678,6 +4395,8 @@ static const luaL_Reg basLib[] = {
 void installESP32Libs(lua_State* L)
 {
    memset(activeGPIO, 0, sizeof(void*)*GPIO_NUM_MAX);
+   lua_newtable(L);
+   cleanupOwners=luaL_ref(L,LUA_REGISTRYINDEX);
 
 // --- RESERVED PINS FOR ESP32 ---
 #ifdef CONFIG_IDF_TARGET_ESP32
@@ -3687,6 +4406,11 @@ void installESP32Libs(lua_State* L)
     activeGPIO[9]  = RESERVED_PIN; // GPIO9  - Connected to SPI Flash WP
     activeGPIO[10] = RESERVED_PIN; // GPIO10 - Connected to SPI Flash HD
     activeGPIO[11] = RESERVED_PIN; // GPIO11 - Connected to SPI Flash CS
+#if CONFIG_SPIRAM
+    /* Include the PSRAM pins selected by IDF for this chip/module. */
+    for(int pin=0; pin<GPIO_NUM_MAX; ++pin)
+       if(esp_gpio_is_reserved(BIT64(pin))) activeGPIO[pin]=RESERVED_PIN;
+#endif
 #endif
 
    // --- RESERVED PINS FOR ESP32-S3 ---
@@ -3707,7 +4431,6 @@ void installESP32Libs(lua_State* L)
     activeGPIO[37] = RESERVED_PIN; // GPIO37 - Connected to PSRAM HD
 #endif
 
-   ThreadMutex_constructor(&rMutex);
    soDispMutex = HttpServer_getMutex(ltMgr.server);
    luaL_newlib(L, esp32Lib);
    lua_setglobal(L,"esp32");

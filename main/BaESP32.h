@@ -4,6 +4,7 @@
 #include <barracuda.h>
 
 typedef union {
+   int ref; /* Immutable userdata event identity */
    gpio_num_t pin;
    void* ptr;
 } EventBrokerCallbackArg;
@@ -30,7 +31,8 @@ void eventBrokerTask(void *params);
 int lcam(lua_State* L);  /* BaCam.c */
 //#endif
 void lInitConfigTable(lua_State* L, int ix);
-void* lNewUdata(lua_State *L,size_t size,const char *tname,const luaL_Reg *l);
+/* nuv is the number of Lua uservalue slots; see implementation for slot usage. */
+void* lNewUdataUV(lua_State *L,size_t size,const char *tname,const luaL_Reg *l,int nuv);
 int lsdcard(lua_State* L);
 int pushEspRetVal(lua_State* L, esp_err_t err, const char* msg, int throwOnInvArg);
 

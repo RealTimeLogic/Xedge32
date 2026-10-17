@@ -1,6 +1,9 @@
 ADC API
 =======
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The Analog-to-Digital Converter (ADC) API lets Lua code measure analog voltages
 using the ESP32's built-in ADC hardware. This is the API you use when reading
 potentiometers, light sensors, simple analog outputs from other circuits, and

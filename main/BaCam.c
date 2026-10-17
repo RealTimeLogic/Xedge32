@@ -262,7 +262,7 @@ int lcam(lua_State* L)
    // Create the CAM object and copy the sensor and configuration information to it. 
    // For now it is only used in the close and read functions, but in the future it 
    // may be necessary to send commands to the camera.
-   LCAM* cam = (LCAM*)lNewUdata(L, sizeof(LCAM), BACAM, camObjLib);
+   LCAM* cam = (LCAM*)lNewUdataUV(L, sizeof(LCAM), BACAM, camObjLib,1);
    
    // Init camera config struct
    cfg.pin_pwdn = pwdn;                       

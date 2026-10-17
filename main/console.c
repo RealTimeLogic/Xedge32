@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
 #include <sys/cdefs.h>
 #include <string.h>
 #include "esp_system.h"
@@ -14,6 +16,17 @@
 #include "driver/uart.h"
 #include "driver/uart_vfs.h"
 #include "esp_console.h"
+
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+/* Override linenoise's weak reader: retain partial lines across USB glitches. */
+ssize_t esp_linenoise_default_read_bytes(int fd, void* buf, size_t count)
+{
+   ssize_t n;
+   while((n = read(fd, buf, count)) < 0 && errno == EIO)
+      vTaskDelay(pdMS_TO_TICKS(10));
+   return n;
+}
+#endif
 
 void manageConsole(bool start)
 {

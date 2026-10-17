@@ -703,7 +703,7 @@ int lcam(lua_State *L) {
     }
 
     // --- PHASE 3: ALLOCATE LUA OBJECT ---
-    LCAM* cam = (LCAM*)lNewUdata(L, sizeof(LCAM), BACAM, camObjLib);
+    LCAM* cam = (LCAM*)lNewUdataUV(L, sizeof(LCAM), BACAM, camObjLib,1);
     memset(cam, 0, sizeof(LCAM));
     cam->fd = fd;
     cam->requested_w = (uint32_t)req_w;

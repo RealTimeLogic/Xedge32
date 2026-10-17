@@ -3,6 +3,9 @@
 UART API
 ========
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The UART API provides access to the ESP32's Universal Asynchronous
 Receiver/Transmitter hardware. Use it when you need serial communication with
 sensors, modems, external MCUs, industrial adapters, or RS-232/RS-485
@@ -66,10 +69,18 @@ Parameters
 - ``pattern``: Enables pattern detection, for example ``"+++"``. Requires a
   callback.
 
+With ``pattern`` enabled, received bytes remain buffered until a complete
+pattern is detected. The callback receives the preceding data with the pattern
+removed; an empty frame is returned as an empty string. Overflow is reported
+through the error callback.
+
 Additional options when ``pattern`` is enabled:
 
 - ``maxlen``: Maximum number of recorded pattern positions. Default is ``0``.
 - ``timeout``: Maximum gap allowed between characters in the same pattern.
+  Default is ``9`` baud-rate cycles; use a positive value for pattern detection.
+  Default is ``9`` baud-rate cycles; use a positive value for pattern detection.
+  Default is ``9`` baud-rate cycles; use a positive value for pattern detection.
 - ``postidle``: Minimum idle time required after the pattern.
 - ``preidle``: Minimum idle time required before the pattern.
 

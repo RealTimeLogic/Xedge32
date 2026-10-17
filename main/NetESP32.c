@@ -452,7 +452,9 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
          {
             // Erase network configuration (SSID and password)
             // to avoid attempting reconnection with invalid credentials.
-            cfgEraseNet(); 
+            esp_err_t err = cfgEraseNet();
+            if(err != ESP_OK)
+               ESP_LOGE(TAG, "Cannot erase network config: %s", esp_err_to_name(err));
             netWifiStop(false); 
             netWifiApStart(false);  
          }
@@ -1166,7 +1168,9 @@ esp_err_t ret = ESP_OK;
 
    if(!strcmp("close", cfg->adapter))
    {
-      cfgEraseNet();  
+      ret = cfgEraseNet();
+      if(ret != ESP_OK)
+         return ret;
 
       if(wifi_netif != NULL) 
       {
@@ -1231,10 +1235,11 @@ esp_err_t ret = ESP_OK;
       } 
    }
    
-   // Save config when the adapter started successfully. 
+   /* Report save failures even if the adapter started successfully.
+      A persistence error does not disconnect the running adapter. */
    if(ESP_OK == ret)
    {
-      cfgSetNet(cfg);
+      ret = cfgSetNet(cfg);
    }
    else
    {

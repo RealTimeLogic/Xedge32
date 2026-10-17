@@ -1,6 +1,9 @@
 PWM API
 =======
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The PWM API is built on top of the ESP-IDF LEDC peripheral. Although LEDC was
 originally designed for LED dimming, it is also a general-purpose PWM engine
 that works well for tasks such as:
@@ -81,6 +84,9 @@ Function signature:
 
 This function configures a timer. Call it before opening any channel that uses
 that timer. A given timer only needs to be configured once.
+A timer cannot be reconfigured while an open PWM channel uses it. Close all
+of its channels first. Each speed-mode/channel pair has one owner, even when
+another object requests a different GPIO.
 
 Required ``config`` fields:
 

@@ -3,6 +3,9 @@
 I2C API
 =======
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The I2C API lets Xedge32 communicate with sensors, displays, EEPROMs, and other
 peripherals that use the I2C bus. It exposes a straightforward master-side API
 that is well suited for both direct register access and small driver modules

@@ -15,7 +15,6 @@
 #include <esp_log.h>
 #include "CfgESP32.h"
 
-// TODO: Found the value for no init.
 static nvs_handle_t nvsh;
 
 static const char TAG[]={"X"};
@@ -65,26 +64,39 @@ esp_err_t mDnsSet(const char* name)
  * @brief Save the SD card parameters to the configuration storage.
  *
  * @param cfg Pointer to the SD card slot configuration structure.
- * @return ESP_OK if the SD card parameters are successfully saved.
+ * @return ESP_OK after commit, or the first NVS error. Earlier writes are
+ *         not rolled back on failure.
  */
 esp_err_t cfgSetSdCard(sdmmc_slot_config_t* cfg)
 {
-   nvs_set_i32(nvsh, "SdWidth", (int32_t)cfg->width);
+   esp_err_t err;
+   if((err = nvs_set_i32(nvsh, "SdWidth", (int32_t)cfg->width)) != ESP_OK)
+      return err;
    
 #ifdef SOC_SDMMC_USE_GPIO_MATRIX 
-   nvs_set_i32(nvsh, "SdClk", (int32_t)cfg->clk);
-   nvs_set_i32(nvsh, "SdCmd", (int32_t)cfg->cmd);
-   nvs_set_i32(nvsh, "SdD0", (int32_t)cfg->d0);
-   nvs_set_i32(nvsh, "SdD1", (int32_t)cfg->d1);
-   nvs_set_i32(nvsh, "SdD2", (int32_t)cfg->d2);
-   nvs_set_i32(nvsh, "SdD3", (int32_t)cfg->d3);
-   nvs_set_i32(nvsh, "SdD4", (int32_t)cfg->d4);
-   nvs_set_i32(nvsh, "SdD5", (int32_t)cfg->d5);
-   nvs_set_i32(nvsh, "SdD6", (int32_t)cfg->d6);
-   nvs_set_i32(nvsh, "SdD7", (int32_t)cfg->d7);
+   if((err = nvs_set_i32(nvsh, "SdClk", (int32_t)cfg->clk)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdCmd", (int32_t)cfg->cmd)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD0", (int32_t)cfg->d0)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD1", (int32_t)cfg->d1)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD2", (int32_t)cfg->d2)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD3", (int32_t)cfg->d3)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD4", (int32_t)cfg->d4)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD5", (int32_t)cfg->d5)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD6", (int32_t)cfg->d6)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "SdD7", (int32_t)cfg->d7)) != ESP_OK)
+      return err;
 #endif   
 
-   return ESP_OK;
+   return nvs_commit(nvsh);
 }
 
 /**
@@ -156,7 +168,7 @@ int32_t width;
             cfg->d4 = d4;
             cfg->d5 = d5;
             cfg->d6 = d6;
-            cfg->d6 = d7;
+            cfg->d7 = d7;
          }
          else
          {
@@ -171,45 +183,31 @@ int32_t width;
    return ESP_FAIL;
 }
 
-/**
- * @brief Erase all the SD card parameters from the configuration storage.
- *
- * @param cfg Pointer to the SD card slot configuration structure.
- * @return ESP_OK if the SD card parameters are successfully saved.
- */
+/* Erase the count keys in the shared namespace and commit. Missing keys are
+   already erased. Returns the first NVS error; prior erases are not rolled back. */
+static esp_err_t cfgEraseKeys(const char* const* keys, size_t count)
+{
+   for(size_t i = 0; i < count; i++)
+   {
+      esp_err_t err = nvs_erase_key(nvsh, keys[i]);
+      if(err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND)
+         return err;
+   }
+   return nvs_commit(nvsh);
+}
+
+/* Erase saved SD parameters. No input; returns ESP_OK after commit or the
+   first NVS error. Unset optional pins and an already-erased config are valid. */
 esp_err_t cfgEraseSdCard(void)
 {
-   esp_err_t errWidth = nvs_erase_key(nvsh, "SdWidth");
+   static const char* const keys[] = {
+      "SdWidth",
 #ifdef SOC_SDMMC_USE_GPIO_MATRIX
-   esp_err_t errClk = nvs_erase_key(nvsh, "SdClk");
-   esp_err_t errCmd = nvs_erase_key(nvsh, "SdCmd");
-   esp_err_t errD0 = nvs_erase_key(nvsh, "SdD0");
-   esp_err_t errD1 = nvs_erase_key(nvsh, "SdD1");
-   esp_err_t errD2 = nvs_erase_key(nvsh, "SdD2"); 
-   esp_err_t errD3 = nvs_erase_key(nvsh, "SdD3");
-   esp_err_t errD4 = nvs_erase_key(nvsh, "SdD4");
-   esp_err_t errD5 = nvs_erase_key(nvsh, "SdD5");
-   esp_err_t errD6 = nvs_erase_key(nvsh, "SdD6"); 
-   esp_err_t errD7 = nvs_erase_key(nvsh, "SdD7");
+      "SdClk", "SdCmd", "SdD0", "SdD1", "SdD2", "SdD3",
+      "SdD4", "SdD5", "SdD6", "SdD7",
 #endif
-      
-   if(ESP_OK == errWidth) 
-   {
-#ifdef SOC_SDMMC_USE_GPIO_MATRIX
-      if((ESP_OK == errClk) && (ESP_OK == errCmd) &&
-         (ESP_OK == errD0) && (ESP_OK == errD1) &&
-         (ESP_OK == errD2) && (ESP_OK == errD3) &&
-         (ESP_OK == errD4) && (ESP_OK == errD5) &&
-         (ESP_OK == errD6) && (ESP_OK == errD7))
-      {   
-         return ESP_OK;
-      }
-#else
-     return ESP_OK; 
-#endif
-   }
-   
-   return ESP_FAIL;
+   };
+   return cfgEraseKeys(keys, sizeof(keys) / sizeof(keys[0]));
 }
 
 /**
@@ -261,53 +259,54 @@ esp_err_t cfgGetNet(netConfig_t* cfg)
  * @brief Save the Network parameters to the configuration storage.
  *
  * @param cfg Pointer to the network configuration structure.
- * @return ESP_OK if the network parameters are successfully saved.
+ * @return ESP_OK after commit, or the first NVS error. Earlier writes are
+ *         not rolled back on failure.
  */
 esp_err_t cfgSetNet(netConfig_t* cfg)
 {
-   nvs_set_str(nvsh, "netAdapter", cfg->adapter);
-   nvs_set_str(nvsh, "netSsid", cfg->ssid);
-   nvs_set_str(nvsh, "netPassword", cfg->password);
+   esp_err_t err;
+   if((err = nvs_set_str(nvsh, "netAdapter", cfg->adapter)) != ESP_OK)
+      return err;
+   if((err = nvs_set_str(nvsh, "netSsid", cfg->ssid)) != ESP_OK)
+      return err;
+   if((err = nvs_set_str(nvsh, "netPassword", cfg->password)) != ESP_OK)
+      return err;
    
-   nvs_set_i32(nvsh, "netSpiHostId", cfg->spi.hostId);
-   nvs_set_i32(nvsh, "netSpiClk", cfg->spi.clk);
-   nvs_set_i32(nvsh, "netSpiMosi", cfg->spi.mosi);
-   nvs_set_i32(nvsh, "netSpiMiso", cfg->spi.miso);
-   nvs_set_i32(nvsh, "netSpiCs", cfg->spi.cs);
-   nvs_set_i32(nvsh, "netSpiIrq", cfg->spi.irq);
-   nvs_set_i32(nvsh, "netSpiFreq", cfg->spi.freq);
+   if((err = nvs_set_i32(nvsh, "netSpiHostId", cfg->spi.hostId)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiClk", cfg->spi.clk)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiMosi", cfg->spi.mosi)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiMiso", cfg->spi.miso)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiCs", cfg->spi.cs)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiIrq", cfg->spi.irq)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netSpiFreq", cfg->spi.freq)) != ESP_OK)
+      return err;
    
-   nvs_set_i32(nvsh, "netPhyRst", cfg->phyRstPin);
-   nvs_set_i32(nvsh, "netPhyMdio", cfg->phyMdioPin);
-   nvs_set_i32(nvsh, "netPhyMdc", cfg->phyMdcPin);
+   if((err = nvs_set_i32(nvsh, "netPhyRst", cfg->phyRstPin)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netPhyMdio", cfg->phyMdioPin)) != ESP_OK)
+      return err;
+   if((err = nvs_set_i32(nvsh, "netPhyMdc", cfg->phyMdcPin)) != ESP_OK)
+      return err;
    
-   return ESP_OK;
+   return nvs_commit(nvsh);
 }
 
-/**
- * @brief Erase all the Network parameters from the configuration storage.
- *
- * @param cfg Pointer to the network configuration structure.
- * @return ESP_OK if the network parameters are successfully erased.
- */
+/* Erase saved network parameters. No input; returns ESP_OK after commit or
+   the first NVS error. Missing keys count as already erased. */
 esp_err_t cfgEraseNet(void)
 {
-   nvs_erase_key(nvsh, "netAdapter");
-   nvs_erase_key(nvsh, "netSsid");
-   nvs_erase_key(nvsh, "netPassword");
-   nvs_erase_key(nvsh, "netSpiHostId");
-   nvs_erase_key(nvsh, "netSpiClk");
-   nvs_erase_key(nvsh, "netSpiMosi");
-   nvs_erase_key(nvsh, "netSpiMiso");
-   nvs_erase_key(nvsh, "netSpiCs");
-   nvs_erase_key(nvsh, "netSpiIrq");
-   nvs_erase_key(nvsh, "netSpiFreq");
-   
-   nvs_erase_key(nvsh, "netPhyRst");
-   nvs_erase_key(nvsh, "netPhyMdio");
-   nvs_erase_key(nvsh, "netPhyMdc");
-   
-   return ESP_OK;
+   static const char* const keys[] = {
+      "netAdapter", "netSsid", "netPassword", "netSpiHostId", "netSpiClk",
+      "netSpiMosi", "netSpiMiso", "netSpiCs", "netSpiIrq", "netSpiFreq",
+      "netPhyRst", "netPhyMdio", "netPhyMdc"
+   };
+   return cfgEraseKeys(keys, sizeof(keys) / sizeof(keys[0]));
 }
   
 

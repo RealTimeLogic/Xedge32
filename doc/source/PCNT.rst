@@ -1,6 +1,9 @@
 PCNT API
 ========
 
+See :ref:`hardware-resource-lifetime` for callback ownership, close results,
+and cleanup behavior.
+
 The PCNT API exposes the ESP32 pulse counter hardware to Lua. Pulse counters
 are useful when you need to count edges, track direction, or monitor quadrature
 signals from devices such as rotary encoders, tachometers, flow sensors, and
@@ -117,6 +120,9 @@ Each entry in ``channels`` is a table with ``gpio`` and ``action`` sub-tables.
 
 - ``edge``: GPIO used for edge detection.
 - ``level``: GPIO used for control/level detection.
+
+Use ``-1`` for an unused edge or level input. At least one physical pin is
+required. The object reserves every configured pin until it closes.
 
 ``action.edge`` fields:
 

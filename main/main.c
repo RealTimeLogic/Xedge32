@@ -9,6 +9,11 @@
    terms and conditions of the included License Agreement.
 */
 
+#include <esp_idf_version.h>
+#if ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 1, 0)
+#error IDF too old
+#endif
+
 #include <sys/param.h>
 #include <time.h>
 #include <sys/time.h>
@@ -586,11 +591,12 @@ int lsdcard(lua_State* L)
          {           
             err = openSdCard(&cfg);
             if(ESP_OK == err)
+               err = cfgSetSdCard(&cfg);
+            if(ESP_OK == err)
             {
-               cfgSetSdCard(&cfg);
-               // TODO: When I execute esp_restart with esp32-s3 and the console 
-               // is CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG, the restart hangs, but 
-               // when I put a delay of 1000 mS it works.
+               /* Allow USB Serial/JTAG console activity to settle before
+                  restarting after SD configuration. Immediate restart has
+                  hung on S3; retain the existing S3/P4 delay. */
 #if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
                Thread_sleep(1000);
 #endif
@@ -681,15 +687,6 @@ void app_main(void)
       esp_err_t ret = esp_linenoise_get_line(el_handle, cmd_buffer, sizeof(cmd_buffer));  
       if(ret != ESP_OK) 
       {
-#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
-         /* A charger supplies power but no USB SOF packets. Reclaim the
-            unused console task instead of retrying stdin forever. */
-         if( ! usb_serial_jtag_is_connected())
-         {
-            manageConsole(false);
-            return;
-         }
-#endif
          vTaskDelay(pdMS_TO_TICKS(10));
          continue;
       }
