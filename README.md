@@ -85,7 +85,6 @@ configuring and building so Xedge32 loads the matching defaults. This example
 selects ESP32-S3:
 
 ```bash
-export IDF_TARGET=esp32s3
 idf.py set-target esp32s3
 
 # For another board, change both lines above to esp32 or esp32p4.
@@ -97,14 +96,10 @@ idf.py menuconfig
 idf.py build
 ```
 
-`idf.py set-target` clears the default build directory and creates a new
-`sdkconfig`, saving the previous one as `sdkconfig.old`. Preserve any existing
-configuration you need before changing targets.
-
 The supplied defaults are development profiles, so check the board's flash,
 PSRAM, console, and peripheral configuration before flashing. ESP32-P4 does
 not have integrated Wi-Fi; the supplied ESP-Hosted profile requires a compatible
-companion device and firmware. See the [getting started guide](doc/source/GettingStarted.rst)
+companion device and firmware. See the [getting started guide](https://realtimelogic.com/ba/ESP32/source/GettingStarted.html)
 for board and connection details. Existing `sdkconfig` files retain their saved
 values when defaults change.
 
@@ -177,7 +172,7 @@ For a separate build directory, add `-B "$build_dir" -D SDKCONFIG="$config_file"
 to both commands so they use the intended firmware and configuration.
 
 A first installation or a partition-layout change also needs the matching
-bootloader and partition table. Review the [getting started guide](doc/source/GettingStarted.rst)
+bootloader and partition table. Review the [getting started guide](https://realtimelogic.com/ba/ESP32/source/GettingStarted.html)
 and [partition guide](partitions/README.md) before flashing. Factory provisioning
 can replace configuration, application files, and PSA keys.
 
@@ -249,9 +244,9 @@ to the chip. Preserve this file when retaining identities and data derived
 from it.
 
 **Before production, replace the example product secret.** The checkout includes
-example key material in [EncryptionKey.h](main/BAS/examples/xedge/src/EncryptionKey.h).
+example key material in [EncryptionKey.h](https://github.com/RealTimeLogic/BAS/blob/main/examples/xedge/src/EncryptionKey.h).
 Use a unique, confidential secret for each product or deployment and protect
-it as part of the firmware design. The [BAS build guide](main/BAS/doc/compiling.md#xedge-rtos)
+it as part of the firmware design. The [BAS build guide](https://github.com/RealTimeLogic/BAS/blob/main/doc/compiling.md#xedge-rtos)
 describes selecting a generated header with `XEDGE_SOFTTPM_KEY_HEADER`.
 Changing the product secret on an existing device changes derived keys, so plan
 the migration of its identities and encrypted data first.
