@@ -61,10 +61,21 @@ sudo apt -y install git zip curl
 ### Clone the repository
 
 ```bash
-git clone --recursive https://github.com/RealTimeLogic/xedge32.git xedge
+git clone https://github.com/RealTimeLogic/xedge32.git xedge
 cd xedge
+# Install the BAS and resource revisions required by this Xedge32 version.
 git submodule update --init --recursive
 ```
+
+For an existing checkout, pull the Xedge32 update and rerun the submodule
+command above before building. If you already have a build directory, run
+`idf.py reconfigure` to refresh its resource dependencies (include `-B` if
+using a separate build directory).
+
+An outdated BAS-Resources revision can fail while generating `XedgeZip.c`
+with `SharkSSLParseCAList not found in the path`. Update Xedge32 and its
+recorded submodules as described above. The current build uses embedded CA
+certificates and does not require running `SharkSSLParseCAList`.
 
 ### Select a target and build
 
