@@ -1,3 +1,12 @@
+# Set S3 PSA defaults before the provider's generic defaults are read.
+choice MBEDTLS_COMPILER_OPTIMIZATION
+   default MBEDTLS_COMPILER_OPTIMIZATION_PERF if XEDGE_PSA && IDF_TARGET_ESP32S3
+endchoice
+
+config MBEDTLS_ECP_FIXED_POINT_OPTIM
+   depends on MBEDTLS_ECP_C
+   default y if XEDGE_PSA && IDF_TARGET_ESP32S3
+
 menu "Xedge config"
    
    menu "Camera"
@@ -168,7 +177,19 @@ menu "Xedge config"
              Enabling this is required if you build BAS-Resources:Xedge with OPC UA
    endmenu
 
+   config XEDGE_PSA
+      bool "Use PSA Crypto for Xedge"
+      depends on IDF_TARGET_ESP32S3 || IDF_TARGET_ESP32P4
+      default n
+      help
+         Use ESP-IDF's PSA provider for SharkSSL and ba.tpm. Persistent keys
+         use NVS; configuration and derived secrets become device-specific.
+         Switching from softTPM requires migration or a deliberate data reset.
+         This option alone does not provide hardware-isolated keys.
+         ESP32-S3 defaults to provider -O2 and fixed-point optimization.
+
    menu "softTPM"
+      depends on !XEDGE_PSA
       config softTPM_EFUSE_ENABLED
          bool "Use eFuse"
       default n

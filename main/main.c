@@ -1,7 +1,7 @@
 /* 
    ESP-IDF startup code calling xedge.c after ESP initialization.
 
-   Copyright (c) Real Time Logic
+   Copyright (c) 2026 Real Time Logic
 
    This software may only be used by the terms and conditions
    stipulated in the corresponding license agreement under which the
@@ -42,6 +42,19 @@
 #include "BaESP32.h"
 #include "NetESP32.h"
 #include "CfgESP32.h"
+
+#if SHARKSSL_PSA_CONSUMER
+#include <psa/crypto.h>
+
+/* Called by BAS before cryptography/Lua, after app_main initializes NVS.
+ * No inputs or Lua stack access; return zero on success, PSA error otherwise.
+ * Provider state and persistent keys survive Lua debugger restarts.
+ */
+int xedgeInitPsa(void)
+{
+   return (int)psa_crypto_init();
+}
+#endif
 
 /*
  * To enable the thread debug please execute idf.py menuconfig and go
@@ -257,6 +270,8 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
       balua_iointf(L, "sd",  (IoIntf*)sdCard);
    }
 
+#if BA_ENABLE_SOFTTPM_KEY_MATERIAL
+   /* PSA owns its persistent roots; do not create or feed softTPM secrets. */
    uint8_t keyBuf[32]; // 256 bits = 32 bytes
 #if CONFIG_softTPM_EFUSE_ENABLED
    static const esp_efuse_desc_t efuseSecDescriptor =
@@ -329,6 +344,7 @@ int xedgeOpenAUX(XedgeOpenAUX* aux)
       fp->closeFp(fp);
 #endif
    aux->addSecret(aux, TRUE, keyBuf, sizeof(keyBuf)); /* Send DDUI to TPM */
+#endif
    aux->xedgeCfgFile = openXCfgPartition() ? xedgeCfgFile : 0;
 
    /* We return when we get an IP address, thus preventing the
@@ -395,7 +411,7 @@ int xedgeInitDiskIo(DiskIo* io) /* Called by xedge.c */
 static void mainServerTask(Thread *t)
 {
    (void)t;
-#ifdef USE_DLMALLOC
+#if BA_ALLOCATOR == BA_ALLOCATOR_DLMALLOC
    /* Allocate as much pSRAM as possible */
   #if CONFIG_IDF_TARGET_ESP32S3 
      EXT_RAM_BSS_ATTR static char poolBuf[7*1024*1024 + 5*1024];
@@ -632,7 +648,7 @@ static void initComponents()
    }
    
    /* Using BAS thread porting API */
-   Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_STACKSZ);
+   Thread_constructor(&t, mainServerTask, ThreadPrioNormal, BA_THREAD_STACK_SIZE);
    Thread_start(&t);
 }
 

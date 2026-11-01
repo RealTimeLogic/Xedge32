@@ -1,7 +1,7 @@
 /** 
  * Configuration parameter module for xedge32.c 
  *
- * Copyright (c) Real Time Logic
+ * Copyright (c) 2026 Real Time Logic
  *
  * This software may only be used by the terms and conditions
  * stipulated in the corresponding license agreement under which the
@@ -17,7 +17,6 @@
 
 static nvs_handle_t nvsh;
 
-static const char TAG[]={"X"};
 
 /**
  * @brief Initialize the configuration parameters module.
@@ -25,19 +24,26 @@ static const char TAG[]={"X"};
  *        and opens the NVS namespace for reading and writing configuration parameters. 
  *         
  * @note This function should be called at the start of the application.
- * @return ESP_OK if the configuration module is successfully initialized.
+ * @return ESP_OK on success; unrecoverable NVS errors abort startup.
+ *         Only the configuration partition is erased for the two recoverable
+ *         initialization errors. PSA builds also initialize key storage.
  */
 esp_err_t cfgInit(void)
 {
    esp_err_t err = nvs_flash_init();
-   if((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NVS_NEW_VERSION_FOUND))
+   /* Only configuration NVS is recoverable by erasure. PSA keys live in
+    * a separate partition and must never be erased on an initialization error.
+    */
+   if(err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
    {
-      ESP_LOGE(TAG, "NVS init failed! Erasing memory.");
+      ESP_LOGE("X", "Configuration NVS init failed (%s); erasing configuration", esp_err_to_name(err));
       ESP_ERROR_CHECK(nvs_flash_erase());
       err = nvs_flash_init();
    }
-
    ESP_ERROR_CHECK(err);
+#if CONFIG_XEDGE_PSA
+   ESP_ERROR_CHECK(nvs_flash_init_partition("psa"));
+#endif
    
    ESP_ERROR_CHECK(nvs_open("xedge", NVS_READWRITE, &nvsh));
     

@@ -1,0 +1,3 @@
+# Factory-empty PSA store; keys are created on the device.
+key,type,encoding,value
+psa_its,namespace,,

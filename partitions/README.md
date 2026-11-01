@@ -12,10 +12,10 @@ Ensure that the files for applications/configurations/certificates are copied to
 Usage
 -----
 
-This tool provides the opportunity to use the stock **Xedge32** firmware and generate/write the binary images of the FAT and NVS by console commands. Additionally, it can generate/flash the FAT and NVS images with the firmware and bootloader when executing the **idf.py build flash** commands.
+The build generates factory filesystem and NVS images. Flash them explicitly using the commands below; ordinary `idf.py flash` preserves these data partitions.
 
-1. **Integrated Usage with CMakeLists.txt:**
-   - Modify the main `CMakeLists.txt` to use the macros **fatfs_create_spiflash_image** and **nvs_create_partition_image** with **FLASH_IN_PROJECT** to automate the generation of binary files and include them in the **idf.py flash** command.
+1. **Factory provisioning:**
+   - The build generates NVS and storage images, but ordinary `idf.py flash` preserves those partitions. Use `idf.py nvs-flash storage-flash` explicitly to install the factory images. This replaces saved network settings and application files. On S3/P4, explicitly add `psa-flash` to reset PSA keys as well. Use these commands only for a new board or an intentional reset. Release factory images include all three partitions on S3/P4; classic ESP32 has no PSA partition.
    
 2. **Manual Usage:**
    - Generate the files separately and flash them to the ESP32 using the **esp_tool.py** utility provided by Espressif.
@@ -49,3 +49,29 @@ Before generating the FAT image manually, copy the required files to the `storag
     python ~/esp/esp-idf/components/esptool_py/esptool/esptool.py write_flash -z 0x640000 storage.bin 
 
 
+
+PSA key storage (S3/P4)
+----------------------
+The `psa` partition occupies 24 KiB at `0x12000`, in the former alignment gap.
+Other partition offsets and sizes are unchanged. It is reserved in PSA and
+softTPM builds. `nvs_psa.csv` creates an empty key store for factory provisioning;
+it contains no device secrets and is excluded from ordinary `idf.py flash`.
+
+The `nvs` partition holds network and hardware settings. If its initialization
+reports no free pages or an unsupported newer format, Xedge32 erases `nvs` and
+retries; network settings must then be configured again. A PSA partition
+initialization error stops startup. Xedge32 never automatically erases `psa`
+or falls back to configuration NVS. This separation does not provide
+hardware-isolated key storage.
+
+Ordinary `idf.py flash` and application OTA preserve the data partitions.
+Explicit `idf.py nvs-flash storage-flash` replaces configuration and application
+files. On S3/P4, `idf.py psa-flash` separately replaces the key store with an
+empty image and permanently loses existing PSA keys. Factory release images reset
+all three partitions; do not use them to preserve an installed identity.
+
+Upgrading from firmware that stored PSA keys in `nvs` requires installing the
+new partition table and deliberately reprovisioning keys, certificates, and
+encrypted data. There is no key migration. Application-only OTA is insufficient
+for this first upgrade; use a factory installation. Subsequent application OTA
+updates require retaining the matching crypto backend.
