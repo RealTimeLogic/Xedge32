@@ -1,7 +1,7 @@
 /** 
  * Low level network module for xedge32.c
  *
- * Copyright (c) Real Time Logic
+ * Copyright (c) Real Time Logic, 2026
  *
  * This software may only be used by the terms and conditions
  * stipulated in the corresponding license agreement under which the
@@ -390,6 +390,14 @@ void netEventGotIP(int32_t eventId, esp_netif_ip_info_t ipInfo)
 static void onNetEvent(void *arg, esp_event_base_t eventBase,
                         int32_t eventId, void *eventData)
 {
+#if CONFIG_LWIP_IPV6
+   if(eventBase == IP_EVENT && eventId == IP_EVENT_NETIF_UP)
+   {
+      ip_event_netif_status_t* event = (ip_event_netif_status_t*)eventData;
+      esp_netif_create_ip6_linklocal(event->esp_netif);
+      return;
+   }
+#endif
    if(eventBase == WIFI_EVENT)
    {
       if(WIFI_EVENT_STA_CONNECTED == eventId)
@@ -1109,6 +1117,12 @@ esp_err_t netInit(void)
    err = esp_event_loop_create_default();
    if(err != ESP_OK)
       return err;
+
+#if CONFIG_LWIP_IPV6
+   err = esp_event_handler_register(IP_EVENT, IP_EVENT_NETIF_UP, &onNetEvent, NULL);
+   if(err != ESP_OK)
+      return err;
+#endif
 
    err = gpio_install_isr_service(0);
    if((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE))

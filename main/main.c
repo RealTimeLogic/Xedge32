@@ -42,6 +42,9 @@
 #include "BaESP32.h"
 #include "NetESP32.h"
 #include "CfgESP32.h"
+#if !SHARKSSL_PSA_CONSUMER
+#include <bootloader_random.h>
+#endif
 
 #if SHARKSSL_PSA_CONSUMER
 #include <psa/crypto.h>
@@ -426,10 +429,24 @@ static void mainServerTask(Thread *t)
    #error must use dlmalloc
 #endif
 
-   for(int i = 0 ; i < 16 ; i++)
+#if !SHARKSSL_PSA_CONSUMER
    {
-      sharkssl_entropy(esp_random());
+      U8 seed[48];
+      int status;
+      /* This runs before xedgeOpenAUX starts RF/ADC/I2S users. The heap is
+       * ready for the RNG mutex; the ADC entropy window is exclusive. */
+      bootloader_random_enable();
+      esp_fill_random(seed, sizeof(seed));
+      bootloader_random_disable();
+      status = sharkssl_entropyEx(seed, sizeof(seed));
+      sharkssl_clear(seed, sizeof(seed));
+      if(status)
+      {
+         ESP_LOGE(TAG, "Native RNG initialization failed (%d)", status);
+         abort();
+      }
    }
+#endif
 
    HttpTrace_setFLushCallback(writeHttpTrace);
    HttpServer_setErrHnd(myErrHandler); 

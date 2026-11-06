@@ -103,6 +103,19 @@ companion device and firmware. See the [getting started guide](https://realtimel
 for board and connection details. Existing `sdkconfig` files retain their saved
 values when defaults change.
 
+#### IPv6 and large UDP packets
+
+IPv6 follows `CONFIG_LWIP_IPV6` in `idf.py menuconfig`. The supplied defaults
+enable IPv6, address autoconfiguration (SLAAC), and IPv6 reassembly. Existing
+`sdkconfig` files keep their saved settings.
+
+**Warning:** with IPv6 reassembly enabled, the tested ESP-IDF 6.1 stack on
+ESP32-S3 asserted in `ip6_reass` and rebooted when receiving a fragmented IPv6
+UDP payload of **65,488 bytes**; 65,487 bytes passed. The failure occurs in
+lwIP before BAS receives the packet. Xedge32 uses the SDK's unmodified IPv6
+reassembler and permits builds with reassembly enabled. It does not apply an
+automatic lwIP patch; the native-stack issue remains until fixed in the SDK.
+
 #### Optional: Separate builds for each target
 
 To keep configurations and build outputs for multiple targets, use a separate
@@ -376,3 +389,19 @@ source code.
 
 The following page provides details on the included cryptographic
 software: https://github.com/RealTimeLogic/SharkSSL
+
+### Random-generator startup
+
+Native builds initialize the heap first, enable the ESP-IDF bootloader entropy
+source for a short interval, fill a 48-byte buffer, and disable that source
+before network, ADC or other peripheral use. Startup checks
+`sharkssl_entropyEx` and aborts on failure. The allocator's lifetime cookie
+does not depend on the cryptographic generator. PSA builds keep provider-owned
+initialization and do not inject native seed data.
+
+The BAS Lua bootstrap preserves earlier entropy contributions. Shared Xedge
+resources can later add public Internet data, after the ACME clock check
+`(os.time()+86400) > xedge.compileTime` or an SNTP event. This is supplemental
+input; it does not replace hardware entropy or protect keys generated earlier.
+`ba.rndseed` accepts actual numbers through its compatibility adapter and
+32..65535-byte strings unchanged. PSA returns `nil,error` for this function.

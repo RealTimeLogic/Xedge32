@@ -18,6 +18,7 @@ set(main_priv_reqs
     esp_adc         # for esp_adc/adc_oneshot.h (IDF v5+)
     app_update      # <-- for esp_ota_ops.h
     esp_timer
+    bootloader_support # Early native RNG entropy, before peripheral startup.
 )
 
 # Use ESP-IDF's provider, never the bundled Windows PSA provider.
@@ -57,6 +58,7 @@ idf_component_register(
 
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     BA_ESP32 BA_FREERTOS BA_LWIP BA_ENABLE_TPM=1 BA_ENABLE_EMBEDDED_CA=1
+    BA_ENABLE_IPV6=$<BOOL:${CONFIG_LWIP_IPV6}>
     XEDGE_THREAD_POOL_MODE=XEDGE_THREAD_POOL_SHARED_FIXED XEDGE_THREAD_COUNT=2
     BA_ALLOCATOR=BA_ALLOCATOR_DLMALLOC BA_ENABLE_LUA_STDIO=0
     BA_ENABLE_LUA_LPEG=1 BA_ENABLE_LUA_CBOR=1 BA_ENABLE_LUA_PROTOBUF=1
@@ -68,7 +70,8 @@ if(CONFIG_XEDGE_PSA)
     target_include_directories(${COMPONENT_LIB} BEFORE PRIVATE
         "$ENV{IDF_PATH}/components/mbedtls/mbedtls/tf-psa-crypto/include")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE
-        BA_PSA_GLOBALKEY_USE_DEVICE_ROOT=1 SHARKSSL_USE_CHACHA20=0 SHARKSSL_USE_POLY1305=0)
+        BA_PSA_GLOBALKEY_USE_DEVICE_ROOT=1 SHARKSSL_USE_CHACHA20=0 SHARKSSL_USE_POLY1305=0
+        SHARKSSL_AES_SOFTWARE_CT=0 SHARKSSL_AES_GCM_SOFTWARE_CT=0)
 endif()
 
 
