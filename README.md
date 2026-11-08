@@ -1,18 +1,19 @@
 # Xedge32
 
-Xedge32 brings a browser-based Lua development environment to ESP32, ESP32-S3,
-and ESP32-P4. Use it to build and test connected applications on the device,
-from sensor and GPIO experiments to web interfaces, protocol bridges, and
-[edge controllers](https://realtimelogic.com/products/edge-controller/).
+Build connected ESP32 products in Lua, right from your browser. Xedge32 brings
+on-device application development to ESP32, ESP32-S3, and ESP32-P4, with the web
+interfaces, networking, and hardware access you need for sensors, protocol
+bridges, and [edge controllers](https://realtimelogic.com/products/edge-controller/).
 
-Start with prebuilt firmware and develop in Lua. When your product needs custom
-hardware support or native APIs, build and extend the C firmware. Xedge32 is
-also a reference platform for evaluating Xedge and the Barracuda App Server
-(BAS) on a microcontroller.
+Install prebuilt firmware and start developing. Add application logic in Lua
+without rebuilding the firmware for every change. When your product needs
+custom hardware support or native APIs, extend the C firmware. Xedge32 gives
+you a working reference platform for Xedge and the Barracuda App Server (BAS),
+with a path from your first prototype to an OEM integration.
 
-![ESP32 Edge Controller](https://realtimelogic.com/images/xedge/v1/Xedge.png)
+![Xedge browser IDE](https://realtimelogic.com/images/xedge/v1/Xedge.png)
 
-Xedge32 in developer mode
+*Edit and run Lua applications on the device from your browser.*
 
 ## Getting Started
 
@@ -23,11 +24,16 @@ Xedge32 in developer mode
 3. Explore the [Xedge32 tutorials](https://realtimelogic.com/xedge32-tutorials/),
    the [ESP32 hardware APIs](https://realtimelogic.com/ba/ESP32/), and the
    [Xedge development environment](https://realtimelogic.com/ba/doc/en/Xedge.html).
+4. [Set up trusted HTTPS](#automatic-certificate-management) for access to your device.
 
 You do not need to compile the firmware to get started. Build from source when
 you need to change its configuration, native code, or embedded resources.
 
-## Understanding the Xedge32 Architecture
+**Build and flash with an AI agent:** Give your AI coding agent
+[AGENTS.md](AGENTS.md) for dependency setup, target selection, builds,
+programming, and startup checks.
+
+## Understanding the Xedge Architecture
 
 Xedge32 combines three layers:
 
@@ -42,7 +48,7 @@ they can [integrate and extend](#xedge32-and-oem-integration) in their own
 firmware. For more Xedge build and release options, see the
 [standalone Xedge build guide](https://realtimelogic.com/ba/examples/xedge/readme.html).
 
-## Compiling The C Code (for experts)
+## Compiling the C Code (for experts)
 
 Use a Linux shell to build the firmware. On Windows, you can use the
 [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/about);
@@ -72,10 +78,8 @@ command above before building. If you already have a build directory, run
 `idf.py reconfigure` to refresh its resource dependencies (include `-B` if
 using a separate build directory).
 
-An outdated BAS-Resources revision can fail while generating `XedgeZip.c`
-with `SharkSSLParseCAList not found in the path`. Update Xedge32 and its
-recorded submodules as described above. The current build uses embedded CA
-certificates and does not require running `SharkSSLParseCAList`.
+The build embeds CA certificates and generates the matching Lua and web
+resources automatically.
 
 ### Select a target and build
 
@@ -85,6 +89,7 @@ configuring and building so Xedge32 loads the matching defaults. This example
 selects ESP32-S3:
 
 ```bash
+export IDF_TARGET=esp32s3
 idf.py set-target esp32s3
 
 # For another board, change both lines above to esp32 or esp32p4.
@@ -158,18 +163,6 @@ idf.py xedge-resources
 idf.py -B "$build_dir" -D SDKCONFIG="$config_file" xedge-resources
 ```
 
-The helper is build source and belongs in Git. These `.gitignore` rules leave
-it available for tracking while ignoring other contents of `Build-Resources`:
-
-```gitignore
-/Build-Resources/*
-!/Build-Resources/build_resources.py
-```
-
-The first rule ignores the directory's contents; the second makes an exception
-for the helper. Ignoring the directory itself would prevent this exception
-from working. Neither rule deletes files or stages them for commit.
-
 ### Flash the firmware
 
 Replace `PORT` with the board's serial port. For an application update on a
@@ -195,15 +188,29 @@ Use `idf.py menuconfig` to select Xedge32 features and board settings. If you
 use separate builds, include the `-B` and `SDKCONFIG` options shown above. Among
 the available options:
 
-- **Multicast DNS (mDNS):** Enable local discovery so the device can be reached
-  at `http://xedge32.local` on a network that supports mDNS. The name can be
-  customized from Lua.
+- **Multicast DNS (mDNS):** Keep `CONFIG_mDNS_ENABLED` enabled for
+  [SharkCA's local HTTPS names](#sharkca-and-mdns). It also provides the
+  default `xedge32.local` name for development access.
 - **[OPC UA](https://realtimelogic.com/products/opc-ua/):** Enable the
   industrial communication feature in menuconfig. The build includes matching
   Lua resources automatically.
 - **Camera:** Configure the camera support and hardware to match your board.
 - **TPM backend:** Keep the default softTPM, or select PSA Crypto on ESP32-S3
   and ESP32-P4. Read [TPM](#tpm) before changing an existing device's backend.
+
+## Automatic Certificate Management
+
+Start with the [introduction to automatic certificate management](https://realtimelogic.com/services/SharkTrust/) for the public and private trust options. Then follow the [Xedge certificate manual](https://realtimelogic.com/ba/doc/en/Xedge.html#cert) to configure SharkTrustX or SharkCA. The manual covers enrollment, renewal, portal credentials, and browser trust.
+
+For IDE users and access control, follow the [Xedge authentication and configuration guide](https://realtimelogic.com/ba/doc/en/Xedge.html#conf).
+
+### SharkCA and mDNS
+
+Xedge's multicast DNS (mDNS) support is primarily for **SharkCA's local HTTPS names**. SharkCA issues the certificate; mDNS lets a browser find the device by its assigned `.local` name. Xedge manages that registration automatically. Connecting computers must also trust the zone's device CA root; resolving a name alone does not establish HTTPS trust.
+
+Use the [SharkCA user manual](https://github.com/RealTimeLogic/SharkCA/blob/main/doc/user-manual.md) for portal and trust setup. Application-managed names are an optional use of the [mDNS Lua API](https://realtimelogic.com/ba/doc/en/lua/auxlua.html#mdns).
+
+On ESP32, `CONFIG_mDNS_ENABLED` enables the native responder and the `ba.createmdns` API used by SharkCA. The development name `xedge32.local` can coexist with the certificate's name. See the [ESP32 hostname controls](https://realtimelogic.com/ba/ESP32/source/misc.html#esp32-execute-label) to change or disable that extra default name while retaining SharkCA's registration. Use the certificate's assigned hostname for trusted HTTPS.
 
 ## TPM
 
@@ -221,26 +228,29 @@ SharkSSL remains the TLS implementation in both modes. PSA changes its crypto
 provider and the TPM key store; it does not replace SharkSSL with an mbedTLS
 TLS server. Neither backend requires a separate TPM chip.
 
-**Why softTPM is the default:** Its named private keys are derived when needed
-instead of being stored as persistent private keys in flash. With a protected
-product secret and device-specific input in eFuse, this can reduce exposure to
-flash extraction and device cloning compared with the ESP32 PSA provider's
-ordinary NVS-backed key storage. The protection depends on the full device
-configuration and threat model; eFuse input is readable by software and is not
-a hardware-isolated key. PSA providers with hardware-protected keys can offer
-stronger isolation where supported.
+**Our recommendation: softTPM with native SharkSSL.** We believe softTPM is the
+more secure choice for Xedge32 products on ESP32 chips than the flash-backed PSA
+configuration supplied here. It derives named private keys when needed instead
+of storing them as persistent private keys in flash. With a protected product
+secret and device-specific input in eFuse, copying application storage alone
+is not enough to reproduce a device's identity.
 
-Native SharkSSL can also be faster for some workloads. In a single ESP32-S3
-test against PSA configured with provider `-O2` and fixed-point optimization,
-softTPM with native SharkSSL completed full TLS 1.3 handshakes faster for the
-tested P-256 and X25519 key exchanges. PSA was faster for the tested signing
-operations and sustained TLS transfers. Results depend on the operation,
-configuration, and target; measure your own workload.
+That protection depends on the product secret, firmware integrity, and correct
+provisioning. softTPM runs in software, and its eFuse input is software-readable.
+Our comparison is with the ESP32 PSA configuration used by Xedge32; a PSA
+provider with hardware-isolated keys has a different security boundary.
 
-**PSA support:** Xedge32's optional backend uses the standard PSA Crypto API,
-making ESP32-S3 and ESP32-P4 useful reference platforms for testing BAS and
-SharkSSL with a PSA provider. API support does not by itself imply PSA Certified
-hardware or a hardware-isolated root of trust.
+**Faster HTTPS connections with SharkSSL.** Native SharkSSL delivered more than
+twice the fresh HTTPS request rate of PSA on ESP32-S3 and more than five times
+on the tested ESP32-P4 profile. That gives device web interfaces and clients
+less time to wait when opening secure connections. See the
+[HTTPS performance comparison](#https-performance) for measurements and settings.
+
+**PSA support for API experimentation.** The optional backend makes ESP32-S3 and
+ESP32-P4 useful platforms for exploring the standard PSA Crypto API, evaluating
+provider integration, and testing BAS and SharkSSL with that interface. Choose
+it when your project needs to work with PSA. Enabling the API does not by itself
+provide hardware-isolated keys or PSA certification.
 
 ### softTPM
 
@@ -298,55 +308,129 @@ Unlike softTPM's product-wide `globalkey`, it is not shared across devices.
 Losing the root makes data encrypted with its derived keys unreadable; creating
 a new root does not recover that data.
 
-The current provider stores persistent keys in NVS and can use supported
+The ESP-IDF provider stores persistent keys in NVS and can use supported
 on-chip crypto accelerators. Acceleration does not imply key isolation:
 hardware-protected keys require a suitable provider, key location, and chip
 revision. Enabling this option alone does not supply that protection.
 Protect production devices with appropriate ESP32 security features, including
 secure boot and storage encryption. **Enabling NVS encryption for the default
 `nvs` partition does not automatically encrypt the separate `psa` partition.**
-The current firmware initializes `psa` without NVS encryption. Encrypting it
-requires additional firmware integration, key provisioning, and validation;
+Xedge32 initializes `psa` without NVS encryption. Encrypting it requires
+additional firmware integration, key provisioning, and validation;
 see [ESP-IDF's custom NVS encryption guidance](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32s3/api-reference/storage/nvs_encryption.html#encrypted-read-write).
 
-### PSA performance on ESP32-S3
+### Random-generator startup
 
-On ESP32-S3, new PSA configurations default to both provider options for
-faster elliptic-curve operations:
+Native builds initialize the heap first, enable the ESP-IDF bootloader entropy
+source for a short interval, fill a 48-byte buffer, and disable that source
+before network, ADC or other peripheral use. Startup checks
+`sharkssl_entropyEx` and aborts on failure. The allocator's lifetime cookie
+does not depend on the cryptographic generator. PSA builds keep provider-owned
+initialization and do not inject native seed data.
+
+The BAS Lua bootstrap preserves earlier entropy contributions. Shared Xedge
+resources can later add public Internet data, after the ACME clock check
+`(os.time()+86400) > xedge.compileTime` or an SNTP event. This is supplemental
+input; it does not replace hardware entropy or protect keys generated earlier.
+`ba.rndseed` accepts actual numbers through its compatibility adapter and
+32..65535-byte strings unchanged. PSA returns `nil,error` for this function.
+
+### HTTPS performance
+
+Native SharkSSL gives Xedge32 a clear advantage when clients open fresh HTTPS
+connections. In our ESP-IDF 6.1 tests, it served **over twice as many requests
+per second on ESP32-S3** and **over five times as many on ESP32-P4** as the PSA
+configurations below:
+
+| Target | Native SharkSSL / softTPM | PSA | Native request-rate advantage |
+| --- | ---: | ---: | ---: |
+| ESP32-S3 | 6.12 requests/s | 2.87 requests/s | 2.1x |
+| ESP32-P4 | 12.86 requests/s | 2.39 requests/s | 5.4x |
+
+Each backend completed 48 of 48 requests at 16 concurrent clients with a
+30-second socket timeout. Every request opened a full TLS 1.3 connection,
+using a TPM-backed P-384 server certificate and AES-256-GCM, without session
+resumption. These measurements cover connection setup and short HTTPS requests.
+Signing and sustained encrypted transfers have different performance profiles;
+PSA can be faster for those operations.
+
+The S3 test used a 240 MHz ESP32-S3 with 8 MiB PSRAM and Wi-Fi. Its PSA provider
+used `-O2` and fixed-point optimization. The P4 test used a 360 MHz revision 1.3
+chip with 32 MiB PSRAM and IP101 Ethernet; its PSA provider used size optimization,
+no fixed-point precomputation, and software ECDSA. The P4 result applies to that
+profile, not to newer chip revisions with hardware-accelerated ECDSA.
+
+#### Tuning the PSA provider on ESP32-S3
+
+Xedge32's S3 defaults select these provider options for faster elliptic-curve
+operations:
 
 | Boolean option | Setting |
 | --- | --- |
-| `CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_PERF` | Enable **Optimize for performance (-O2)** instead of **Optimize for size (-Os)** |
+| `CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_PERF` | Enable **Optimize for performance (-O2)** |
 | `CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM` | Enable **fixed-point multiplication optimisations** |
 
-PSA remains optional and disabled by default. S3 PSA releases explicitly select
-both options; P4 settings are unchanged. An existing `sdkconfig` can retain
-previously saved choices. Use the search function (`/`) in the menuconfig for
-your build to select both options when upgrading an existing S3 PSA configuration.
-
-These options affect the ESP-IDF crypto provider; BAS retains its existing
-compiler settings. Faster signing does not guarantee faster complete
-TLS handshakes than native SharkSSL, and `-O2` can reduce AES-GCM API throughput.
-Measure your workload and validate ESP32-P4 separately.
+For an existing S3 configuration, use menuconfig search (`/`) to check both
+options; saved `sdkconfig` values take precedence over defaults. These settings
+affect the ESP-IDF crypto provider. PSA remains optional and disabled by default.
+Measure your application's connection latency, transfer rate, and memory use
+when choosing a backend or tuning its provider.
 
 ### Retaining keys and changing backends
 
 The Lua API is shared, but the keys and encrypted data are not interchangeable.
 Before switching from softTPM to PSA, switching back, or changing a PSA
-derivation profile, recover the data using the old firmware and plan its
-migration, or deliberately reset it. Certificates need matching keys or
-re-enrollment. There is no automatic migration or fallback.
+derivation profile, recover the data while its existing keys are still
+available and plan its migration, or deliberately reset it. Certificates need
+matching keys or re-enrollment. There is no automatic migration or fallback.
 
 ### PSA key storage and configuration recovery
 
 ESP32-S3 and ESP32-P4 keep PSA keys in a separate `psa` NVS partition. Ordinary
 flashing and application OTA preserve data partitions, but factory images and
-explicit partition-flash commands can erase settings, files, or keys. The first
-upgrade from firmware that stored PSA keys in `nvs` requires a new partition
-table and reprovisioning; there is no automatic key migration.
+explicit partition-flash commands can erase settings, files, or keys. Preserve
+the `psa` partition when retaining device identities and encrypted data. Check
+the partition guide before changing the storage layout or reprovisioning keys.
 
 See [PSA key storage and recovery](partitions/README.md#psa-key-storage-s3p4)
 for the partition layout, recovery behavior, and provisioning details.
+
+## HTTP connection and socket capacity
+
+ESP32-S3 and ESP32-P4 provide capacity for browser requests alongside
+background services. The defaults are the same with softTPM or PSA:
+
+| Target | HTTP connection slots | lwIP sockets | TCP accept queue |
+| --- | ---: | ---: | ---: |
+| ESP32-S3 | **16** | **32** | **16** |
+| ESP32-P4 | **16** | **32** | **16** |
+| Classic ESP32 | 8 | 16 | 6 |
+
+These are three different budgets. The HTTP pool holds incoming HTTP/HTTPS
+connections, including pending requests and idle keep-alive connections. The
+lwIP socket budget also serves listeners, WebSockets, UDP and outgoing clients.
+The accept queue holds established TCP connections waiting for the application
+to accept them, separately for each listener. A browser can use several
+connections; none of these numbers is a browser-user limit.
+
+**PSA does not impose a separate 16-socket limit.** The S3/P4 defaults come from
+[sdkconfig.defaults.esp32s3](sdkconfig.defaults.esp32s3) and
+[sdkconfig.defaults.esp32p4](sdkconfig.defaults.esp32p4). For an existing S3/P4
+configuration, use menuconfig search (`/`) to set the integer options
+`LWIP_MAX_SOCKETS` to `32` and `LWIP_TCP_ACCEPTMBOX_SIZE` to `16`, then rebuild.
+Saved `sdkconfig` values take precedence over defaults. Both S3 release console
+variants and the P4 release use these settings with either crypto backend.
+
+The HTTP connection pool is configured separately from lwIP's socket budget.
+Increasing the socket count alone does not enlarge the HTTP pool. When the pool
+is full, BAS may reclaim a pooled connection or reject a new one.
+
+Both S3 and P4 completed the [HTTPS benchmark](#https-performance) at 16
+concurrent clients with both backends. At 32 clients, both backends completed
+16 of 48 requests with the same 30-second socket timeout and remained responsive
+after the burst. Treat these as workload measurements, not browser-user limits.
+Reuse HTTPS connections where possible, and size your application for its peak
+RAM use, long-lived connections, and acceptable response time.
 
 ## Embedding Lua Apps and configuring NVS
 
@@ -365,6 +449,22 @@ lets you update application logic without rebuilding it for every change.
 Learn more about [using Lua alongside C for embedded development](https://realtimelogic.com/articles/Using-Lua-for-Embedded-Development-vs-Traditional-C-Code)
 and [creating Lua-to-C bindings](https://tutorial.realtimelogic.com/Lua-Bindings.lsp).
 
+## Xedge on Other Platforms
+
+Xedge brings the same browser-based Lua and LSP development workflow to several
+embedded platforms. Explore the port that fits your hardware and RTOS.
+
+- [Xedge for ThreadX](https://github.com/RealTimeLogic/Xedge4ThreadX): Xedge integrated with ThreadX, NetX Duo, and FileX.
+- [Xedge for Zephyr](https://github.com/RealTimeLogic/Xedge4Zephyr): Xedge for the Zephyr RTOS.
+- [Xedge for FreeRTOS](https://realtimelogic.com/downloads/bas/rt1020/): Ready-to-run project for the NXP i.MX RT1020 evaluation board.
+- [Xedge for NuttX](https://nuttx.apache.org/docs/latest/applications/examples/xedge_demo/index.html): Example and build instructions in the Apache NuttX documentation.
+- [Generic Xedge port](https://github.com/RealTimeLogic/BAS/blob/main/doc/compiling.md#xedge-rtos): BAS build instructions for integrating Xedge with your own RTOS target.
+
+## Licensing and Dependencies
+
+See this repository's [LICENSE](LICENSE), the [BAS license](main/BAS/LICENSE),
+and the [BAS-Resources license](main/BAS-Resources/LICENSE). Other dependencies
+retain their own licenses and notices.
 
 ## Export restrictions
 
@@ -373,7 +473,7 @@ which you currently reside may have restrictions on the import,
 possession, use, and/or re-export to another country, of
 encryption software. BEFORE using any encryption software, please
 check your country's laws, regulations and policies concerning the
-import, possession, or use, and re-export of encryption software, to 
+import, possession, or use, and re-export of encryption software, to
 see if this is permitted. See https://www.wassenaar.org/ for more
 information.
 
@@ -389,19 +489,3 @@ source code.
 
 The following page provides details on the included cryptographic
 software: https://github.com/RealTimeLogic/SharkSSL
-
-### Random-generator startup
-
-Native builds initialize the heap first, enable the ESP-IDF bootloader entropy
-source for a short interval, fill a 48-byte buffer, and disable that source
-before network, ADC or other peripheral use. Startup checks
-`sharkssl_entropyEx` and aborts on failure. The allocator's lifetime cookie
-does not depend on the cryptographic generator. PSA builds keep provider-owned
-initialization and do not inject native seed data.
-
-The BAS Lua bootstrap preserves earlier entropy contributions. Shared Xedge
-resources can later add public Internet data, after the ACME clock check
-`(os.time()+86400) > xedge.compileTime` or an SNTP event. This is supplemental
-input; it does not replace hardware entropy or protect keys generated earlier.
-`ba.rndseed` accepts actual numbers through its compatibility adapter and
-32..65535-byte strings unchanged. PSA returns `nil,error` for this function.

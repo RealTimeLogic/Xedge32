@@ -40,3 +40,7 @@ CONFIG_CAMERA_OV5647=y
 # Development profile; release variants override OPC UA and console settings.
 CONFIG_mDNS_ENABLED=y
 CONFIG_OPCUA_ENABLED=n
+
+# P4 network capacity, shared by softTPM and PSA builds.
+CONFIG_LWIP_MAX_SOCKETS=32
+CONFIG_LWIP_TCP_ACCEPTMBOX_SIZE=16

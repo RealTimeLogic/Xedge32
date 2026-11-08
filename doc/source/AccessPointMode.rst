@@ -113,13 +113,18 @@ is usually the most convenient:
   custom build with mDNS enabled.
 - The DHCP-assigned IP address if you prefer direct IP access.
 - A DHCP reservation on your router if you want the same IP address every time.
-- A permanent public URL by enabling the SharkTrust Let's Encrypt plugin from
-  `Xedge's configuration menu
-  <https://realtimelogic.com/ba/doc/?url=Xedge.html#cert>`_.
+- A trusted HTTPS hostname through Xedge's automatic certificate management.
+  Start with the `SharkTrust introduction
+  <https://realtimelogic.com/services/SharkTrust/>`_ to choose public or private
+  trust, then follow the `Xedge certificate manual
+  <https://realtimelogic.com/ba/doc/en/Xedge.html#cert>`_.
 
 Additional notes:
 
-- You can change the mDNS name by using :ref:`esp32-execute-label`.
+- mDNS primarily supports SharkCA's local HTTPS names. Xedge advertises the
+  certificate's assigned name automatically. The default ``xedge32.local``
+  name is also available for development; use :ref:`esp32-execute-label` to
+  change or disable that extra name.
 - mDNS is convenient, but it may resolve more slowly than normal DNS on some
   networks.
 - Bookmarking a stable IP address or using a DHCP reservation is often the most

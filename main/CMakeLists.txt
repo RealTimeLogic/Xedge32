@@ -33,6 +33,12 @@ set(main_srcs
     "LPeg/lpvm.c" "CBOR/cbor_c.c" "CBOR/dnf.c" "lua-protobuf/pb.c"
 )
 
+# S3/P4 pool size is a platform choice; leave the BAS dependency unchanged.
+if(IDF_TARGET STREQUAL "esp32s3" OR IDF_TARGET STREQUAL "esp32p4")
+    set_property(SOURCE "BAS/examples/xedge/src/xedge.c" APPEND PROPERTY
+        COMPILE_DEFINITIONS HttpServerConfig_setNoOfHttpConnections=xedgeSetNoOfHttpConnections)
+endif()
+
 # 2. Conditionally append the camera driver AND the correct C file
 if(IDF_TARGET STREQUAL "esp32" OR IDF_TARGET STREQUAL "esp32s3")
     list(APPEND main_priv_reqs "esp32-camera")

@@ -312,6 +312,13 @@ second return value when handling failures programmatically.
 ``ba.createmdns(name)`` compatibility
 ----------------------------------------
 
+Xedge32 uses this API primarily to advertise the local HTTPS name assigned
+by SharkCA. Xedge manages that registration automatically. Start with the
+`automatic certificate management introduction
+<https://realtimelogic.com/services/SharkTrust/>`_, then follow the
+`Xedge certificate manual <https://realtimelogic.com/ba/doc/en/Xedge.html#cert>`_
+for setup. The API below is for applications that need additional names.
+
 Xedge32 provides a compatibility implementation of the BAS
 `mDNS hostname responder API <https://realtimelogic.com/ba/doc/en/lua/auxlua.html#mdns>`_
 when ``CONFIG_mDNS_ENABLED`` is enabled. It uses ESP-IDF's existing multicast

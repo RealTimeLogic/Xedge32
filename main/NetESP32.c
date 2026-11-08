@@ -410,6 +410,11 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
       }
       else if(WIFI_EVENT_STA_DISCONNECTED == eventId) 
       {
+         /* STA shutdown may queue a disconnect after fallback AP starts.
+          * Ignore it before clearing the AP's IP state or starting AP twice. */
+         if(!wifi_netif)
+            return;
+
          wifi_event_sta_disconnected_t* d = (wifi_event_sta_disconnected_t*)eventData;
          netTrace(9, "WiFi disconnect ev. %d\n", d->reason);
 
@@ -463,7 +468,6 @@ static void onNetEvent(void *arg, esp_event_base_t eventBase,
             esp_err_t err = cfgEraseNet();
             if(err != ESP_OK)
                ESP_LOGE(TAG, "Cannot erase network config: %s", esp_err_to_name(err));
-            netWifiStop(false); 
             netWifiApStart(false);  
          }
          else 
@@ -573,6 +577,12 @@ esp_err_t netWifiApStart(bool regHandler)
 {
 #ifdef CONFIG_XEDGE_WIFI_ENABLED
    ap_netif = esp_netif_create_default_wifi_ap();
+
+   /* Attach AP before removing STA so IDF keeps its default handlers.
+    * Unregistering and re-registering them inside an event callback can
+    * leave the new AP without handlers when deferred removal runs. */
+   if(wifi_netif)
+      netWifiStop(false);
 
    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
    ESP_ERROR_CHECK(esp_wifi_init(&cfg));

@@ -46,6 +46,17 @@
 #include <bootloader_random.h>
 #endif
 
+#if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32P4
+/* Xedge host pool setter, redirected only for xedge.c by CMake.
+ * cfg is the startup configuration; size is the host's worker-derived minimum.
+ * Keep at least 16 slots and return the real setter's result. No Lua access.
+ */
+int xedgeSetNoOfHttpConnections(HttpServerConfig* cfg, U16 size)
+{
+   return HttpServerConfig_setNoOfHttpConnections(cfg, size < 16 ? 16 : size);
+}
+#endif
+
 #if SHARKSSL_PSA_CONSUMER
 #include <psa/crypto.h>
 
